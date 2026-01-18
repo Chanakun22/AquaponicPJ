@@ -1,0 +1,268 @@
+/**
+ * @file netpie.cpp
+ * @brief Implementation สำหรับ NETPIE MQTT
+ */
+
+#include "netpie.h"
+#include "wifiConn.h"
+#include "lightController.h"
+#include "phSensor.h"
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include <ArduinoJson.h>
+
+// ============================================================================
+// PRIVATE VARIABLES
+// ============================================================================
+
+static WiFiClient _wifiClient;
+static PubSubClient _mqtt(_wifiClient);
+static unsigned long _lastReconnectAttempt = 0;
+static unsigned long _lastPublishTime = 0;
+static bool _shadowRequested = false;
+
+// ============================================================================
+// PRIVATE FUNCTION PROTOTYPES
+// ============================================================================
+
+static void _mqttCallback(char* topic, byte* payload, unsigned int length);
+static bool _mqttReconnect(void);
+static void _parseShadowData(const char* json);
+
+// ============================================================================
+// PRIVATE FUNCTIONS
+// ============================================================================
+
+/**
+ * @brief Parse Shadow data จาก NETPIE (รองรับ partial update)
+ */
+static void _parseShadowData(const char* json) {
+    StaticJsonDocument<1024> doc;
+    DeserializationError err = deserializeJson(doc, json);
+    
+    if (err) {
+        Serial.print(F("[NETPIE] JSON parse error: "));
+        Serial.println(err.c_str());
+        return;
+    }
+    
+    // ตรวจสอบ light schedule
+    if (doc.containsKey("data")) {
+        JsonObject data = doc["data"];
+        
+        // Light Schedule - อัพเดทเฉพาะ field ที่มี
+        bool hasLightData = false;
+        
+        if (data.containsKey("lightEnabled")) {
+            lightCtrlSetEnabled(data["lightEnabled"].as<int>());
+            hasLightData = true;
+        }
+        if (data.containsKey("lightOnDay")) {
+            lightCtrlSetOnDay(data["lightOnDay"].as<int>());
+            hasLightData = true;
+        }
+        if (data.containsKey("lightOnTime")) {
+            lightCtrlSetOnTime(data["lightOnTime"].as<const char*>());
+            hasLightData = true;
+        }
+        if (data.containsKey("lightOffDay")) {
+            lightCtrlSetOffDay(data["lightOffDay"].as<int>());
+            hasLightData = true;
+        }
+        if (data.containsKey("lightOffTime")) {
+            lightCtrlSetOffTime(data["lightOffTime"].as<const char*>());
+            hasLightData = true;
+        }
+        
+        // lightRelay: สั่งเปิด/ปิดไฟโดยตรง (0=OFF, 1=ON)
+        // ทำงานได้เฉพาะเมื่อ lightEnabled = 0 (manual mode)
+        if (data.containsKey("lightRelay")) {
+            int relay = data["lightRelay"].as<int>();
+            if (!lightCtrlIsEnabled()) {
+                lightCtrlSetState(relay == 1);
+                Serial.printf("[NETPIE] lightRelay: %s\n", relay == 1 ? "ON" : "OFF");
+            } else {
+                Serial.println(F("[NETPIE] lightRelay IGNORED (schedule mode active)"));
+            }
+        }
+        
+        if (hasLightData) {
+            lightCtrlPrintSchedule();
+        }
+        
+        // pH Calibration Commands
+        if (data.containsKey("phCal7")) {
+            if (data["phCal7"].as<int>() == 1) {
+                Serial.println(F("[NETPIE] pH Calibration 7.0 triggered"));
+                phCalibratePh7();
+            }
+        }
+        if (data.containsKey("phCal4")) {
+            if (data["phCal4"].as<int>() == 1) {
+                Serial.println(F("[NETPIE] pH Calibration 4.0 triggered"));
+                phCalibratePh4();
+            }
+        }
+    }
+}
+
+/**
+ * @brief Callback เมื่อได้รับข้อความจาก NETPIE
+ */
+static void _mqttCallback(char* topic, byte* payload, unsigned int length) {
+    Serial.print(F("[NETPIE] Message: "));
+    Serial.println(topic);
+    
+    // แปลง payload เป็น string
+    char message[length + 1];
+    memcpy(message, payload, length);
+    message[length] = '\0';
+    
+    // Shadow response (ตอนเริ่มต้น) หรือ Shadow updated (real-time)
+    if (strstr(topic, "@shadow/data/get/response") || 
+        strstr(topic, "@private/shadow/data/get/response") ||
+        strstr(topic, "@shadow/data/updated")) {
+        Serial.println(F("[NETPIE] Shadow data received/updated"));
+        _parseShadowData(message);
+    }
+    
+    // Message topics
+    if (strstr(topic, "@msg/lightEnabled")) {
+        int enabled = atoi(message);
+        StaticJsonDocument<256> doc;
+        doc["data"]["lightEnabled"] = enabled;
+        char json[256];
+        serializeJson(doc, json);
+        _parseShadowData(json);
+    }
+    
+    if (strstr(topic, "@msg/lightOn")) {
+        lightCtrlSetState(true);
+        _mqtt.publish("@shadow/data/update", "{\"data\":{\"lightRelay\":1}}");
+    }
+    
+    if (strstr(topic, "@msg/lightOff")) {
+        lightCtrlSetState(false);
+        _mqtt.publish("@shadow/data/update", "{\"data\":{\"lightRelay\":0}}");
+    }
+}
+
+/**
+ * @brief พยายามเชื่อมต่อ MQTT
+ */
+static bool _mqttReconnect(void) {
+    Serial.println(F("[NETPIE] Connecting to MQTT..."));
+    
+    if (_mqtt.connect(NETPIE_CLIENT_ID, NETPIE_TOKEN, NETPIE_SECRET)) {
+        Serial.println(F("[NETPIE] Connected!"));
+        
+        // Subscribe topics
+        _mqtt.subscribe("@msg/#");
+        _mqtt.subscribe("@private/shadow/data/get/response");
+        _mqtt.subscribe("@shadow/data/get/response");
+        _mqtt.subscribe("@shadow/data/updated");  // ⬅️ รับ real-time updates!
+        
+        Serial.println(F("[NETPIE] Subscribed (including shadow updates)"));
+        
+        // Request shadow data ครั้งแรก
+        _mqtt.publish("@shadow/data/get", "{}");
+        _shadowRequested = true;
+        Serial.println(F("[NETPIE] Shadow requested"));
+        
+        return true;
+    } else {
+        Serial.print(F("[NETPIE] Failed, rc="));
+        Serial.println(_mqtt.state());
+        return false;
+    }
+}
+
+// ============================================================================
+// PUBLIC FUNCTIONS
+// ============================================================================
+
+void netpieSetup(void) {
+    Serial.println(F("[NETPIE] Initializing..."));
+    
+    _mqtt.setServer(MQTT_BROKER, MQTT_PORT);
+    _mqtt.setCallback(_mqttCallback);
+    _mqtt.setBufferSize(1024);  // เพิ่ม buffer size
+    
+    Serial.print(F("[NETPIE] Broker: "));
+    Serial.println(MQTT_BROKER);
+}
+
+void netpieLoop(void) {
+    if (!wifiIsConnected()) {
+        return;
+    }
+    
+    if (!_mqtt.connected()) {
+        unsigned long now = millis();
+        if (now - _lastReconnectAttempt >= MQTT_RECONNECT_INTERVAL) {
+            _lastReconnectAttempt = now;
+            if (_mqttReconnect()) {
+                _lastReconnectAttempt = 0;
+            }
+        }
+    } else {
+        _mqtt.loop();
+    }
+}
+
+bool netpieIsConnected(void) {
+    return _mqtt.connected();
+}
+
+void netpiePublishData(float waterTemp, float airTemp, float humidity, float tds, float light, float ph) {
+    if (millis() - _lastPublishTime < NETPIE_PUBLISH_INTERVAL) {
+        return;
+    }
+    _lastPublishTime = millis();
+    
+    if (!netpieIsConnected()) {
+        return;
+    }
+    
+    StaticJsonDocument<512> doc;
+    JsonObject data = doc.createNestedObject("data");
+    
+    if (!isnan(waterTemp)) {
+        data["waterTemp"] = round(waterTemp * 10) / 10.0;
+    }
+    if (!isnan(airTemp)) {
+        data["airTemp"] = round(airTemp * 10) / 10.0;
+    }
+    if (!isnan(humidity)) {
+        data["humidity"] = round(humidity * 10) / 10.0;
+    }
+    if (tds >= 0) {
+        data["tds"] = round(tds * 10) / 10.0;
+    }
+    if (light >= 0) {
+        data["light"] = round(light * 10) / 10.0;
+    }
+    if (ph >= 0) {
+        data["ph"] = round(ph * 100) / 100.0;  // 2 decimal places for pH
+    }
+    
+    // เพิ่มสถานะไฟ
+    data["lightRelay"] = lightCtrlGetState() ? 1 : 0;
+    
+    char payload[512];
+    serializeJson(doc, payload);
+    
+    if (_mqtt.publish("@shadow/data/update", payload)) {
+        Serial.println(F("[NETPIE] Published"));
+        Serial.println(payload);
+    } else {
+        Serial.println(F("[NETPIE] Publish failed!"));
+    }
+}
+
+void netpiePublish(const char* topic, const char* payload) {
+    if (!netpieIsConnected()) {
+        return;
+    }
+    _mqtt.publish(topic, payload);
+}
