@@ -4,6 +4,7 @@
  */
 
 #include "tempSensor.h"
+#include "logger.h"
 
 
 // ============================================================================
@@ -21,7 +22,14 @@ static float _lastWaterTemp = NAN;
 
 void tempSetup(void) {
     _sensors.begin();
-    Serial.println(F("[TEMP] DS18B20 initialized"));
+    
+    // Check if sensor is present
+    int deviceCount = _sensors.getDeviceCount();
+    if (deviceCount == 0) {
+        LOG_ERROR("DS18B20 not found! Check wiring.");
+    } else {
+        LOG_INFO("DS18B20 initialized - Found %d device(s)", deviceCount);
+    }
 }
 
 float tempRead(void) {
@@ -45,7 +53,7 @@ void tempLoop(void) {
         
         // ตรวจสอบค่าที่อ่านได้
         if (isnan(temperature)) {
-            Serial.println(F("[TEMP] Failed to read from sensor!"));
+            LOG_WARN("Failed to read temperature from DS18B20");
             return;
         }
         

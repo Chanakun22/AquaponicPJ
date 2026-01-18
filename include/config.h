@@ -99,6 +99,27 @@
 #define SERIAL_BAUD_RATE    115200  // Baud rate สำหรับ Serial Monitor
 
 /**
+ * @section Logging Configuration
+ * LOG_LEVEL_INFO = Production (no debug)
+ * LOG_LEVEL_DEBUG = Development (all logs)
+ */
+#define LOG_LEVEL           LOG_LEVEL_INFO
+
+/**
+ * @section OTA Update Settings
+ */
+#define OTA_ENABLED         1       // 1=Enable OTA, 0=Disable
+#define OTA_PORT            3232     // OTA update port
+#define OTA_HOSTNAME        "aquaponics-sensor"  // OTA hostname
+#define OTA_PASSWORD        ""      // OTA password (empty = no password)
+
+/**
+ * @section Factory Reset Settings
+ */
+#define FACTORY_RESET_PIN   0       // Pin for factory reset (BOOT button)
+#define FACTORY_RESET_TIME  5000    // Hold button for 5 seconds to reset
+
+/**
  * @section Timing Settings
  */
 #define TDS_READ_INTERVAL   1000    // ช่วงเวลาอ่านค่า TDS (ms)

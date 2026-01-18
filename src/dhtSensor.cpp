@@ -4,6 +4,7 @@
  */
 
 #include "dhtSensor.h"
+#include "logger.h"
 
 // ============================================================================
 // PRIVATE VARIABLES
@@ -20,7 +21,7 @@ static float _lastHumidity = NAN;
 
 void dhtSetup(void) {
     _dht.begin();
-    Serial.println(F("[DHT] Sensor initialized"));
+    LOG_INFO("DHT22 sensor initialized");
 }
 
 float dhtReadTemperature(void) {
@@ -41,7 +42,7 @@ void dhtLoop(void) {
         
         // ตรวจสอบค่าที่อ่านได้
         if (isnan(humidity) || isnan(temperature)) {
-            Serial.println(F("[DHT] Failed to read from sensor!"));
+            LOG_WARN("Failed to read from DHT22 sensor");
             return;
         }
         

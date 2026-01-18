@@ -6,6 +6,9 @@
 
 #include <Arduino.h>
 #include "config.h"
+#include "logger.h"
+#include "system.h"
+#include "ota.h"
 #include "TdsSensor.h"
 #include "dhtSensor.h"
 #include "tempSensor.h"
@@ -112,19 +115,20 @@ static float validateLight(float light) {
 void setup() {
     // เริ่มต้น Serial
     Serial.begin(SERIAL_BAUD_RATE);
-    // ESP32 Serial.begin() ไม่ blocking ไม่ต้อง delay
-    Serial.println(F("========================================"));
-    Serial.println(F("   Aquaponics Sensor System v2.2"));
-    Serial.println(F("   WiFi + NETPIE + Light Control"));
-    Serial.println(F("========================================"));
+    delay(100);  // Allow serial to stabilize
+    
+    LOG_MODULE_START("Aquaponics Sensor System");
+    LOG_INFO("Firmware Version: %s", systemGetVersion());
+    LOG_INFO("Build Date: %s %s", __DATE__, __TIME__);
+    
+    // Initialize system management first
+    systemInit();
     
 #if defined(ESP32) && WATCHDOG_ENABLED
     // เริ่มต้น Watchdog Timer
     esp_task_wdt_init(WATCHDOG_TIMEOUT_SEC, true);  // true = panic on timeout (reboot)
     esp_task_wdt_add(NULL);  // Add current task to watchdog
-    Serial.print(F("[SYSTEM] Watchdog Timer enabled ("));
-    Serial.print(WATCHDOG_TIMEOUT_SEC);
-    Serial.println(F(" seconds)"));
+    LOG_INFO("Watchdog Timer enabled (%d seconds)", WATCHDOG_TIMEOUT_SEC);
 #endif
     
     // เริ่มต้น LED สถานะ
@@ -133,6 +137,9 @@ void setup() {
     
     // เริ่มต้น WiFi (non-blocking)
     wifiSetup();
+    
+    // เริ่มต้น OTA (after WiFi)
+    otaSetup();
     
     // เริ่มต้น NETPIE
     netpieSetup();
@@ -147,11 +154,17 @@ void setup() {
     lightSetup();
     phSetup();
     
-    Serial.println(F("[SYSTEM] All modules initialized"));
-    Serial.println(F("========================================\n"));
+    LOG_INFO("All modules initialized");
+    LOG_MODULE_END("Aquaponics Sensor System");
 }
 
 void loop() {
+    // ======== System Management ========
+    systemLoop();
+    
+    // ======== OTA Update Handler ========
+    otaLoop();
+    
     // ======== WiFi & NETPIE (ทำงานเมื่อออนไลน์) ========
     wifiLoop();
     netpieLoop();
@@ -209,25 +222,51 @@ void loop() {
         }
         
         if (strcmp(cmd, "cal7") == 0) {
-            Serial.println(F("[CMD] Calibrating pH 7.0..."));
+            LOG_INFO("Calibrating pH 7.0...");
             phCalibratePh7();
         } else if (strcmp(cmd, "cal4") == 0) {
-            Serial.println(F("[CMD] Calibrating pH 4.0..."));
+            LOG_INFO("Calibrating pH 4.0...");
             phCalibratePh4();
         } else if (strcmp(cmd, "ph") == 0) {
-            Serial.printf("[CMD] pH: %.2f, Voltage: %.1f mV\n", phRead(), phReadVoltage());
+            LOG_INFO("pH: %.2f, Voltage: %.1f mV", phRead(), phReadVoltage());
+        } else if (strcmp(cmd, "health") == 0) {
+            SystemHealth_t health;
+            systemGetHealth(&health);
+            LOG_INFO("===== SYSTEM HEALTH =====");
+            LOG_INFO("Uptime: %lu seconds", health.uptimeMs / 1000);
+            LOG_INFO("Free Heap: %lu bytes", health.freeHeap);
+            LOG_INFO("Min Free Heap: %lu bytes", health.minFreeHeap);
+            LOG_INFO("Watchdog Resets: %u", health.watchdogResets);
+            LOG_INFO("WiFi Reconnects: %u", health.wifiReconnects);
+            LOG_INFO("MQTT Reconnects: %u", health.mqttReconnects);
+            LOG_INFO("Sensors OK: %s", health.sensorsOk ? "YES" : "NO");
+            LOG_INFO("=========================");
+        } else if (strcmp(cmd, "reset") == 0) {
+            LOG_WARN("Factory reset requested!");
+            systemFactoryReset();
         } else if (strcmp(cmd, "help") == 0) {
-            Serial.println(F("===== COMMANDS ====="));
-            Serial.println(F("cal7  - Calibrate pH 7.0"));
-            Serial.println(F("cal4  - Calibrate pH 4.0"));
-            Serial.println(F("ph    - Show current pH"));
-            Serial.println(F("===================="));
+            LOG_INFO("===== COMMANDS =====");
+            LOG_INFO("cal7   - Calibrate pH 7.0");
+            LOG_INFO("cal4   - Calibrate pH 4.0");
+            LOG_INFO("ph     - Show current pH");
+            LOG_INFO("health - Show system health");
+            LOG_INFO("reset  - Factory reset");
+            LOG_INFO("====================");
+        } else {
+            LOG_WARN("Unknown command: %s (type 'help' for commands)", cmd);
         }
     }
     
     // ======== ส่งข้อมูลไป NETPIE (เฉพาะเมื่อ connected) ========
     if (wifiIsConnected() && netpieIsConnected()) {
         netpiePublishData(currentWaterTemp, currentAirTemp, currentHumidity, currentTds, currentLight, currentPh);
+    }
+    
+    // ======== System Health Check ========
+    if (!systemIsHealthy()) {
+        #if defined(ESP32)
+        LOG_ERROR("System unhealthy! Free heap: %lu bytes", ESP.getFreeHeap());
+        #endif
     }
     
 #if defined(ESP32) && WATCHDOG_ENABLED

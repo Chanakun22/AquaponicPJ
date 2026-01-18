@@ -4,6 +4,8 @@
  */
 
 #include "netpie.h"
+#include "logger.h"
+#include "system.h"
 #include "wifiConn.h"
 #include "lightController.h"
 #include "phSensor.h"
@@ -41,8 +43,7 @@ static void _parseShadowData(const char* json) {
     DeserializationError err = deserializeJson(doc, json);
     
     if (err) {
-        Serial.print(F("[NETPIE] JSON parse error: "));
-        Serial.println(err.c_str());
+        LOG_ERROR("JSON parse error: %s", err.c_str());
         return;
     }
     
@@ -80,9 +81,9 @@ static void _parseShadowData(const char* json) {
             int relay = data["lightRelay"].as<int>();
             if (!lightCtrlIsEnabled()) {
                 lightCtrlSetState(relay == 1);
-                Serial.printf("[NETPIE] lightRelay: %s\n", relay == 1 ? "ON" : "OFF");
+                LOG_INFO("lightRelay: %s", relay == 1 ? "ON" : "OFF");
             } else {
-                Serial.println(F("[NETPIE] lightRelay IGNORED (schedule mode active)"));
+                LOG_DEBUG("lightRelay IGNORED (schedule mode active)");
             }
         }
         
@@ -93,13 +94,13 @@ static void _parseShadowData(const char* json) {
         // pH Calibration Commands
         if (data.containsKey("phCal7")) {
             if (data["phCal7"].as<int>() == 1) {
-                Serial.println(F("[NETPIE] pH Calibration 7.0 triggered"));
+                LOG_INFO("pH Calibration 7.0 triggered via NETPIE");
                 phCalibratePh7();
             }
         }
         if (data.containsKey("phCal4")) {
             if (data["phCal4"].as<int>() == 1) {
-                Serial.println(F("[NETPIE] pH Calibration 4.0 triggered"));
+                LOG_INFO("pH Calibration 4.0 triggered via NETPIE");
                 phCalibratePh4();
             }
         }
@@ -110,8 +111,7 @@ static void _parseShadowData(const char* json) {
  * @brief Callback เมื่อได้รับข้อความจาก NETPIE
  */
 static void _mqttCallback(char* topic, byte* payload, unsigned int length) {
-    Serial.print(F("[NETPIE] Message: "));
-    Serial.println(topic);
+    LOG_DEBUG("MQTT message received: %s", topic);
     
     // แปลง payload เป็น string
     char message[length + 1];
@@ -122,7 +122,7 @@ static void _mqttCallback(char* topic, byte* payload, unsigned int length) {
     if (strstr(topic, "@shadow/data/get/response") || 
         strstr(topic, "@private/shadow/data/get/response") ||
         strstr(topic, "@shadow/data/updated")) {
-        Serial.println(F("[NETPIE] Shadow data received/updated"));
+        LOG_DEBUG("Shadow data received/updated");
         _parseShadowData(message);
     }
     
@@ -151,10 +151,10 @@ static void _mqttCallback(char* topic, byte* payload, unsigned int length) {
  * @brief พยายามเชื่อมต่อ MQTT
  */
 static bool _mqttReconnect(void) {
-    Serial.println(F("[NETPIE] Connecting to MQTT..."));
+    LOG_INFO("Connecting to MQTT broker...");
     
     if (_mqtt.connect(NETPIE_CLIENT_ID, NETPIE_TOKEN, NETPIE_SECRET)) {
-        Serial.println(F("[NETPIE] Connected!"));
+        LOG_INFO("MQTT connected!");
         
         // Subscribe topics
         _mqtt.subscribe("@msg/#");
@@ -162,17 +162,16 @@ static bool _mqttReconnect(void) {
         _mqtt.subscribe("@shadow/data/get/response");
         _mqtt.subscribe("@shadow/data/updated");  // ⬅️ รับ real-time updates!
         
-        Serial.println(F("[NETPIE] Subscribed (including shadow updates)"));
+        LOG_DEBUG("Subscribed to MQTT topics (including shadow updates)");
         
         // Request shadow data ครั้งแรก
         _mqtt.publish("@shadow/data/get", "{}");
         _shadowRequested = true;
-        Serial.println(F("[NETPIE] Shadow requested"));
+        LOG_DEBUG("Shadow data requested");
         
         return true;
     } else {
-        Serial.print(F("[NETPIE] Failed, rc="));
-        Serial.println(_mqtt.state());
+        LOG_WARN("MQTT connection failed, rc=%d", _mqtt.state());
         return false;
     }
 }
@@ -182,14 +181,13 @@ static bool _mqttReconnect(void) {
 // ============================================================================
 
 void netpieSetup(void) {
-    Serial.println(F("[NETPIE] Initializing..."));
+    LOG_INFO("Initializing NETPIE MQTT...");
     
     _mqtt.setServer(MQTT_BROKER, MQTT_PORT);
     _mqtt.setCallback(_mqttCallback);
     _mqtt.setBufferSize(1024);  // เพิ่ม buffer size
     
-    Serial.print(F("[NETPIE] Broker: "));
-    Serial.println(MQTT_BROKER);
+    LOG_INFO("MQTT Broker: %s:%d", MQTT_BROKER, MQTT_PORT);
 }
 
 void netpieLoop(void) {
@@ -203,6 +201,7 @@ void netpieLoop(void) {
             _lastReconnectAttempt = now;
             if (_mqttReconnect()) {
                 _lastReconnectAttempt = 0;
+                systemIncrementMqttReconnects();
             }
         }
     } else {
@@ -253,10 +252,9 @@ void netpiePublishData(float waterTemp, float airTemp, float humidity, float tds
     serializeJson(doc, payload);
     
     if (_mqtt.publish("@shadow/data/update", payload)) {
-        Serial.println(F("[NETPIE] Published"));
-        Serial.println(payload);
+        LOG_DEBUG("Published to NETPIE: %s", payload);
     } else {
-        Serial.println(F("[NETPIE] Publish failed!"));
+        LOG_ERROR("NETPIE publish failed!");
     }
 }
 

@@ -4,6 +4,7 @@
  */
 
 #include "TdsSensor.h"
+#include "logger.h"
 
 // ============================================================================
 // PRIVATE VARIABLES
@@ -67,9 +68,7 @@ void tdsSetup(void) {
     _tdsSampleCollected = 0;
     _tdsReady = false;
     
-    Serial.print(F("[TDS] Sensor initialized, collecting "));
-    Serial.print(TDS_SAMPLE_COUNT);
-    Serial.println(F(" samples..."));
+    LOG_INFO("TDS sensor initialized, collecting %d samples...", TDS_SAMPLE_COUNT);
 }
 
 float tdsRead(float temperature) {
@@ -82,7 +81,7 @@ float tdsRead(float temperature) {
         _tdsSampleCollected++;
         if (_tdsSampleCollected >= TDS_SAMPLE_COUNT) {
             _tdsReady = true;
-            Serial.println(F("[TDS] Buffer ready! Starting measurements..."));
+            LOG_INFO("TDS buffer ready! Starting measurements...");
         }
     }
     

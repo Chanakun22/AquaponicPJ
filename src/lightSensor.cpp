@@ -4,6 +4,7 @@
  */
 
 #include "lightSensor.h"
+#include "logger.h"
 #include <Wire.h>
 #include <BH1750.h>
 
@@ -29,10 +30,10 @@ void lightSetup(void) {
     // เริ่มต้น BH1750
     if (_lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, BH1750_ADDRESS)) {
         _sensorReady = true;
-        Serial.println(F("[LIGHT] BH1750 initialized successfully"));
+        LOG_INFO("BH1750 initialized successfully");
     } else {
         _sensorReady = false;
-        Serial.println(F("[LIGHT] ERROR: BH1750 not found! Check wiring."));
+        LOG_ERROR("BH1750 not found! Check wiring.");
     }
 }
 
@@ -46,7 +47,7 @@ float lightRead(void) {
         
         // ตรวจสอบค่าผิดปกติ
         if (_lastLux < 0) {
-            Serial.println(F("[LIGHT] Read error!"));
+            LOG_WARN("BH1750 read error");
             return -1.0f;
         }
     }

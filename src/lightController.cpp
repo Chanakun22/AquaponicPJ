@@ -4,6 +4,7 @@
  */
 
 #include "lightController.h"
+#include "logger.h"
 #include "wifiConn.h"
 #include <time.h>
 #include <Adafruit_NeoPixel.h>
@@ -75,7 +76,7 @@ static bool _isInSchedule(int currentDay, int currentHour, int currentMinute) {
 // ============================================================================
 
 void lightCtrlSetup(void) {
-    Serial.println(F("[LIGHT_CTRL] Initializing..."));
+    LOG_INFO("Initializing light controller...");
     
     // ตั้งค่า NeoPixel RGB LED
     _neopixel.begin();
@@ -84,11 +85,11 @@ void lightCtrlSetup(void) {
     _neopixel.show();
     _currentState = false;
     
-    Serial.println(F("[LIGHT_CTRL] NeoPixel RGB LED initialized (GPIO 48)"));
+    LOG_INFO("NeoPixel RGB LED initialized (GPIO 48)");
     
     // ตั้งค่า NTP
     configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC, NTP_SERVER);
-    Serial.println(F("[LIGHT_CTRL] NTP configured"));
+    LOG_INFO("NTP configured");
 }
 
 void lightCtrlLoop(void) {
@@ -108,7 +109,7 @@ void lightCtrlLoop(void) {
     // ถ้ายังไม่ได้เปิดใช้งาน ไม่ต้องทำอะไร
     if (!_lightEnabled) {
         if (showDebug) {
-            Serial.println(F("[LIGHT_CTRL] System DISABLED (lightEnabled=0)"));
+            LOG_DEBUG("Light controller DISABLED (lightEnabled=0)");
         }
         return;
     }
@@ -117,41 +118,41 @@ void lightCtrlLoop(void) {
     struct tm timeinfo;
     if (!getLocalTime(&timeinfo)) {
         if (showDebug) {
-            Serial.println(F("[LIGHT_CTRL] NTP NOT synced yet!"));
+            LOG_DEBUG("NTP NOT synced yet!");
         }
         return;
     }
     
     if (!_ntpSynced) {
         _ntpSynced = true;
-        Serial.println(F("[LIGHT_CTRL] NTP synced!"));
+        LOG_INFO("NTP synced!");
     }
     
     // DEBUG: แสดงเวลาปัจจุบัน
     static const char* dayNames[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
     if (showDebug) {
-        Serial.printf("[LIGHT_CTRL] Now: %s %02d:%02d | ON: %s %02d:%02d | OFF: %s %02d:%02d\n",
-                      dayNames[timeinfo.tm_wday], timeinfo.tm_hour, timeinfo.tm_min,
-                      dayNames[_onDay], _onHour, _onMinute,
-                      dayNames[_offDay], _offHour, _offMinute);
+        LOG_DEBUG("Now: %s %02d:%02d | ON: %s %02d:%02d | OFF: %s %02d:%02d",
+                  dayNames[timeinfo.tm_wday], timeinfo.tm_hour, timeinfo.tm_min,
+                  dayNames[_onDay], _onHour, _onMinute,
+                  dayNames[_offDay], _offHour, _offMinute);
     }
     
     // ตรวจสอบว่าเวลาปัจจุบันอยู่ใน schedule หรือไม่
     bool shouldBeOn = _isInSchedule(timeinfo.tm_wday, timeinfo.tm_hour, timeinfo.tm_min);
     
     if (showDebug) {
-        Serial.printf("[LIGHT_CTRL] shouldBeOn=%s, currentState=%s\n",
-                      shouldBeOn ? "YES" : "NO", _currentState ? "ON" : "OFF");
+        LOG_DEBUG("shouldBeOn=%s, currentState=%s",
+                  shouldBeOn ? "YES" : "NO", _currentState ? "ON" : "OFF");
     }
     
     if (shouldBeOn && !_currentState) {
         lightCtrlSetState(true);
-        Serial.printf("[LIGHT_CTRL] Schedule ON at %s %02d:%02d\n", 
-                      dayNames[timeinfo.tm_wday], timeinfo.tm_hour, timeinfo.tm_min);
+        LOG_INFO("Schedule ON at %s %02d:%02d", 
+                 dayNames[timeinfo.tm_wday], timeinfo.tm_hour, timeinfo.tm_min);
     } else if (!shouldBeOn && _currentState) {
         lightCtrlSetState(false);
-        Serial.printf("[LIGHT_CTRL] Schedule OFF at %s %02d:%02d\n", 
-                      dayNames[timeinfo.tm_wday], timeinfo.tm_hour, timeinfo.tm_min);
+        LOG_INFO("Schedule OFF at %s %02d:%02d", 
+                 dayNames[timeinfo.tm_wday], timeinfo.tm_hour, timeinfo.tm_min);
     }
 }
 
@@ -168,7 +169,7 @@ void lightCtrlSetState(bool state) {
     }
     _neopixel.show();
     
-    Serial.printf("[LIGHT_CTRL] NeoPixel: %s\n", state ? "GREEN (ON)" : "OFF");
+    LOG_DEBUG("NeoPixel: %s", state ? "GREEN (ON)" : "OFF");
 }
 
 bool lightCtrlGetState(void) {
@@ -201,21 +202,21 @@ bool lightCtrlGetTime(char* buffer, size_t bufferSize) {
 
 void lightCtrlSetEnabled(int enabled) {
     _lightEnabled = (enabled == 1);
-    Serial.printf("[LIGHT_CTRL] Enabled: %s\n", _lightEnabled ? "YES" : "NO");
+    LOG_INFO("Light controller enabled: %s", _lightEnabled ? "YES" : "NO");
 }
 
 void lightCtrlSetOnDay(int day) {
     if (day >= 0 && day <= 6) {
         _onDay = day;
         static const char* dayNames[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
-        Serial.printf("[LIGHT_CTRL] ON Day: %s (%d)\n", dayNames[_onDay], _onDay);
+        LOG_INFO("Light ON Day: %s (%d)", dayNames[_onDay], _onDay);
     }
 }
 
 void lightCtrlSetOnTime(const char* onTime) {
     if (onTime && strlen(onTime) >= 4) {
         _parseTime(onTime, &_onHour, &_onMinute);
-        Serial.printf("[LIGHT_CTRL] ON Time: %02d:%02d\n", _onHour, _onMinute);
+        LOG_INFO("Light ON Time: %02d:%02d", _onHour, _onMinute);
     }
 }
 
@@ -223,23 +224,23 @@ void lightCtrlSetOffDay(int day) {
     if (day >= 0 && day <= 6) {
         _offDay = day;
         static const char* dayNames[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
-        Serial.printf("[LIGHT_CTRL] OFF Day: %s (%d)\n", dayNames[_offDay], _offDay);
+        LOG_INFO("Light OFF Day: %s (%d)", dayNames[_offDay], _offDay);
     }
 }
 
 void lightCtrlSetOffTime(const char* offTime) {
     if (offTime && strlen(offTime) >= 4) {
         _parseTime(offTime, &_offHour, &_offMinute);
-        Serial.printf("[LIGHT_CTRL] OFF Time: %02d:%02d\n", _offHour, _offMinute);
+        LOG_INFO("Light OFF Time: %02d:%02d", _offHour, _offMinute);
     }
 }
 
 void lightCtrlPrintSchedule(void) {
     static const char* dayNames[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
-    Serial.println(F("[LIGHT_CTRL] === Current Schedule ==="));
-    Serial.printf("  Enabled: %s\n", _lightEnabled ? "YES" : "NO");
-    Serial.printf("  ON:  %s %02d:%02d\n", dayNames[_onDay], _onHour, _onMinute);
-    Serial.printf("  OFF: %s %02d:%02d\n", dayNames[_offDay], _offHour, _offMinute);
-    Serial.println(F("[LIGHT_CTRL] ======================="));
+    LOG_INFO("=== Current Light Schedule ===");
+    LOG_INFO("  Enabled: %s", _lightEnabled ? "YES" : "NO");
+    LOG_INFO("  ON:  %s %02d:%02d", dayNames[_onDay], _onHour, _onMinute);
+    LOG_INFO("  OFF: %s %02d:%02d", dayNames[_offDay], _offHour, _offMinute);
+    LOG_INFO("==============================");
 }
 

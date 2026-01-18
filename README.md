@@ -1,6 +1,15 @@
-# 🌿 Aquaponics Sensor System v2.2
+# 🌿 Aquaponics Sensor System v2.3 (Production)
 
 ระบบตรวจวัดและควบคุมคุณภาพน้ำสำหรับ Aquaponics พร้อมเชื่อมต่อ WiFi และ NETPIE IoT Platform
+
+**Production-Ready Features:**
+- ✅ Structured Logging System (Conditional Debug)
+- ✅ OTA Update Support
+- ✅ System Health Monitoring
+- ✅ Factory Reset Capability
+- ✅ Error Recovery & Resilience
+- ✅ Memory Management
+- ✅ Version Tracking
 
 ---
 
@@ -63,6 +72,11 @@
 - ✅ **pH Calibration** - Calibrate ผ่าน Serial หรือ NETPIE
 - ✅ **Non-blocking Design** - ทุก module ทำงานแบบ non-blocking
 - ✅ **WiFiManager** - ตั้งค่า WiFi ผ่าน Captive Portal
+- ✅ **OTA Updates** - อัพเดท firmware ผ่าน WiFi (ArduinoOTA)
+- ✅ **System Health** - ตรวจสอบ memory, uptime, reconnects
+- ✅ **Production Logging** - Structured logs with log levels
+- ✅ **Factory Reset** - Reset ทุกการตั้งค่าด้วยปุ่ม BOOT
+- ✅ **Error Recovery** - Auto-reconnect WiFi/MQTT
 
 ---
 
@@ -335,12 +349,14 @@ pH = 7.0 + (currentVoltage - voltage@pH7) / slope
 
 เปิด Serial Monitor (115200 baud) และพิมพ์คำสั่ง:
 
-| Command | Description                     |
-| ------- | ------------------------------- |
-| `cal7`  | Calibrate pH 7.0                |
-| `cal4`  | Calibrate pH 4.0                |
-| `ph`    | แสดงค่า pH และ Voltage ปัจจุบัน |
-| `help`  | แสดงรายการ commands             |
+| Command  | Description                     |
+| -------- | ------------------------------- |
+| `cal7`   | Calibrate pH 7.0                |
+| `cal4`   | Calibrate pH 4.0                |
+| `ph`     | แสดงค่า pH และ Voltage ปัจจุบัน |
+| `health` | แสดง system health status      |
+| `reset`  | Factory reset (ลบทุกการตั้งค่า) |
+| `help`   | แสดงรายการ commands             |
 
 ---
 
@@ -350,6 +366,9 @@ pH = 7.0 + (currentVoltage - voltage@pH7) / slope
 test/
 ├── include/                    # Header files
 │   ├── config.h               # Pin & Configuration
+│   ├── logger.h               # Production Logging System
+│   ├── system.h               # System Management
+│   ├── ota.h                  # OTA Update Support
 │   ├── TdsSensor.h            # TDS Sensor interface
 │   ├── dhtSensor.h            # DHT22 interface
 │   ├── tempSensor.h           # DS18B20 interface
@@ -361,6 +380,8 @@ test/
 │
 ├── src/                        # Source files
 │   ├── main.cpp               # Main program loop
+│   ├── system.cpp             # System Management
+│   ├── ota.cpp                # OTA Update
 │   ├── TdsSensor.cpp          # TDS implementation
 │   ├── dhtSensor.cpp          # DHT22 implementation
 │   ├── tempSensor.cpp         # DS18B20 implementation
@@ -436,22 +457,104 @@ pio device monitor   # Serial Monitor
 
 ---
 
+## Production Features
+
+### OTA Updates
+
+ระบบรองรับการอัพเดท firmware ผ่าน WiFi โดยไม่ต้องเชื่อมต่อ USB:
+
+1. **Enable OTA** (default: enabled)
+   ```cpp
+   // ใน config.h
+   #define OTA_ENABLED 1
+   #define OTA_HOSTNAME "aquaponics-sensor"
+   ```
+
+2. **Upload via PlatformIO:**
+   ```bash
+   pio run -t upload --upload-port <IP_ADDRESS>
+   ```
+
+3. **หรือใช้ Arduino IDE:**
+   - Tools → Port → Network Ports → `aquaponics-sensor.local`
+
+### System Health Monitoring
+
+ตรวจสอบสถานะระบบผ่าน Serial command `health`:
+
+```
+===== SYSTEM HEALTH =====
+Uptime: 86400 seconds
+Free Heap: 245678 bytes
+Min Free Heap: 234567 bytes
+Watchdog Resets: 0
+WiFi Reconnects: 2
+MQTT Reconnects: 1
+Sensors OK: YES
+=========================
+```
+
+### Factory Reset
+
+**วิธีที่ 1: ปุ่ม BOOT**
+- กดค้างปุ่ม BOOT 5 วินาทีตอน boot
+- ระบบจะลบทุกการตั้งค่าและ restart
+
+**วิธีที่ 2: Serial Command**
+- พิมพ์ `reset` ใน Serial Monitor
+
+**วิธีที่ 3: NETPIE**
+- ส่ง `{"data":{"factoryReset":1}}` ไปที่ shadow
+
+### Logging System
+
+ระบบใช้ structured logging แบบ conditional:
+
+```cpp
+// Production mode (default)
+#define LOG_LEVEL LOG_LEVEL_INFO  // ไม่แสดง debug logs
+
+// Development mode
+#define LOG_LEVEL LOG_LEVEL_DEBUG  // แสดงทุก logs
+```
+
+**Log Levels:**
+- `ERROR` - Critical errors
+- `WARN` - Warnings
+- `INFO` - General information
+- `DEBUG` - Debug messages (development only)
+
 ## Troubleshooting
 
 ### WiFi ไม่เชื่อมต่อ
 
-- ลบข้อมูล WiFi เดิม: กด Boot button 10 วินาที
+- **Factory Reset:** กด Boot button 5 วินาทีตอน boot
 - ตรวจสอบว่า WiFi เป็น 2.4GHz
+- ตรวจสอบ log ผ่าน Serial Monitor
 
 ### pH อ่านค่าไม่ถูกต้อง
 
 - Calibrate ใหม่ด้วย buffer pH 7.0 และ 4.0
 - ตรวจสอบว่า probe ไม่แห้ง
+- ตรวจสอบ calibration values: `ph` command
 
 ### NETPIE ไม่เชื่อมต่อ
 
-- ตรวจสอบ credentials ใน config.h
+- ตรวจสอบ credentials ใน `include/secrets.h`
 - ตรวจสอบ internet connection
+- ดู log ผ่าน Serial Monitor (`LOG_LEVEL_DEBUG`)
+
+### Memory Issues
+
+- ตรวจสอบ free heap: `health` command
+- ถ้า free heap < 20KB ระบบจะแจ้งเตือน
+- Restart ระบบถ้าจำเป็น
+
+### OTA Update Failed
+
+- ตรวจสอบว่า ESP32 เชื่อมต่อ WiFi แล้ว
+- ตรวจสอบ OTA password (ถ้ามี)
+- ใช้ USB upload เป็นทางเลือก
 
 ---
 

@@ -5,6 +5,7 @@
  */
 
 #include "phSensor.h"
+#include "logger.h"
 #include <Preferences.h>
 
 // ============================================================================
@@ -112,7 +113,7 @@ static void _saveCalibrationToNVS(void) {
     _prefs.putInt("volt7", _calibVoltage7);
     _prefs.putInt("volt4", _calibVoltage4);
     _prefs.putFloat("slope", _calibSlope);
-    Serial.println(F("[PH] Calibration saved to NVS!"));
+    LOG_INFO("pH calibration saved to NVS");
 }
 
 /**
@@ -123,13 +124,13 @@ static void _loadCalibrationFromNVS(void) {
     _calibVoltage4 = _prefs.getInt("volt4", 0);
     _calibSlope = _prefs.getFloat("slope", 0);
     
-    Serial.println(F("[PH] Loaded calibration from NVS:"));
-    Serial.printf("[PH]   Voltage@pH7: %d (%.1f mV)\n", _calibVoltage7, (_calibVoltage7 / 4095.0) * 3300.0);
+    LOG_INFO("Loaded pH calibration from NVS:");
+    LOG_INFO("  Voltage@pH7: %d (%.1f mV)", _calibVoltage7, (_calibVoltage7 / 4095.0) * 3300.0);
     if (_calibVoltage4 != 0) {
-        Serial.printf("[PH]   Voltage@pH4: %d (%.1f mV)\n", _calibVoltage4, (_calibVoltage4 / 4095.0) * 3300.0);
-        Serial.printf("[PH]   Slope: %.2f mV/pH\n", _calibSlope);
+        LOG_INFO("  Voltage@pH4: %d (%.1f mV)", _calibVoltage4, (_calibVoltage4 / 4095.0) * 3300.0);
+        LOG_INFO("  Slope: %.2f mV/pH", _calibSlope);
     } else {
-        Serial.println(F("[PH]   pH 4.0 not calibrated yet"));
+        LOG_INFO("  pH 4.0 not calibrated yet");
     }
 }
 
@@ -156,9 +157,8 @@ void phSetup(void) {
     _bufferFull = false;
     _sensorReady = false;
     
-    Serial.print(F("[PH] PIN: "));
-    Serial.println(PH_SENSOR_PIN);
-    Serial.println(F("[PH] Warming up... (30 samples needed)"));
+    LOG_INFO("pH sensor PIN: %d", PH_SENSOR_PIN);
+    LOG_INFO("Warming up... (%d samples needed)", PH_SAMPLE_COUNT);
 }
 
 void phLoop(void) {
@@ -183,7 +183,7 @@ void phLoop(void) {
         if (_bufferFull) {
             if (!_sensorReady) {
                 _sensorReady = true;
-                Serial.println(F("[PH] Sensor ready!"));
+                LOG_INFO("pH sensor ready!");
             }
             
             int medianValue = _getMedianValue();
@@ -215,56 +215,56 @@ void phSetTemperature(float temperature) {
 
 void phCalibratePh7(void) {
     if (!_bufferFull) {
-        Serial.println(F("[PH] ERROR: Need more samples. Wait for sensor ready."));
+        LOG_ERROR("Need more samples. Wait for sensor ready.");
         return;
     }
     
     _calibVoltage7 = _getMedianValue();
     float voltage = (_calibVoltage7 / 4095.0) * 3300.0;
     
-    Serial.println(F("[PH] ===== CALIBRATION pH 7.0 ====="));
-    Serial.printf("[PH] ADC Value: %d\n", _calibVoltage7);
-    Serial.printf("[PH] Voltage: %.1f mV\n", voltage);
-    Serial.printf("[PH] Temperature: %.1f °C\n", _waterTemperature);
+    LOG_INFO("===== CALIBRATION pH 7.0 =====");
+    LOG_INFO("ADC Value: %d", _calibVoltage7);
+    LOG_INFO("Voltage: %.1f mV", voltage);
+    LOG_INFO("Temperature: %.1f °C", _waterTemperature);
     
     // Recalculate slope if pH 4 calibration exists
     if (_calibVoltage4 != 0) {
         float voltage4 = (_calibVoltage4 / 4095.0) * 3300.0;
         float voltage7 = voltage;
         _calibSlope = (voltage4 - voltage7) / (4.0 - 7.0);
-        Serial.printf("[PH] Calculated slope: %.2f mV/pH\n", _calibSlope);
+        LOG_INFO("Calculated slope: %.2f mV/pH", _calibSlope);
     }
     
     // บันทึกลง NVS
     _saveCalibrationToNVS();
-    Serial.println(F("[PH] ================================"));
+    LOG_INFO("================================");
 }
 
 void phCalibratePh4(void) {
     if (!_bufferFull) {
-        Serial.println(F("[PH] ERROR: Need more samples. Wait for sensor ready."));
+        LOG_ERROR("Need more samples. Wait for sensor ready.");
         return;
     }
     
     _calibVoltage4 = _getMedianValue();
     float voltage = (_calibVoltage4 / 4095.0) * 3300.0;
     
-    Serial.println(F("[PH] ===== CALIBRATION pH 4.0 ====="));
-    Serial.printf("[PH] ADC Value: %d\n", _calibVoltage4);
-    Serial.printf("[PH] Voltage: %.1f mV\n", voltage);
-    Serial.printf("[PH] Temperature: %.1f °C\n", _waterTemperature);
+    LOG_INFO("===== CALIBRATION pH 4.0 =====");
+    LOG_INFO("ADC Value: %d", _calibVoltage4);
+    LOG_INFO("Voltage: %.1f mV", voltage);
+    LOG_INFO("Temperature: %.1f °C", _waterTemperature);
     
     // Calculate slope if pH 7 calibration exists
     if (_calibVoltage7 != 0) {
         float voltage4 = voltage;
         float voltage7 = (_calibVoltage7 / 4095.0) * 3300.0;
         _calibSlope = (voltage4 - voltage7) / (4.0 - 7.0);
-        Serial.printf("[PH] Calculated slope: %.2f mV/pH\n", _calibSlope);
+        LOG_INFO("Calculated slope: %.2f mV/pH", _calibSlope);
     }
     
     // บันทึกลง NVS
     _saveCalibrationToNVS();
-    Serial.println(F("[PH] ================================"));
+    LOG_INFO("================================");
 }
 
 void phClearCalibration(void) {
@@ -272,6 +272,6 @@ void phClearCalibration(void) {
     _calibVoltage7 = PH_VOLTAGE_AT_7;
     _calibVoltage4 = 0;
     _calibSlope = 0;
-    Serial.println(F("[PH] Calibration cleared from NVS!"));
+    LOG_INFO("pH calibration cleared from NVS");
 }
 
