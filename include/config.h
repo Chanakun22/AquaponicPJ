@@ -111,7 +111,7 @@
 #define OTA_ENABLED         1       // 1=Enable OTA, 0=Disable
 #define OTA_PORT            3232     // OTA update port
 #define OTA_HOSTNAME        "aquaponics-sensor"  // OTA hostname
-#define OTA_PASSWORD        ""      // OTA password (empty = no password)
+#define OTA_PASSWORD        SECRET_OTA_PASSWORD
 
 /**
  * @section Factory Reset Settings

@@ -9,6 +9,7 @@
 #include "logger.h"
 #include "system.h"
 #include "ota.h"
+#include "webServer.h"
 #include "TdsSensor.h"
 #include "dhtSensor.h"
 #include "tempSensor.h"
@@ -137,6 +138,9 @@ void setup() {
     
     // เริ่มต้น WiFi (non-blocking)
     wifiSetup();
+    
+    // เริ่มต้น Web Server & WebSerial
+    webServerSetup();
     
     // เริ่มต้น OTA (after WiFi)
     otaSetup();
