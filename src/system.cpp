@@ -7,6 +7,7 @@
 #include "logger.h"
 #include "config.h"
 #include <Preferences.h>
+#include <WiFi.h>
 
 #if defined(ESP32)
 #include <ESP.h>
@@ -72,6 +73,9 @@ void systemInit(void) {
     #else
     _minFreeHeap = 0;
     #endif
+
+    // Initialize Factory Reset Pin
+    pinMode(FACTORY_RESET_PIN, INPUT_PULLUP);
     
     _systemInitialized = true;
     
@@ -84,6 +88,27 @@ void systemInit(void) {
 void systemLoop(void) {
     if (!_systemInitialized) {
         return;
+    }
+
+    // Factory Reset Button Logic
+    static unsigned long _btnPressStart = 0;
+    if (digitalRead(FACTORY_RESET_PIN) == LOW) {
+        if (_btnPressStart == 0) {
+            _btnPressStart = millis();
+        } else if (millis() - _btnPressStart > FACTORY_RESET_TIME) {
+            // Button held long enough
+            LOG_WARN("Factory Reset Button Detected!");
+            
+            // Blink LED rapidly to indicate reset
+            // Note: Removed digitalWrite blinking to avoid conflict with RMT/NeoPixel on ESP32-S3
+            LOG_INFO("Resetting in 3... 2... 1...");
+            delay(1000);
+            
+            systemFactoryReset();
+            _btnPressStart = 0; // Reset counter (though system will reboot)
+        }
+    } else {
+        _btnPressStart = 0; // Button released
     }
     
     // Update minimum free heap
@@ -135,6 +160,11 @@ void systemFactoryReset(void) {
     prefs.begin("WiFiManager", false);
     prefs.clear();
     prefs.end();
+
+    // Force erase WiFi credentials from NVS
+    #if defined(ESP32)
+    WiFi.disconnect(true, true);  // Turn off and erase credentials
+    #endif
     
     // Clear pH calibration
     prefs.begin("phSensor", false);

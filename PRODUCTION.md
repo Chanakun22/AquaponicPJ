@@ -1,195 +1,85 @@
-# Production Deployment Guide
+# 🏭 คู่มือการเตรียมระบบสำหรับใช้งานจริง (Production Guide)
 
-## Pre-Deployment Checklist
-
-### 1. Configuration
-
-- [ ] Copy `include/secrets.h.example` to `include/secrets.h`
-- [ ] Fill in NETPIE credentials
-- [ ] Set WiFi AP name and password
-- [ ] Verify pin configurations match hardware
-- [ ] Set log level to `LOG_LEVEL_INFO` for production
-
-### 2. Build Configuration
-
-- [ ] Verify `platformio.ini` board settings
-- [ ] Check library versions are stable
-- [ ] Enable OTA if needed
-- [ ] Set appropriate watchdog timeout
-
-### 3. Testing
-
-- [ ] Test all sensors individually
-- [ ] Test WiFi connection and reconnection
-- [ ] Test NETPIE MQTT connection
-- [ ] Test pH calibration
-- [ ] Test light schedule
-- [ ] Test factory reset
-- [ ] Test OTA update (if enabled)
-- [ ] Run for 24+ hours stability test
-
-## Deployment Steps
-
-### Step 1: Build Firmware
-
-```bash
-pio run
-```
-
-### Step 2: Upload via USB
-
-```bash
-pio run -t upload
-pio device monitor
-```
-
-### Step 3: Initial Configuration
-
-1. ESP32 will create WiFi AP
-2. Connect to AP and configure WiFi
-3. Verify connection to NETPIE
-4. Calibrate pH sensor
-
-### Step 4: Enable OTA (Optional)
-
-After initial WiFi setup, future updates can use OTA:
-
-```bash
-pio run -t upload --upload-port <ESP32_IP>
-```
-
-## Production Monitoring
-
-### Key Metrics to Monitor
-
-1. **Uptime** - Should be stable (no unexpected resets)
-2. **Free Heap** - Should stay above 20KB
-3. **Reconnects** - WiFi/MQTT reconnects should be minimal
-4. **Sensor Readings** - Values should be within expected ranges
-
-### Logging in Production
-
-Set log level to `LOG_LEVEL_INFO` in `config.h`:
-
-```cpp
-#define LOG_LEVEL LOG_LEVEL_INFO  // Production
-```
-
-This will:
-- Show errors and warnings
-- Show important information
-- Hide debug messages (reduce serial traffic)
-
-### Remote Monitoring
-
-Monitor system health via NETPIE:
-- Check `health` topic for system status
-- Monitor sensor data for anomalies
-- Set up alerts for disconnections
-
-## Maintenance
-
-### Regular Tasks
-
-1. **Weekly:**
-   - Check system health via Serial or NETPIE
-   - Verify sensor readings are reasonable
-   - Check for firmware updates
-
-2. **Monthly:**
-   - Clean pH probe
-   - Verify calibration accuracy
-   - Review error logs
-
-3. **Quarterly:**
-   - Recalibrate pH sensor
-   - Check hardware connections
-   - Update firmware if available
-
-### Troubleshooting Production Issues
-
-**System Keeps Restarting:**
-- Check watchdog timeout
-- Review error logs
-- Verify power supply stability
-
-**Sensors Reading Incorrectly:**
-- Recalibrate pH sensor
-- Check sensor connections
-- Verify sensor health
-
-**WiFi/MQTT Disconnections:**
-- Check network stability
-- Review reconnect counts
-- Verify credentials
-
-**Memory Issues:**
-- Monitor free heap
-- Restart if consistently low
-- Review code for memory leaks
-
-## Version Management
-
-Current Version: **2.3.0**
-
-Version format: `MAJOR.MINOR.PATCH`
-
-- **MAJOR** - Breaking changes
-- **MINOR** - New features
-- **PATCH** - Bug fixes
-
-Check version via Serial:
-```
-health
-```
-
-Or in code:
-```cpp
-systemGetVersion();  // Returns "2.3.0"
-```
-
-## Security Considerations
-
-1. **Credentials:**
-   - Never commit `secrets.h` to git
-   - Use strong WiFi passwords
-   - Rotate NETPIE credentials periodically
-
-2. **OTA:**
-   - Set OTA password if enabled
-   - Use secure WiFi network
-   - Verify firmware signatures
-
-3. **Network:**
-   - Use WPA2/WPA3 WiFi
-   - Consider VPN for remote access
-   - Monitor for unauthorized access
-
-## Backup & Recovery
-
-### Backup Configuration
-
-Save these files:
-- `include/secrets.h` (credentials)
-- pH calibration values (via Serial `ph` command)
-- Light schedule settings
-
-### Recovery Procedure
-
-1. Factory reset (BOOT button 5 seconds)
-2. Reconfigure WiFi
-3. Recalibrate pH sensor
-4. Restore light schedule via NETPIE
-
-## Support
-
-For issues or questions:
-1. Check Serial logs (`LOG_LEVEL_DEBUG`)
-2. Review system health (`health` command)
-3. Check NETPIE connection status
-4. Verify hardware connections
+เอกสารนี้รวบรวมขั้นตอนและข้อควรระวังทั้งหมด ก่อนนำบอร์ดไปติดตั้งหน้างาน เพื่อให้ระบบทำงานได้เสถียรที่สุด
 
 ---
 
-**Last Updated:** 2024
-**Firmware Version:** 2.3.0
+## 📋 1. รายการตรวจสอบก่อนติดตั้ง (Pre-Deployment Checklist)
+
+### ✅ ด้านความปลอดภัย (Security)
+
+- [ ] **เปลี่ยนรหัสผ่าน:** ตรวจสอบไฟล์ `include/secrets.h` ว่าแก้ไขรหัสผ่านหรือยัง?
+  - `SECRET_WIFI_AP_PASS` (รหัส Hotspot ตอนเน็ตหลุด)
+  - `SECRET_TELNET_PASSWORD` (รหัสเข้าดู Log)
+  - `SECRET_OTA_PASSWORD` (รหัสอัปเดตผ่าน WiFi)
+- [ ] **ความลับ:** ห้ามนำไฟล์ `secrets.h` ขึ้น GitHub หรือแชร์ให้คนอื่นเด็ดขาด
+
+### ✅ ด้านฮาร์ดแวร์ (Hardware)
+
+- [ ] **แหล่งจ่ายไฟ:** ใช้ Adapter 5V ที่มีคุณภาพ (แนะนำ 2A ขึ้นไป) เพื่อป้องกัน WiFi หลุดบ่อย
+- [ ] **สายสัญญาณ:** สายเซ็นเซอร์ DS18B20 และ DHT22 ยาวไม่ควรเกิน 2 เมตร (ถ้าเกินต้องใช้สาย Shield)
+- [ ] **กล่องกันน้ำ:** หากติดตั้งภายนอก ต้องใส่กล่องกันน้ำที่มีรูระบายความร้อน
+
+### ✅ ด้านซอฟต์แวร์ (Software)
+
+- [ ] **Watchdog:** ตรวจสอบ `config.h` ว่า `#define WATCHDOG_ENABLED 1` (เปิดใช้งาน)
+- [ ] **Log Level:** ใน Production Build ควรเป็น `LOG_LEVEL_INFO` (ปิด Debug เพื่อความเร็ว)
+
+---
+
+## 🚀 2. วิธี Build และ Upload (Production Mode)
+
+ระบบนี้ถูกตั้งค่าให้เป็นโหมด Production โดยอัตโนมัติ (Optimization Level 2 + No Debug Assertions)
+
+### วิธี Upload
+
+1. เสียบสาย USB เข้ากับบอร์ด
+2. กด Upload ผ่าน PlatformIO ตามปกติ
+3. หรือใช้คำสั่ง Terminal:
+   ```bash
+   pio run -e production -t upload
+   ```
+
+### วิธีอัปเดตผ่าน WiFi (OTA)
+
+หากติดตั้งไปแล้วและต้องการแก้บั๊ก:
+
+1. เชื่อมต่อ WiFi วงเดียวกับบอร์ด
+2. แก้ไข IP ใน `platformio.ini` (section `[env:ota_upload]`)
+3. ใช้คำสั่ง:
+   ```bash
+   pio run -e ota_upload -t upload
+   ```
+
+---
+
+## 🛠 3. การบำรุงรักษา (Maintenance)
+
+### 💡 ไฟสถานะ (Status LED)
+
+- **สีฟ้า (กระพริบ):** กำลังบูตระบบ / กำลังต่อ WiFi
+- **สีเขียว (ค้าง):** ระบบทำงานปกติ (Online)
+- **สีเหลือง (กระพริบ):** WiFi หลุด (กำลังต่อใหม่)
+- **สีแดง (กระพริบเร็วๆ):** เซ็นเซอร์มีปัญหา หรือ ระบบ Error
+
+### 🔧 การแก้ปัญหาเบื้องต้น
+
+1. **WiFi หลุด/เปลี่ยนรหัส:**
+   - กดปุ่ม **BOOT ค้างไว้ 5 วินาที**
+   - รอไฟกระพริบ -> ใช้มือถือ connect `AquaponicsAP` เพื่อตั้งค่าใหม่
+2. **ระบบค้าง/ไม่ตอบสนอง:**
+   - ระบบมี **Watchdog** จะรีสตาร์ทตัวเองภายใน 1 นาที
+   - หากไม่หาย ให้ถอดปลั๊กไฟแล้วเสียบใหม่
+
+### 🔍 การดู Log (Debug)
+
+เมื่อเกิดปัญหาหน้างาน ให้ใช้คอมพิวเตอร์หรือมือถือ:
+
+1. เชื่อม WiFi วงเดียวกัน
+2. เปิดแอป **Telnet** ไปที่ IP บอร์ด (Port 23)
+3. ใส่รหัสผ่าน `admin` (หรือที่ตั้งไว้)
+4. แคปเจอร์หน้าจอ Log ส่งให้ผู้พัฒนา
+
+---
+
+_เอกสารนี้สำหรับเจ้าหน้าที่ติดตั้งและดูแลรักษาระบบ_

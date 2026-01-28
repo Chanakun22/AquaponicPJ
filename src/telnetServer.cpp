@@ -61,7 +61,7 @@ void telnetLoop(void) {
                         if (_inputBuffer == SECRET_TELNET_PASSWORD) {
                             _isAuthenticated = true;
                             _telnetClient.println("\r\nAccess Granted.");
-                            _telnetClient.println("Type 'help' for commands.");
+                            _telnetClient.println("เข้าสู่ระบบเรียบร้อย✅");
                         } else {
                             _telnetClient.println("\r\nAccess Denied.");
                             _telnetClient.print("Password: ");
