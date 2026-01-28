@@ -58,19 +58,19 @@
  * @brief ช่วงค่าที่ยอมรับได้สำหรับแต่ละ sensor
  */
 #define TDS_MIN             0.0f    // TDS ต่ำสุด (ppm)
-#define TDS_MAX             1000.0f // TDS สูงสุด (ppm)
+#define TDS_MAX             2000.0f // TDS สูงสุด (ppm)
 
 #define PH_MIN              0.0f    // pH ต่ำสุด
 #define PH_MAX              14.0f   // pH สูงสุด
 
-#define TEMP_MIN            -10.0f  // อุณหภูมิต่ำสุด (°C) - ทั้งน้ำและอากาศ
-#define TEMP_MAX            100.0f  // อุณหภูมิสูงสุด (°C) - ทั้งน้ำและอากาศ
+#define TEMP_MIN            0.0f    // อุณหภูมิต่ำสุด (°C)
+#define TEMP_MAX            50.0f   // อุณหภูมิสูงสุด (°C)
 
 #define HUMIDITY_MIN        0.0f    // ความชื้นต่ำสุด (%)
 #define HUMIDITY_MAX        100.0f  // ความชื้นสูงสุด (%)
 
 #define LIGHT_MIN           0.0f    // ความเข้มแสงต่ำสุด (lux)
-#define LIGHT_MAX           65535.0f // ความเข้มแสงสูงสุด (lux) - BH1750 maximum
+#define LIGHT_MAX           65535.0f // ความเข้มแสงสูงสุด (lux)
 
 /**
  * @section DHT Sensor Settings
@@ -181,24 +181,6 @@
  * @section Light Schedule Settings
  */
 #define LIGHT_CHECK_INTERVAL 1000             // ตรวจสอบตารางเวลาทุก (ms)
-
-// ============================================================================
-// VALIDATION SETTINGS
-// ============================================================================
-
-/**
- * @section Sensor Validation Thresholds
- */
-#define TDS_MIN             0.0f
-#define TDS_MAX             2000.0f
-#define PH_MIN              0.0f
-#define PH_MAX              14.0f
-#define TEMP_MIN            0.0f
-#define TEMP_MAX            50.0f
-#define HUMIDITY_MIN        0.0f
-#define HUMIDITY_MAX        100.0f
-#define LIGHT_MIN           0.0f
-#define LIGHT_MAX           65535.0f
 
 // ============================================================================
 // WATCHDOG TIMER CONFIGURATION
