@@ -103,7 +103,9 @@
  * LOG_LEVEL_INFO = Production (no debug)
  * LOG_LEVEL_DEBUG = Development (all logs)
  */
+#ifndef LOG_LEVEL
 #define LOG_LEVEL           LOG_LEVEL_INFO
+#endif
 
 /**
  * @section OTA Update Settings
