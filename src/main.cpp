@@ -18,6 +18,7 @@
 #include "lightController.h"
 #include "wifiConn.h"
 #include "netpie.h"
+#include "commandHandler.h"
 
 #if defined(ESP32) && WATCHDOG_ENABLED
 #include "esp_task_wdt.h"
@@ -117,6 +118,9 @@ void setup() {
     lightSetup();
     phSetup();
     
+    // Command Handler
+    commandSetup();
+    
     LOG_INFO("All modules initialized");
     LOG_MODULE_END("Aquaponics Sensor System");
 }
@@ -172,41 +176,8 @@ void loop() {
     }
     phLoop();
     
-    // ======== Serial Commands ========
-    if (Serial.available()) {
-        char cmd[16];
-        size_t len = Serial.readBytesUntil('\n', cmd, sizeof(cmd) - 1);
-        cmd[len] = '\0';
-        while (len > 0 && (cmd[len-1] == ' ' || cmd[len-1] == '\r' || cmd[len-1] == '\n')) cmd[--len] = '\0';
-        
-        if (strcmp(cmd, "cal7") == 0) {
-            LOG_INFO("Calibrating pH 7.0...");
-            phCalibratePh7();
-        } else if (strcmp(cmd, "cal4") == 0) {
-            LOG_INFO("Calibrating pH 4.0...");
-            phCalibratePh4();
-        } else if (strcmp(cmd, "ph") == 0) {
-            LOG_INFO("pH: %.2f, Voltage: %.1f mV", phRead(), phReadVoltage());
-        } else if (strcmp(cmd, "health") == 0) {
-            SystemHealth_t health;
-            systemGetHealth(&health);
-            LOG_INFO("===== SYSTEM HEALTH =====");
-            LOG_INFO("Uptime: %lu s", health.uptimeMs / 1000);
-            LOG_INFO("Free Heap: %lu B", health.freeHeap);
-            LOG_INFO("Min Free Heap: %lu B", health.minFreeHeap);
-            LOG_INFO("Watchdog Resets: %u", health.watchdogResets);
-            LOG_INFO("WiFi Reconnects: %u", health.wifiReconnects);
-            LOG_INFO("=========================");
-        } else if (strcmp(cmd, "reset") == 0) {
-            LOG_WARN("Factory reset requested!");
-            systemFactoryReset();
-        } else if (strcmp(cmd, "reboot") == 0) {
-            LOG_WARN("Rebooting...");
-            ESP.restart();
-        } else {
-            LOG_WARN("Unknown command: %s", cmd);
-        }
-    }
+    // ======== Command Handling (Serial) ========
+    commandCheckSerial();
     
     // ======== Publish Data ========
     if (wifiIsConnected() && netpieIsConnected()) {

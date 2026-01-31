@@ -5,6 +5,7 @@
 
 #include "telnetServer.h"
 #include "config.h"  // For SECRET_TELNET_PASSWORD
+#include "commandHandler.h"
 #include <WiFi.h>
 
 WiFiServer _telnetServer(23);
@@ -73,15 +74,22 @@ void telnetLoop(void) {
                     _telnetClient.print("*"); // Mask password
                 }
             } 
-            // Authenticated command handling (if we want to move Serial cmds here later)
+            // Authenticated command handling
             else {
-                // For now, simple echo or discard. 
-                // Commands are handled in main.cpp via Serial, 
-                // but we could buffer them here and pass to a shared command parser.
-                // Currently main.cpp reads from Serial. 
-                // If we want Telnet commands, we need to integrate better. 
-                // BUT user just asked for production ready. 
-                // Security is priority.
+                if (c == '\n' || c == '\r') {
+                    if (_inputBuffer.length() > 0) {
+                        // Convert String to char array for commandProcess
+                        char cmdBuf[64];
+                        _inputBuffer.toCharArray(cmdBuf, sizeof(cmdBuf));
+                        
+                        // Process command via commandHandler
+                        commandProcess(cmdBuf, CMD_OUTPUT_TELNET);
+                        
+                        _inputBuffer = "";
+                    }
+                } else if (isPrintable(c)) {
+                    _inputBuffer += c;
+                }
             }
         }
     }
