@@ -121,7 +121,7 @@ bool wifiIsConnected(void) {
 void wifiReset(void) {
     LOG_WARN("Resetting WiFi settings...");
     _wifiMgr.resetSettings();
-    delay(500);
+    // ไม่ต้องใช้ delay - restart จะทำให้ทุกอย่างหยุดอยู่แล้ว
     ESP.restart();
 }
 

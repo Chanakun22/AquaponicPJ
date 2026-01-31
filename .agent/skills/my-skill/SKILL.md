@@ -58,7 +58,84 @@ delay(1000);
 - Implement input validation and error handling
 - Use `extern` for global data access across files
 
-## 7. Response Language
+## 7. Production Standards
+
+### 7.1 Non-Blocking Requirements (Critical for Production)
+
+- **ABSOLUTELY NO `delay()` ALLOWED** - ใช้ `millis()` based timing เท่านั้น
+- Use **State Machines** for multi-step operations (e.g., sensor calibration, connection retry)
+- Implement **Async I/O patterns** - never wait synchronously for network/sensor responses
+- Consider **FreeRTOS Tasks** for CPU-intensive operations that might block the main loop
+- Always **yield to other tasks** using `vTaskDelay(1)` or `yield()` in long loops
+- Implement **timeout mechanisms** for all external communications
+
+```cpp
+// ✅ Production Non-blocking State Machine Pattern
+enum SensorState { IDLE, READING, PROCESSING, ERROR };
+static SensorState state = IDLE;
+static unsigned long stateTimer = 0;
+
+void sensorLoop() {
+    switch (state) {
+        case IDLE:
+            if (millis() - stateTimer >= READ_INTERVAL) {
+                startAsyncRead();
+                state = READING;
+                stateTimer = millis();
+            }
+            break;
+        case READING:
+            if (isReadComplete()) {
+                state = PROCESSING;
+            } else if (millis() - stateTimer > TIMEOUT_MS) {
+                state = ERROR;  // Timeout - graceful handling
+            }
+            break;
+        case PROCESSING:
+            processData();
+            state = IDLE;
+            stateTimer = millis();
+            break;
+        case ERROR:
+            handleError();
+            state = IDLE;
+            stateTimer = millis();
+            break;
+    }
+}
+```
+
+### 7.2 Error Handling & Reliability
+
+- Ensure code is **production-ready** with proper error handling and recovery
+- Implement **Watchdog Timer (WDT)** feeding in long-running operations to prevent system hangs
+- Use **OTA (Over-The-Air)** compatible code structure - avoid blocking operations during updates
+- Optimize **memory usage** - prefer stack allocation over heap when possible
+- Add **graceful degradation** - if a sensor fails, system should continue operating with other sensors
+- Use **LOG_LEVEL** appropriately: DEBUG for development, INFO or WARN for production
+- Implement **retry mechanisms** with exponential backoff for network operations
+- Consider **power consumption** for battery-powered deployments
+
+```cpp
+// ✅ Production-ready error handling
+bool readSensor() {
+    static int failCount = 0;
+    float value = sensor.read();
+
+    if (isnan(value) || value < MIN_VALID || value > MAX_VALID) {
+        failCount++;
+        LOG_WARN("[Sensor] Invalid reading #%d", failCount);
+        if (failCount >= MAX_RETRIES) {
+            LOG_ERROR("[Sensor] Max retries exceeded, using last known good value");
+        }
+        return false;
+    }
+    failCount = 0;  // Reset on success
+    return true;
+}
+```
+
+## 8. Response Language
 
 - **Crucial:** Explain your technical decisions in **Thai language** so the user can understand the implementation
 - Keep the tone professional, encouraging, and easy to understand for beginners
