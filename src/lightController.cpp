@@ -162,7 +162,7 @@ void lightCtrlSetState(bool state) {
     // ใช้ NeoPixel RGB LED แทน digitalWrite
     if (state) {
         // ON: สีเขียว
-        _neopixel.setPixelColor(0, _neopixel.Color(0, 255, 0));
+        _neopixel.setPixelColor(0, _neopixel.Color(255, 0, 255));
     } else {
         // OFF: ปิด LED
         _neopixel.setPixelColor(0, _neopixel.Color(0, 0, 0));
