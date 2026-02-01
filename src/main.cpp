@@ -19,6 +19,7 @@
 #include "wifiConn.h"
 #include "netpie.h"
 #include "commandHandler.h"
+#include "dataApi.h"  // Test: HTTP API สำหรับ Monitor (ลบได้)
 
 #if defined(ESP32) && WATCHDOG_ENABLED
 #include "esp_task_wdt.h"
@@ -121,6 +122,9 @@ void setup() {
     // Command Handler
     commandSetup();
     
+    // Test: Data API สำหรับ Web Monitor (ลบได้)
+    dataApiSetup();
+    
     LOG_INFO("All modules initialized");
     LOG_MODULE_END("Aquaponics Sensor System");
 }
@@ -134,6 +138,7 @@ void loop() {
     telnetLoop();    // Handle Telnet clients
     otaLoop();       // Handle OTA updates
     netpieLoop();    // Handle Netpie MQTT
+    dataApiLoop();   // Test: Handle HTTP API requests (ลบได้)
     
     // ======== Light Controller ========
     lightCtrlLoop();

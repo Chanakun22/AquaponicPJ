@@ -27,9 +27,11 @@
 typedef struct {
     unsigned long uptimeMs;        // System uptime in milliseconds
     unsigned long freeHeap;        // Free heap memory (bytes)
+    unsigned long heapSize;        // Total heap memory (bytes)
     unsigned long minFreeHeap;     // Minimum free heap since boot
+    float cpuTemp;                 // Chip temperature (Celsius)
     unsigned int watchdogResets;   // Number of watchdog resets
-    unsigned int wifiReconnects;    // Number of WiFi reconnections
+    unsigned int wifiReconnects;   // Number of WiFi reconnections
     unsigned int mqttReconnects;   // Number of MQTT reconnections
     bool sensorsOk;                // All sensors operational
 } SystemHealth_t;
@@ -42,6 +44,8 @@ typedef struct {
  * @brief Initialize system management
  */
 void systemInit(void);
+
+
 
 /**
  * @brief System loop (call in main loop)

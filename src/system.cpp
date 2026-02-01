@@ -136,10 +136,14 @@ void systemGetHealth(SystemHealth_t* health) {
     
     #if defined(ESP32)
     health->freeHeap = ESP.getFreeHeap();
+    health->heapSize = ESP.getHeapSize();
     health->minFreeHeap = _minFreeHeap;
+    health->cpuTemp = temperatureRead();
     #else
     health->freeHeap = 0;
+    health->heapSize = 0;
     health->minFreeHeap = 0;
+    health->cpuTemp = 0.0f;
     #endif
     
     health->watchdogResets = _watchdogResets;
@@ -217,3 +221,5 @@ void systemIncrementMqttReconnects(void) {
     _mqttReconnects++;
     _savePersistedStats();
 }
+
+

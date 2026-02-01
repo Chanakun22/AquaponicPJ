@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌿 Aquaponics Monitor</title>
+    <style>
+      :root {
+        --bg-primary: #0f172a;
+        --bg-secondary: #1e293b;
+        --bg-card: #334155;
+        --accent-green: #10b981;
+        --accent-blue: #3b82f6;
+        --accent-cyan: #06b6d4;
+        --accent-orange: #f59e0b;
+        --accent-red: #ef4444;
+        --accent-purple: #8b5cf6;
+        --text-primary: #f8fafc;
+        --text-secondary: #94a3b8;
+        --glass: rgba(255, 255, 255, 0.05);
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          "Segoe UI",
+          system-ui,
+          -apple-system,
+          sans-serif;
+        background: linear-gradient(135deg, var(--bg-primary) 0%, #1a1a2e 100%);
+        color: var(--text-primary);
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+
+      /* Header */
+      .header {
+        text-align: center;
+        margin-bottom: 30px;
+        padding: 20px;
+        background: var(--glass);
+        border-radius: 16px;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .header h1 {
+        font-size: 2rem;
+        background: linear-gradient(
+          90deg,
+          var(--accent-green),
+          var(--accent-cyan)
+        );
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 10px;
+      }
+
+      .header .status {
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        flex-wrap: wrap;
+      }
+
+      .status-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+      }
+
+      .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+      }
+
+      .status-dot.online {
+        background: var(--accent-green);
+      }
+      .status-dot.offline {
+        background: var(--accent-red);
+        animation: none;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+
+      /* Connection Form */
+      .connection-form {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        margin-bottom: 30px;
+        flex-wrap: wrap;
+      }
+
+      .connection-form input {
+        padding: 12px 20px;
+        border: 2px solid var(--bg-card);
+        border-radius: 12px;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font-size: 1rem;
+        width: 250px;
+        transition: border-color 0.3s;
+      }
+
+      .connection-form input:focus {
+        outline: none;
+        border-color: var(--accent-cyan);
+      }
+
+      .connection-form button {
+        padding: 12px 30px;
+        border: none;
+        border-radius: 12px;
+        background: linear-gradient(
+          90deg,
+          var(--accent-green),
+          var(--accent-cyan)
+        );
+        color: white;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s;
+      }
+
+      .connection-form button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);
+      }
+
+      /* Progress Bar Styles */
+      .progress-container {
+        margin-top: 10px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        height: 8px;
+        overflow: hidden;
+      }
+      
+      .progress-bar {
+        height: 100%;
+        width: 0%;
+        border-radius: 10px;
+        transition: width 0.5s ease;
+      }
+      
+      .progress-bar.green { background: linear-gradient(90deg, #10b981, #34d399); }
+      .progress-bar.yellow { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+      .progress-bar.red { background: linear-gradient(90deg, #ef4444, #f87171); }
+      
+      .usage-text {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        margin-top: 5px;
+        display: flex;
+        justify-content: space-between;
+      }
+
+      /* Sensor Grid */
+      .sensor-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+      }
+
+      .sensor-card {
+        background: var(--glass);
+        border-radius: 20px;
+        padding: 25px;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        transition:
+          transform 0.3s,
+          box-shadow 0.3s;
+      }
+
+      .sensor-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+      }
+
+      .sensor-card .icon {
+        font-size: 2.5rem;
+        margin-bottom: 15px;
+      }
+
+      .sensor-card .label {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        margin-bottom: 5px;
+      }
+
+      .sensor-card .value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        line-height: 1.2;
+      }
+
+      .sensor-card .unit {
+        font-size: 1rem;
+        color: var(--text-secondary);
+        font-weight: 400;
+      }
+
+      .sensor-card.water-temp .value {
+        color: var(--accent-cyan);
+      }
+      .sensor-card.air-temp .value {
+        color: var(--accent-orange);
+      }
+      .sensor-card.humidity .value {
+        color: var(--accent-blue);
+      }
+      .sensor-card.tds .value {
+        color: var(--accent-green);
+      }
+      .sensor-card.ph .value {
+        color: var(--accent-purple);
+      }
+      .sensor-card.light .value {
+        color: var(--accent-orange);
+      }
+
+      /* System Status */
+      .system-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 30px;
+      }
+
+      .system-item {
+        background: var(--bg-secondary);
+        border-radius: 12px;
+        padding: 15px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .system-item .label {
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+      }
+
+      .system-item .value {
+        font-weight: 600;
+        font-size: 0.95rem;
+      }
+
+      /* Log Section */
+      .log-section {
+        background: var(--bg-secondary);
+        border-radius: 16px;
+        padding: 20px;
+      }
+
+      .log-section h3 {
+        margin-bottom: 15px;
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      .log-container {
+        background: var(--bg-primary);
+        border-radius: 12px;
+        padding: 15px;
+        height: 200px;
+        overflow-y: auto;
+        font-family: "Consolas", "Monaco", monospace;
+        font-size: 0.85rem;
+        line-height: 1.6;
+      }
+
+      .log-entry {
+        padding: 2px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      .log-entry .time {
+        color: var(--text-secondary);
+        margin-right: 10px;
+      }
+
+      .log-entry.info {
+        color: var(--accent-cyan);
+      }
+      .log-entry.warn {
+        color: var(--accent-orange);
+      }
+      .log-entry.error {
+        color: var(--accent-red);
+      }
+
+      /* Responsive */
+      @media (max-width: 600px) {
+        .header h1 {
+          font-size: 1.5rem;
+        }
+        .sensor-card .value {
+          font-size: 2rem;
+        }
+        .connection-form input {
+          width: 100%;
+        }
+      }
+
+      /* Loading State */
+      .loading .value {
+        color: var(--text-secondary) !important;
+      }
+
+      /* Footer */
+      .footer {
+        text-align: center;
+        margin-top: 30px;
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- Header -->
+      <div class="header">
+        <h1>🌿 Aquaponics Monitor</h1>
+        <div class="status">
+          <div class="status-item">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusText">Disconnected</span>
+          </div>
+          <div class="status-item">
+            <span>📡</span>
+            <span id="deviceIp">-</span>
+          </div>
+          <div class="status-item">
+            <span>🕐</span>
+            <span id="lastUpdate">-</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Connection Form -->
+      <div class="connection-form">
+        <input
+          type="text"
+          id="ipInput"
+          placeholder="IP Address (เช่น 192.168.1.100)"
+          value=""
+        />
+        <button onclick="connect()">🔗 Connect</button>
+      </div>
+
+      <!-- Sensor Cards -->
+      <div class="sensor-grid">
+        <div class="sensor-card water-temp loading">
+          <div class="icon">🌡️</div>
+          <div class="label">อุณหภูมิน้ำ</div>
+          <div class="value" id="waterTemp">
+            --<span class="unit"> °C</span>
+          </div>
+        </div>
+        <div class="sensor-card air-temp loading">
+          <div class="icon">🌤️</div>
+          <div class="label">อุณหภูมิอากาศ</div>
+          <div class="value" id="airTemp">--<span class="unit"> °C</span></div>
+        </div>
+        <div class="sensor-card humidity loading">
+          <div class="icon">💧</div>
+          <div class="label">ความชื้น</div>
+          <div class="value" id="humidity">--<span class="unit"> %</span></div>
+        </div>
+        <div class="sensor-card tds loading">
+          <div class="icon">🧪</div>
+          <div class="label">TDS (ความเข้มข้นปุ๋ย)</div>
+          <div class="value" id="tds">--<span class="unit"> ppm</span></div>
+        </div>
+        <div class="sensor-card ph loading">
+          <div class="icon">⚗️</div>
+          <div class="label">ค่า pH</div>
+          <div class="value" id="ph">--</div>
+        </div>
+        <div class="sensor-card light loading">
+          <div class="icon">💡</div>
+          <div class="label">ความเข้มแสง</div>
+          <div class="value" id="light">--<span class="unit"> lux</span></div>
+        </div>
+      </div>
+
+      <!-- System Status -->
+      <div class="system-grid">
+        <div class="system-item">
+          <span class="label">⏱️ Uptime</span>
+          <span class="value" id="uptime">-</span>
+        </div>
+        <div class="system-item">
+          <span class="label">📶 WiFi Signal</span>
+          <span class="value" id="rssi">-</span>
+        </div>
+        <div class="system-item">
+          <span class="label">🧠 Free Memory</span>
+          <span class="value" id="freeHeap">-</span>
+        </div>
+        <div class="system-item">
+          <span class="label">☁️ MQTT</span>
+          <span class="value" id="mqttStatus">-</span>
+        </div>
+        <div class="system-item">
+          <span class="label">💡 Light State</span>
+          <span class="value" id="lightState">-</span>
+        </div>
+        <div class="system-item">
+          <span class="label">📦 Firmware</span>
+          <span class="value" id="firmware">-</span>
+        </div>
+        <div class="system-item">
+          <span class="label">🔄 WiFi Reconnects</span>
+          <span class="value" id="wifiReconnects">-</span>
+        </div>
+        <div class="system-item">
+          <span class="label">☁️ MQTT Reconnects</span>
+          <span class="value" id="mqttReconnects">-</span>
+        </div>
+        <div class="system-item">
+          <span class="label">🐕 Watchdog Resets</span>
+          <span class="value" id="watchdogResets">-</span>
+        </div>
+      </div>
+
+      <!-- Hardware Monitor -->
+       <div class="sensor-grid">
+        <!-- RAM Usage -->
+        <div class="sensor-card">
+          <div class="icon">🧠</div>
+          <div class="label">RAM Usage</div>
+          <div class="value" id="ramPercent">0%</div>
+          <div class="progress-container">
+            <div class="progress-bar green" id="ramBar"></div>
+          </div>
+          <div class="usage-text">
+             <span id="ramUsed">0 KB</span> / <span id="ramTotal">0 KB</span>
+          </div>
+        </div>
+
+        <!-- CPU Temp -->
+        <div class="sensor-card">
+           <div class="icon">🌡️</div>
+           <div class="label">CPU Temp</div>
+           <div class="value" id="cpuTempValue">0°C</div>
+           <div class="progress-container">
+             <div class="progress-bar green" id="cpuBar"></div>
+           </div>
+            <div class="usage-text">
+             <span id="cpuState">Normal</span>
+             <span>Max 85°C</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Log Section -->
+      <div class="log-section">
+        <h3>📜 Activity Log</h3>
+        <div class="log-container" id="logContainer"></div>
+      </div>
+
+      <!-- Footer -->
+      <div class="footer">
+        Aquaponics Sensor System v2.3 | Press F5 to refresh manually
+      </div>
+    </div>
+
+    <script>
+      let deviceIp = "";
+      let updateInterval = null;
+      let wasOnline = false;
+      let lastMqttStatus = null;
+      let lastWifiReconnects = 0;
+      
+      // === Threshold Configuration (ปรับได้ตามต้องการ) ===
+      const THRESHOLDS = {
+        ph: { min: 6.0, max: 8.5, name: "pH" },
+        water_temp: { min: 18, max: 32, name: "อุณหภูมิน้ำ" },
+        air_temp: { min: 15, max: 40, name: "อุณหภูมิอากาศ" },
+        humidity: { min: 40, max: 90, name: "ความชื้น" },
+        tds: { min: 200, max: 1500, name: "TDS" }
+      };
+
+      function connect() {
+        const ip = document.getElementById("ipInput").value.trim();
+        if (!ip) {
+          addLog("error", "กรุณาใส่ IP Address");
+          return;
+        }
+
+        deviceIp = ip.startsWith("http") ? ip : `http://${ip}`;
+        document.getElementById("deviceIp").textContent = ip;
+        addLog("info", `กำลังเชื่อมต่อ ${ip}...`);
+
+        // Start polling
+        if (updateInterval) clearInterval(updateInterval);
+        fetchData();
+        updateInterval = setInterval(fetchData, 2000);
+      }
+
+      async function fetchData() {
+        try {
+          // Fetch sensors
+          const sensorsRes = await fetch(`${deviceIp}/api/sensors`, {
+            timeout: 5000,
+          });
+          const sensors = await sensorsRes.json();
+
+          // Fetch health
+          const healthRes = await fetch(`${deviceIp}/api/health`, {
+            timeout: 5000,
+          });
+          const health = await healthRes.json();
+
+          // Fetch info
+          const infoRes = await fetch(`${deviceIp}/api/info`, {
+            timeout: 5000,
+          });
+          const info = await infoRes.json();
+
+          // Update UI
+          updateSensors(sensors);
+          updateHealth(health);
+          updateInfo(info);
+          
+          // Connection event tracking
+          if (!wasOnline) {
+            addLog("info", "🟢 เชื่อมต่อสำเร็จ!");
+          }
+          setOnline(true);
+          wasOnline = true;
+          
+        } catch (error) {
+          console.error("Fetch error:", error);
+          if (wasOnline) {
+            addLog("error", "🔴 การเชื่อมต่อหลุด!");
+          }
+          setOnline(false);
+          wasOnline = false;
+        }
+      }
+
+      function checkAlerts(data) {
+        for (const [key, threshold] of Object.entries(THRESHOLDS)) {
+          const value = data[key];
+          if (value === null || value === undefined) continue;
+          
+          if (value < threshold.min) {
+            addLog("warn", `⚠️ ${threshold.name} ต่ำเกินไป: ${value} (ขั้นต่ำ ${threshold.min})`);
+          } else if (value > threshold.max) {
+            addLog("warn", `⚠️ ${threshold.name} สูงเกินไป: ${value} (สูงสุด ${threshold.max})`);
+          }
+        }
+      }
+
+      function updateSensors(data) {
+        setValue("waterTemp", data.water_temp, "°C");
+        setValue("airTemp", data.air_temp, "°C");
+        setValue("humidity", data.humidity, "%");
+        setValue("tds", data.tds, "ppm", 0);
+        setValue("ph", data.ph, "", 2);
+        setValue("light", data.light, "lux", 0);
+        document.getElementById("lightState").textContent = data.light_state
+          ? "🟢 ON"
+          : "⚫ OFF";
+
+        document.getElementById("lastUpdate").textContent =
+          new Date().toLocaleTimeString("th-TH");
+          
+        // Check for alert conditions
+        // Check for alert conditions
+        // checkAlerts(data);
+      }
+
+      function updateHealth(data) {
+        document.getElementById("uptime").textContent = formatUptime(
+          data.uptime_sec,
+        );
+        document.getElementById("rssi").textContent = data.wifi_rssi + " dBm";
+        document.getElementById("freeHeap").textContent = formatBytes(
+          data.free_heap,
+        );
+        
+        // Update RAM Meter
+        const heapSize = data.heap_size || 0;
+        const freeHeap = data.free_heap || 0;
+        const usedHeap = heapSize - freeHeap;
+        const ramPercent = heapSize > 0 ? (usedHeap / heapSize) * 100 : 0;
+        
+        document.getElementById("ramPercent").textContent = ramPercent.toFixed(1) + "%";
+        document.getElementById("ramUsed").textContent = formatBytes(usedHeap);
+        document.getElementById("ramTotal").textContent = formatBytes(heapSize);
+        
+        const ramBar = document.getElementById("ramBar");
+        ramBar.style.width = ramPercent + "%";
+        ramBar.className = "progress-bar " + (ramPercent > 90 ? "red" : ramPercent > 70 ? "yellow" : "green");
+
+        // Update CPU Temp Meter
+        const cpuTemp = data.cpu_temp || 0;
+        const cpuPercent = Math.min((cpuTemp / 85) * 100, 100);
+        
+        document.getElementById("cpuTempValue").textContent = cpuTemp.toFixed(1) + "°C";
+        document.getElementById("cpuState").textContent = cpuTemp > 80 ? "Critical" : cpuTemp > 65 ? "High" : "Normal";
+        
+        const cpuBar = document.getElementById("cpuBar");
+        cpuBar.style.width = cpuPercent + "%";
+        cpuBar.className = "progress-bar " + (cpuTemp > 80 ? "red" : cpuTemp > 65 ? "yellow" : "green");
+        
+        // Display reconnect and watchdog counts
+        document.getElementById("wifiReconnects").textContent = data.wifi_reconnects || 0;
+        document.getElementById("mqttReconnects").textContent = data.mqtt_reconnects || 0;
+        document.getElementById("watchdogResets").textContent = data.watchdog_resets || 0;
+        
+        // MQTT status change tracking
+        const mqttConnected = data.mqtt_connected;
+        if (lastMqttStatus !== null && lastMqttStatus !== mqttConnected) {
+          if (mqttConnected) {
+            addLog("info", "☁️ MQTT เชื่อมต่อใหม่แล้ว");
+          } else {
+            addLog("warn", "☁️ MQTT หลุดการเชื่อมต่อ");
+          }
+        }
+        lastMqttStatus = mqttConnected;
+        
+        document.getElementById("mqttStatus").textContent = mqttConnected
+          ? "🟢 Connected"
+          : "🔴 Disconnected";
+          
+        // WiFi reconnect tracking
+        if (lastWifiReconnects > 0 && data.wifi_reconnects > lastWifiReconnects) {
+          addLog("warn", `📶 WiFi Reconnected (ครั้งที่ ${data.wifi_reconnects})`);
+        }
+        lastWifiReconnects = data.wifi_reconnects;
+      }
+
+      function updateInfo(data) {
+        document.getElementById("firmware").textContent = data.firmware;
+      }
+
+      function setValue(id, value, unit, decimals = 2) {
+        const el = document.getElementById(id);
+        const card = el.closest(".sensor-card");
+
+        if (value === null || value === undefined) {
+          el.innerHTML = `--<span class="unit">${unit ? " " + unit : ""}</span>`;
+          card.classList.add("loading");
+        } else {
+          el.innerHTML = `${parseFloat(value).toFixed(decimals)}<span class="unit">${unit ? " " + unit : ""}</span>`;
+          card.classList.remove("loading");
+        }
+      }
+
+      function setOnline(online) {
+        const dot = document.getElementById("statusDot");
+        const text = document.getElementById("statusText");
+
+        if (online) {
+          dot.classList.add("online");
+          dot.classList.remove("offline");
+          text.textContent = "Connected";
+        } else {
+          dot.classList.remove("online");
+          dot.classList.add("offline");
+          text.textContent = "Disconnected";
+        }
+      }
+
+      function formatUptime(seconds) {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        return `${h}h ${m}m ${s}s`;
+      }
+
+      function formatBytes(bytes) {
+        if (bytes < 1024) return bytes + " B";
+        return (bytes / 1024).toFixed(1) + " KB";
+      }
+
+      function addLog(type, message) {
+        const container = document.getElementById("logContainer");
+        const time = new Date().toLocaleTimeString("th-TH");
+        const entry = document.createElement("div");
+        entry.className = `log-entry ${type}`;
+        entry.innerHTML = `<span class="time">[${time}]</span> ${message}`;
+        container.insertBefore(entry, container.firstChild);
+
+        // Keep only last 50 entries
+        while (container.children.length > 50) {
+          container.removeChild(container.lastChild);
+        }
+      }
+
+      // Initialize
+      addLog("info", "Dashboard ready. Enter device IP and click Connect.");
+
+      // Try to connect to common IPs
+      const savedIp = localStorage.getItem("aquaponics_ip");
+      if (savedIp) {
+        document.getElementById("ipInput").value = savedIp;
+      }
+
+      // Save IP on connect
+      const originalConnect = connect;
+      connect = function () {
+        const ip = document.getElementById("ipInput").value.trim();
+        if (ip) localStorage.setItem("aquaponics_ip", ip);
+        originalConnect();
+      };
+    </script>
+  </body>
+</html>
