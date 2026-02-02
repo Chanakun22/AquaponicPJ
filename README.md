@@ -74,4 +74,4 @@
   - `WiFiManager`: สำหรับจัดการการเชื่อมต่อ
 
 ---
-*Verified and Documented by Antigravity AI Agent*
+
