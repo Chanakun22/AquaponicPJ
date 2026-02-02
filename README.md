@@ -69,7 +69,6 @@
 - **MCU**: ESP32-S3 DevKitC-1
 - **Framework**: Arduino Core for ESP32 (v2.0.11 via PlatformIO)
 - **Libraries**:
-  - `ESPAsyncWebServer` & `AsyncTCP`: สำหรับ Web Server ประสิทธิภาพสูง
   - `PubSubClient`: สำหรับ MQTT (NETPIE)
   - `ArduinoJson 6`: สำหรับจัดการข้อมูล JSON
   - `WiFiManager`: สำหรับจัดการการเชื่อมต่อ
