@@ -33,6 +33,7 @@ typedef struct {
     unsigned int watchdogResets;   // Number of watchdog resets
     unsigned int wifiReconnects;   // Number of WiFi reconnections
     unsigned int mqttReconnects;   // Number of MQTT reconnections
+    char resetReason[32];          // Reason for the last reset
     bool sensorsOk;                // All sensors operational
 } SystemHealth_t;
 
@@ -44,6 +45,12 @@ typedef struct {
  * @brief Initialize system management
  */
 void systemInit(void);
+
+/**
+ * @brief Get human readable reset reason
+ * @return String description of reset reason
+ */
+String systemGetResetReasonString(void);
 
 
 

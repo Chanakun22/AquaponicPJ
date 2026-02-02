@@ -85,6 +85,7 @@ static void _handleHealth() {
     json += ",\"watchdog_resets\":" + String(health.watchdogResets);
     json += ",\"wifi_rssi\":" + String(WiFi.RSSI());
     json += ",\"mqtt_connected\":" + String(netpieIsConnected() ? "true" : "false");
+    json += ",\"reset_reason\":\"" + String(health.resetReason) + "\"";
     json += "}";
     
     _httpServer.send(200, "application/json", json);

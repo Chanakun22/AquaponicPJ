@@ -454,6 +454,10 @@
           <span class="label">🐕 Watchdog Resets</span>
           <span class="value" id="watchdogResets">-</span>
         </div>
+        <div class="system-item">
+          <span class="label">⚠️ Reset Reason</span>
+          <span class="value" id="resetReason">-</span>
+        </div>
       </div>
 
       <!-- Hardware Monitor -->
@@ -643,6 +647,7 @@
         document.getElementById("wifiReconnects").textContent = data.wifi_reconnects || 0;
         document.getElementById("mqttReconnects").textContent = data.mqtt_reconnects || 0;
         document.getElementById("watchdogResets").textContent = data.watchdog_resets || 0;
+        document.getElementById("resetReason").textContent = data.reset_reason || "Unknown";
         
         // MQTT status change tracking
         const mqttConnected = data.mqtt_connected;
