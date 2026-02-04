@@ -4,5 +4,6 @@
 .vscode/launch.json
 .vscode/ipch
 include/secrets.h
-
-
+pi_server/index.html
+pi_server/app.py
+PI_COMMANDS.md
