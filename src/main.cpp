@@ -18,8 +18,9 @@
 #include "lightController.h"
 #include "wifiConn.h"
 #include "netpie.h"
+#include "localMqtt.h"
 #include "commandHandler.h"
-#include "dataApi.h"  // Test: HTTP API สำหรับ Monitor (ลบได้)
+
 
 #if defined(ESP32) && WATCHDOG_ENABLED
 #include "esp_task_wdt.h"
@@ -110,6 +111,7 @@ void setup() {
     
     // เริ่มต้น Services อื่นๆ
     netpieSetup();
+    localMqttSetup();
     lightCtrlSetup();
     
     // เริ่มต้นเซ็นเซอร์
@@ -122,8 +124,7 @@ void setup() {
     // Command Handler
     commandSetup();
     
-    // Test: Data API สำหรับ Web Monitor (ลบได้)
-    dataApiSetup();
+
     
     LOG_INFO("All modules initialized");
     LOG_MODULE_END("Aquaponics Sensor System");
@@ -137,8 +138,12 @@ void loop() {
     wifiLoop();      // Handle WiFi connection / config portal
     telnetLoop();    // Handle Telnet clients
     otaLoop();       // Handle OTA updates
+    // ======== Network Services ========
+    wifiLoop();      // Handle WiFi connection / config portal
+    telnetLoop();    // Handle Telnet clients
+    otaLoop();       // Handle OTA updates
     netpieLoop();    // Handle Netpie MQTT
-    dataApiLoop();   // Test: Handle HTTP API requests (ลบได้)
+    localMqttLoop(); // Handle Local MQTT (Pi)
     
     // ======== Light Controller ========
     lightCtrlLoop();
@@ -185,8 +190,11 @@ void loop() {
     commandCheckSerial();
     
     // ======== Publish Data ========
-    if (wifiIsConnected() && netpieIsConnected()) {
-        netpiePublishData(currentWaterTemp, currentAirTemp, currentHumidity, currentTds, currentLight, currentPh);
+    if (wifiIsConnected()) {
+        if (netpieIsConnected()) {
+             netpiePublishData(currentWaterTemp, currentAirTemp, currentHumidity, currentTds, currentLight, currentPh);
+        }
+        localMqttPublishData(currentWaterTemp, currentAirTemp, currentHumidity, currentTds, currentLight, currentPh);
     }
     
     // ======== Health Check ========

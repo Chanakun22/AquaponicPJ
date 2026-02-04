@@ -164,8 +164,17 @@
 #define NETPIE_PUBLISH_INTERVAL 60000         // ส่งข้อมูลทุก (ms) = 60 วินาที
 
 // ============================================================================
-// NTP TIME CONFIGURATION
+// LOCAL MQTT CONFIGURATION (RASPBERRY PI)
 // ============================================================================
+
+/**
+ * @section Local MQTT Settings
+ * @brief เชื่อมต่อกับ Raspberry Pi ภายในวง LAN
+ */
+#define LOCAL_MQTT_HOSTNAME "Chanakun"          // ชื่อ Hostname ของ Pi (ตามที่เห็นใน Router/Terminal)
+#define LOCAL_MQTT_PORT     1883
+#define LOCAL_PUBLISH_INTERVAL 2000          // ส่งข้อมูลทุก 2 วินาที (เร็วกว่า NETPIE)
+#define LOCAL_MQTT_TOPIC_SENSORS "aquaponics/sensors"  // MQTT Topic สำหรับข้อมูล Sensor
 
 /**
  * @section NTP Settings

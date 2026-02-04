@@ -461,32 +461,83 @@
         </div>
       </div>
 
-      <!-- Hardware Monitor -->
-       <div class="sensor-grid">
-        <!-- RAM Usage -->
+      <!-- ============ Device Health Monitor ============ -->
+      <!-- ESP32-S3 Section -->
+      <h3 style="color: var(--accent-cyan); margin-bottom: 15px; font-size: 0.95rem;">
+        📟 ESP32-S3 Health
+      </h3>
+      <div class="sensor-grid" style="margin-bottom: 25px;">
+        <!-- ESP32 RAM Usage -->
         <div class="sensor-card">
           <div class="icon">🧠</div>
-          <div class="label">RAM Usage</div>
-          <div class="value" id="ramPercent">0%</div>
+          <div class="label">RAM Usage (ESP32)</div>
+          <div class="value" id="espRamPercent">0%</div>
           <div class="progress-container">
-            <div class="progress-bar green" id="ramBar"></div>
+            <div class="progress-bar green" id="espRamBar"></div>
           </div>
           <div class="usage-text">
-             <span id="ramUsed">0 KB</span> / <span id="ramTotal">0 KB</span>
+             <span id="espRamUsed">0 KB</span> / <span id="espRamTotal">0 KB</span>
           </div>
         </div>
 
-        <!-- CPU Temp -->
+        <!-- ESP32 CPU Temp -->
         <div class="sensor-card">
            <div class="icon">🌡️</div>
-           <div class="label">CPU Temp</div>
-           <div class="value" id="cpuTempValue">0°C</div>
+           <div class="label">CPU Temp (ESP32)</div>
+           <div class="value" id="espCpuTemp">0°C</div>
            <div class="progress-container">
-             <div class="progress-bar green" id="cpuBar"></div>
+             <div class="progress-bar green" id="espCpuBar"></div>
            </div>
             <div class="usage-text">
-             <span id="cpuState">Normal</span>
+             <span id="espCpuState">Normal</span>
              <span>Max 85°C</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Raspberry Pi Zero 2 W Section -->
+      <h3 style="color: var(--accent-green); margin-bottom: 15px; font-size: 0.95rem;">
+        🥧 Raspberry Pi Zero 2 W Health
+      </h3>
+      <div class="sensor-grid">
+        <!-- Pi RAM Usage -->
+        <div class="sensor-card">
+          <div class="icon">🧠</div>
+          <div class="label">RAM Usage (Pi)</div>
+          <div class="value" id="piRamPercent">0%</div>
+          <div class="progress-container">
+            <div class="progress-bar green" id="piRamBar"></div>
+          </div>
+          <div class="usage-text">
+             <span id="piRamUsed">0 KB</span> / <span id="piRamTotal">0 KB</span>
+          </div>
+        </div>
+
+        <!-- Pi CPU Temp -->
+        <div class="sensor-card">
+           <div class="icon">🌡️</div>
+           <div class="label">CPU Temp (Pi)</div>
+           <div class="value" id="piCpuTemp">0°C</div>
+           <div class="progress-container">
+             <div class="progress-bar green" id="piTempBar"></div>
+           </div>
+            <div class="usage-text">
+             <span>Normal</span>
+             <span>Max 85°C</span>
+          </div>
+        </div>
+
+        <!-- Pi CPU Load -->
+        <div class="sensor-card">
+           <div class="icon">⚡</div>
+           <div class="label">CPU Load (Pi)</div>
+           <div class="value" id="piCpuLoad">0%</div>
+           <div class="progress-container">
+             <div class="progress-bar green" id="piLoadBar"></div>
+           </div>
+            <div class="usage-text">
+             <span id="piLoadState">Idle</span>
+             <span>Max 100%</span>
           </div>
         </div>
       </div>
@@ -632,32 +683,64 @@
           data.free_heap,
         );
         
-        // Update RAM Meter
-        const heapSize = data.heap_size || 0;
-        const freeHeap = data.free_heap || 0;
-        const usedHeap = heapSize - freeHeap;
-        const ramPercent = heapSize > 0 ? (usedHeap / heapSize) * 100 : 0;
+        // =============== ESP32-S3 Stats ===============
+        const espFreeHeap = data.free_heap || 0;
+        const espHeapSize = data.heap_size || 327680; // Default 320KB if not provided
+        const espRamUsed = espHeapSize - espFreeHeap;
+        const espRamPercent = espHeapSize > 0 ? (espRamUsed / espHeapSize) * 100 : 0;
+        const espCpuTemp = data.cpu_temp || 0;
         
-        document.getElementById("ramPercent").textContent = ramPercent.toFixed(1) + "%";
-        document.getElementById("ramUsed").textContent = formatBytes(usedHeap);
-        document.getElementById("ramTotal").textContent = formatBytes(heapSize);
+        // ESP32 RAM
+        document.getElementById("espRamPercent").textContent = espRamPercent.toFixed(1) + "%";
+        document.getElementById("espRamUsed").textContent = formatBytes(espRamUsed);
+        document.getElementById("espRamTotal").textContent = formatBytes(espHeapSize);
         
-        const ramBar = document.getElementById("ramBar");
-        ramBar.style.width = ramPercent + "%";
-        ramBar.className = "progress-bar " + (ramPercent > 90 ? "red" : ramPercent > 70 ? "yellow" : "green");
+        const espRamBar = document.getElementById("espRamBar");
+        espRamBar.style.width = espRamPercent + "%";
+        espRamBar.className = "progress-bar " + (espRamPercent > 90 ? "red" : espRamPercent > 70 ? "yellow" : "green");
 
-        // Update CPU Temp Meter
-        const cpuTemp = data.cpu_temp || 0;
-        const cpuPercent = Math.min((cpuTemp / 85) * 100, 100);
+        // ESP32 CPU Temp
+        document.getElementById("espCpuTemp").textContent = espCpuTemp.toFixed(1) + "°C";
+        document.getElementById("espCpuState").textContent = espCpuTemp > 60 ? "Hot" : "Normal";
         
-        document.getElementById("cpuTempValue").textContent = cpuTemp.toFixed(1) + "°C";
-        document.getElementById("cpuState").textContent = cpuTemp > 80 ? "Critical" : cpuTemp > 65 ? "High" : "Normal";
+        const espCpuBar = document.getElementById("espCpuBar");
+        const espTempPercent = (espCpuTemp / 85) * 100; // Max 85°C for bar
+        espCpuBar.style.width = Math.min(espTempPercent, 100) + "%";
+        espCpuBar.className = "progress-bar " + (espCpuTemp > 80 ? "red" : espCpuTemp > 60 ? "yellow" : "green");
         
-        const cpuBar = document.getElementById("cpuBar");
-        cpuBar.style.width = cpuPercent + "%";
-        cpuBar.className = "progress-bar " + (cpuTemp > 80 ? "red" : cpuTemp > 65 ? "yellow" : "green");
+        // =============== Raspberry Pi Stats ===============
+        const piRamPercent = data.pi_ram_percent || 0;
+        const piRamUsed = data.pi_ram_used || 0;
+        const piRamTotal = data.pi_ram_total || 0;
+        const piTemp = data.pi_temp || 0;
+        const piCpuPercent = data.pi_cpu_percent || 0;
         
-        // Display reconnect and watchdog counts
+        // Pi RAM
+        document.getElementById("piRamPercent").textContent = piRamPercent.toFixed(1) + "%";
+        document.getElementById("piRamUsed").textContent = formatBytes(piRamUsed);
+        document.getElementById("piRamTotal").textContent = formatBytes(piRamTotal);
+        
+        const piRamBar = document.getElementById("piRamBar");
+        piRamBar.style.width = piRamPercent + "%";
+        piRamBar.className = "progress-bar " + (piRamPercent > 90 ? "red" : piRamPercent > 70 ? "yellow" : "green");
+
+        // Pi CPU Temp
+        document.getElementById("piCpuTemp").textContent = piTemp.toFixed(1) + "°C";
+        
+        const piTempBar = document.getElementById("piTempBar");
+        const piTempPercent = (piTemp / 85) * 100;
+        piTempBar.style.width = Math.min(piTempPercent, 100) + "%";
+        piTempBar.className = "progress-bar " + (piTemp > 80 ? "red" : piTemp > 60 ? "yellow" : "green");
+
+        // Pi CPU Load
+        document.getElementById("piCpuLoad").textContent = piCpuPercent.toFixed(1) + "%";
+        document.getElementById("piLoadState").textContent = piCpuPercent > 80 ? "Heavy" : piCpuPercent > 30 ? "Moderate" : "Idle";
+        
+        const piLoadBar = document.getElementById("piLoadBar");
+        piLoadBar.style.width = piCpuPercent + "%";
+        piLoadBar.className = "progress-bar " + (piCpuPercent > 90 ? "red" : piCpuPercent > 70 ? "yellow" : "green");
+        
+        // =============== System Status (from ESP32) ===============
         document.getElementById("wifiReconnects").textContent = data.wifi_reconnects || 0;
         document.getElementById("mqttReconnects").textContent = data.mqtt_reconnects || 0;
         document.getElementById("watchdogResets").textContent = data.watchdog_resets || 0;
