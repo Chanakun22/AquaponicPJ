@@ -7,3 +7,4 @@ include/secrets.h
 pi_server/index.html
 pi_server/app.py
 PI_COMMANDS.md
+tools/monitor/index.html

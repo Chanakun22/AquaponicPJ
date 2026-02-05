@@ -10,6 +10,7 @@
 #include "system.h"
 #include "wifiConn.h"
 #include "netpie.h"
+#include "localMqtt.h"
 #include "phSensor.h"
 #include "TdsSensor.h"
 #include "dhtSensor.h"
@@ -57,6 +58,7 @@ static void _showHelp(CommandOutput_t out) {
     commandPrintf(out, "  help     - แสดงรายการคำสั่ง\r\n");
     commandPrintf(out, "  clear    - ล้างหน้าจอ\r\n");
     commandPrintf(out, "  status   - แสดงค่าเซ็นเซอร์ทั้งหมด\r\n");
+    commandPrintf(out, "  test     - รันระบบ Self-Test\r\n");
     commandPrintf(out, "  health   - แสดงสุขภาพระบบ\r\n");
     commandPrintf(out, "  wifi     - แสดงข้อมูล WiFi\r\n");
     commandPrintf(out, "  mqtt     - แสดงสถานะ NETPIE\r\n");
@@ -137,6 +139,67 @@ static void _showMqtt(CommandOutput_t out) {
 }
 
 // ============================================================================
+// SYSTEM TEST
+// ============================================================================
+
+static void _runSystemTest(CommandOutput_t out) {
+    commandPrintf(out, "\r\n");
+    commandPrintf(out, "========== SYSTEM DIAGNOSTIC ==========\r\n");
+    
+    // 1. Connectivity
+    commandPrintf(out, "[NET] WiFi       : %s\r\n", wifiIsConnected() ? "CONNECTED" : "FAIL");
+    if (wifiIsConnected()) {
+        commandPrintf(out, "      IP         : %s\r\n", WiFi.localIP().toString().c_str());
+        commandPrintf(out, "      RSSI       : %d dBm\r\n", WiFi.RSSI());
+    }
+    
+    commandPrintf(out, "[NET] NETPIE     : %s\r\n", netpieIsConnected() ? "CONNECTED" : "FAIL");
+    commandPrintf(out, "[NET] Local MQTT : %s\r\n", localMqttIsConnected() ? "CONNECTED" : "FAIL");
+    
+    // 2. Sensors
+    float t_water = tempRead();
+    float t_air = dhtReadTemperature();
+    float humid = dhtReadHumidity();
+    float tds = tdsRead(t_water);
+    float light = lightRead();
+    float ph = phRead();
+    
+    commandPrintf(out, "[SEN] Water Temp : %.2f C  %s\r\n", t_water, isnan(t_water) ? "(FAIL)" : "(OK)");
+    commandPrintf(out, "[SEN] Air Temp   : %.2f C  %s\r\n", t_air, isnan(t_air) ? "(FAIL)" : "(OK)");
+    commandPrintf(out, "[SEN] Humidity   : %.2f %%  %s\r\n", humid, isnan(humid) ? "(FAIL)" : "(OK)");
+    commandPrintf(out, "[SEN] TDS        : %.0f ppm %s\r\n", tds, (tds < 0) ? "(FAIL)" : "(OK)");
+    commandPrintf(out, "[SEN] Light      : %.0f lux %s\r\n", light, (light < 0) ? "(FAIL)" : "(OK)");
+    commandPrintf(out, "[SEN] pH         : %.2f    %s\r\n", ph, (ph < 0) ? "(FAIL)" : "(OK)");
+    
+    // 3. System Health
+    SystemHealth_t health;
+    systemGetHealth(&health);
+    
+    commandPrintf(out, "[SYS] Uptime     : %lu s\r\n", health.uptimeMs / 1000);
+    commandPrintf(out, "[SYS] Free Heap  : %lu / %lu B (Min: %lu)\r\n", health.freeHeap, health.heapSize, health.minFreeHeap);
+    commandPrintf(out, "[SYS] CPU Temp   : %.1f C\r\n", health.cpuTemp);
+    
+    // Watchdog & Resets
+    commandPrintf(out, "[WDT] Resets     : %u %s\r\n", health.watchdogResets, (health.watchdogResets > 0) ? "(WARNING)" : "(OK)");
+    commandPrintf(out, "[SYS] Reset Reason: %s\r\n", health.resetReason);
+    commandPrintf(out, "[SYS] Reconnects : WiFi: %u, MQTT: %u\r\n", health.wifiReconnects, health.mqttReconnects);
+    
+    // Time Sync
+    struct tm timeinfo;
+    bool timeOk = getLocalTime(&timeinfo, 100); // 100ms timeout
+    if(timeOk) {
+        char timeStr[30];
+        strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", &timeinfo);
+        commandPrintf(out, "[CLK] Local Time : %s (OK)\r\n", timeStr);
+    } else {
+         commandPrintf(out, "[CLK] Local Time : UNSYNCED (FAIL)\r\n");
+    }
+
+    commandPrintf(out, "=======================================\r\n");
+    commandPrintf(out, "TEST COMPLETE.\r\n");
+}
+
+// ============================================================================
 // PUBLIC FUNCTIONS
 // ============================================================================
 
@@ -169,6 +232,9 @@ void commandProcess(char* cmd, CommandOutput_t output) {
     }
     else if (strcmp(cmd, "status") == 0) {
         _showStatus(output);
+    }
+    else if (strcmp(cmd, "test") == 0) {
+        _runSystemTest(output);
     }
     else if (strcmp(cmd, "health") == 0) {
         _showHealth(output);

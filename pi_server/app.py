@@ -4,6 +4,7 @@ import json
 import threading
 import psutil
 import time
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
@@ -30,6 +31,37 @@ def get_pi_temp():
             return temp
     except:
         return 0
+
+# === Database Setup (SQLite) ===
+import sqlite3
+
+DB_FILE = "aquaponics.db"
+
+def init_db():
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        # Create table if not exists
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sensors (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                water_temp REAL,
+                air_temp REAL,
+                humidity REAL,
+                tds REAL,
+                ph REAL,
+                light REAL
+            )
+        ''')
+        conn.commit()
+        conn.close()
+        print("✅ Database initialized")
+    except Exception as e:
+        print(f"❌ Database Error: {e}")
+
+# Initialize DB on start
+init_db()
 
 # === Log Storage (In-Memory + File) ===
 from collections import deque
@@ -80,8 +112,44 @@ def on_message(client, userdata, msg):
         data = json.loads(payload)
         for key in data:
             last_data[key] = data[key]
+            
+        # === Save to DB (Filtered) ===
+        # Save only every 60 seconds to save space
+        save_data_to_db(data)
+            
     except Exception as e:
         print(f"❌ Error parsing MQTT: {e}")
+
+# === DB Throttling ===
+last_db_save = 0
+
+def save_data_to_db(data):
+    global last_db_save
+    now = time.time()
+    
+    if now - last_db_save < 60: # 60 seconds interval
+        return
+
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO sensors (water_temp, air_temp, humidity, tds, ph, light)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (
+            data.get("water_temp", 0),
+            data.get("air_temp", 0),
+            data.get("humidity", 0),
+            data.get("tds", 0),
+            data.get("ph", 0),
+            data.get("light", 0)
+        ))
+        conn.commit()
+        conn.close()
+        last_db_save = now
+        # print("💾 Data saved to DB") 
+    except Exception as e:
+        print(f"DB Insert Error: {e}")
 
 # === Start MQTT in Background Thread ===
 def start_mqtt():
@@ -155,6 +223,10 @@ def get_logs():
 def logs_view():
     return send_file('full_logs.html')
 
+@app.route('/graphs_view')
+def graphs_view():
+    return send_file('graphs.html')
+
 @app.route('/api/full_logs_file')
 def get_full_logs_file():
     try:
@@ -174,6 +246,65 @@ def clear_logs_file():
         # Clear memory buffer too
         log_buffer.clear()
         return jsonify({"status": "success", "message": "Logs cleared"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/history')
+def get_history():
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        # Get last 3 days of records (3 * 24 * 60 = 4320 mins)
+        cursor.execute('''
+            SELECT timestamp, water_temp, air_temp, humidity, tds, ph, light
+            FROM sensors 
+            ORDER BY id DESC 
+            LIMIT 4320
+        ''')
+        rows = cursor.fetchall()
+        conn.close()
+        
+        # Reverse to chronological order (oldest first)
+        rows.reverse()
+        
+        # Format for Chart.js
+        labels = []
+        data = {
+            "water_temp": [],
+            "air_temp": [],
+            "humidity": [],
+            "tds": [],
+            "ph": [],
+            "light": []
+        }
+        
+        for r in rows:
+            # timestamp is r[0] e.g. "2023-10-27 10:00:00"
+            # SQLite stores as UTC. Convert directly to Thai Time (UTC+7)
+            try:
+                # Parse string to datetime
+                dt_utc = datetime.strptime(r[0], "%Y-%m-%d %H:%M:%S")
+                # Add 7 hours
+                dt_thai = dt_utc + timedelta(hours=7)
+                # Format specific for graph label (HH:MM) or include Date if needed
+                # User wants 3 days, so maybe show date if it's a new day? 
+                # For now let's just do HH:MM and maybe Date/Time if tooltip? 
+                # ChartJS labels are usually X axis.
+                # Let's use simple HH:MM first as requested.
+                t_str = dt_thai.strftime("%d/%m %H:%M") # dd/mm HH:MM is better for 3 days
+            except:
+                t_str = r[0] # Fallback
+            
+            labels.append(t_str)
+            data["water_temp"].append(r[1])
+            data["air_temp"].append(r[2])
+            data["humidity"].append(r[3])
+            data["tds"].append(r[4])
+            data["ph"].append(r[5])
+            data["light"].append(r[6])
+            
+        return jsonify({"labels": labels, "datasets": data})
+
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
