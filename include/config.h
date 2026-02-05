@@ -175,6 +175,7 @@
 #define LOCAL_MQTT_PORT     1883
 #define LOCAL_PUBLISH_INTERVAL 2000          // ส่งข้อมูลทุก 2 วินาที (เร็วกว่า NETPIE)
 #define LOCAL_MQTT_TOPIC_SENSORS "aquaponics/sensors"  // MQTT Topic สำหรับข้อมูล Sensor
+#define LOCAL_MQTT_TOPIC_LOGS    "aquaponics/logs"     // MQTT Topic สำหรับ System Logs
 
 /**
  * @section NTP Settings

@@ -154,3 +154,10 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
         LOG_ERROR("Local MQTT Publish Failed");
     }
 }
+
+void localMqttPublishLog(const char* logMsg) {
+    if (!localMqttIsConnected()) return;
+    
+    // Simple text payload
+    _localMqtt.publish(LOCAL_MQTT_TOPIC_LOGS, logMsg);
+}

@@ -29,10 +29,21 @@
 // LOG MACROS (Serial + Telnet)
 // ============================================================================
 
+#include "localMqtt.h"
+
+// Helper to format and send to MQTT
+// Note: We need a small buffer for the formatted string
+#define LOG_TO_MQTT(fmt, ...) { \
+    char _logBuff[128]; \
+    snprintf(_logBuff, sizeof(_logBuff), fmt, ##__VA_ARGS__); \
+    localMqttPublishLog(_logBuff); \
+}
+
 #if LOG_LEVEL >= LOG_LEVEL_ERROR
 #define LOG_ERROR(fmt, ...) { \
     Serial.printf("[ERROR] " fmt "\n", ##__VA_ARGS__); \
     telnetPrintf("[ERROR] " fmt "\r\n", ##__VA_ARGS__); \
+    LOG_TO_MQTT("[ERROR] " fmt, ##__VA_ARGS__); \
 }
 #else
 #define LOG_ERROR(fmt, ...)
@@ -42,6 +53,7 @@
 #define LOG_WARN(fmt, ...) { \
     Serial.printf("[WARN] " fmt "\n", ##__VA_ARGS__); \
     telnetPrintf("[WARN] " fmt "\r\n", ##__VA_ARGS__); \
+    LOG_TO_MQTT("[WARN] " fmt, ##__VA_ARGS__); \
 }
 #else
 #define LOG_WARN(fmt, ...)
@@ -51,6 +63,7 @@
 #define LOG_INFO(fmt, ...) { \
     Serial.printf("[INFO] " fmt "\n", ##__VA_ARGS__); \
     telnetPrintf("[INFO] " fmt "\r\n", ##__VA_ARGS__); \
+    LOG_TO_MQTT("[INFO] " fmt, ##__VA_ARGS__); \
 }
 #else
 #define LOG_INFO(fmt, ...)
@@ -60,6 +73,8 @@
 #define LOG_DEBUG(fmt, ...) { \
     Serial.printf("[DEBUG] " fmt "\n", ##__VA_ARGS__); \
     telnetPrintf("[DEBUG] " fmt "\r\n", ##__VA_ARGS__); \
+     /* Optional: Don't send DEBUG to MQTT to save bandwidth, or uncomment if needed */ \
+     /* LOG_TO_MQTT("[DEBUG] " fmt, ##__VA_ARGS__); */ \
 }
 #else
 #define LOG_DEBUG(fmt, ...)

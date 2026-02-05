@@ -554,7 +554,10 @@
       <div class="log-panel">
         <div class="log-header">
             <span><i class="fa-solid fa-terminal"></i> SYSTEM LOGS</span>
-            <span onclick="document.getElementById('logContainer').innerHTML=''" style="cursor: pointer; color: var(--secondary)">CLEAR</span>
+            <div>
+                <a href="/logs_view" style="color: var(--primary); text-decoration: none; font-size: 0.8rem; margin-right: 15px; cursor: pointer; border: 1px solid var(--primary); padding: 2px 8px; border-radius: 4px;">FULL LOGS</a>
+                <span onclick="document.getElementById('logContainer').innerHTML=''" style="cursor: pointer; color: var(--secondary)">CLEAR</span>
+            </div>
         </div>
         <div class="log-content" id="logContainer">
             <!-- Logs go here -->
@@ -592,6 +595,11 @@
             </div>
             <!-- Hidden elements to keep JS happy if not used in UI but req by Update func -->
             <div id="freeHeap" style="display:none"></div> 
+            
+            <div class="mini-stat" style="grid-column: span 2; margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;">
+                <div class="mini-label">ESP32 STATUS</div>
+                <div class="mini-val" id="espStatus" style="letter-spacing: 1px;">CHECKING...</div>
+            </div>
         </div>
       </div>
 
@@ -705,21 +713,33 @@
 
       async function fetchData() {
         try {
+          // Fetch sensors
           const sensorsRes = await fetch(`${deviceIp}/api/sensors`, { timeout: 5000 });
           const sensors = await sensorsRes.json();
 
+          // Fetch health
           const healthRes = await fetch(`${deviceIp}/api/health`, { timeout: 5000 });
           const health = await healthRes.json();
 
+          // Fetch info
           const infoRes = await fetch(`${deviceIp}/api/info`, { timeout: 5000 });
           const info = await infoRes.json();
+
+          // Fetch Logs (New!)
+          try {
+             const logsRes = await fetch(`${deviceIp}/api/logs`, { timeout: 3000 });
+             if(logsRes.ok) {
+                const remoteLogs = await logsRes.json();
+                updateLogs(remoteLogs);
+             }
+          } catch(e) { console.log("Log fetch failed", e); }
 
           updateSensors(sensors);
           updateHealth(health);
           updateInfo(info);
           
           if (!wasOnline) {
-            addLog("info", "Connected successfully.");
+            // addLog("info", "Connected successfully."); // Don't spam local logs if we have remote
           }
           setOnline(true);
           wasOnline = true;
@@ -732,6 +752,31 @@
           setOnline(false);
           wasOnline = false;
         }
+      }
+
+      function updateLogs(logs) {
+          const container = document.getElementById("logContainer");
+          // Clear current logs to avoid duplicates (simplest approach for now)
+          // Or smarter: check last entry. For now, simple replace is okay as it refreshes 2s.
+          // actually full replace might cause jitter.
+          // Let's just prepend new ones? No, the API returns the FULL list of last 50.
+          
+          container.innerHTML = ""; 
+          
+          logs.forEach(log => {
+              const entry = document.createElement("div");
+              
+              // Colorize based on content
+              let type = "";
+              if(log.includes("[ERROR]")) type = "error";
+              else if(log.includes("[WARN]")) type = "warn";
+              else if(log.includes("[INFO]")) type = "info";
+              else type = ""; // default
+
+              entry.className = `log-line ${type}`;
+              entry.textContent = log; 
+              container.appendChild(entry);
+          });
       }
 
       function updateSensors(data) {
@@ -751,9 +796,26 @@
       }
 
       function updateHealth(data) {
-        document.getElementById("uptime").textContent = formatUptime(data.uptime_sec);
-        document.getElementById("rssi").textContent = data.wifi_rssi + " dBm";
-        // document.getElementById("freeHeap").textContent = formatBytes(data.free_heap); // moved to mini stat hidden
+        document.getElementById("uptime").innerText = formatUptime(data.uptime_sec);
+        document.getElementById("rssi").innerText = data.wifi_rssi + " dBm";
+        document.getElementById("firmware").innerText = "v3 (Heartbeat)";
+        // document.getElementById("freeHeap").innerText = formatBytes(data.free_heap); // moved to mini stat hidden
+
+        // MQTT Status (Netpie)
+        const mqttEl = document.getElementById("mqttStatus");
+        if(data.mqtt_connected) {
+             mqttEl.innerHTML = '<span style="color:var(--success)">ONLINE</span>';
+        } else {
+             mqttEl.innerHTML = '<span style="color:var(--error)">OFFLINE</span>';
+        }
+
+        // ESP32 Heartbeat Status (New!)
+        const espStatEl = document.getElementById("espStatus");
+        if(data.esp_status === "ONLINE") {
+            espStatEl.innerHTML = '<span style="color:var(--success); font-weight:bold;"><i class="fas fa-check-circle"></i> ONLINE</span>';
+        } else {
+            espStatEl.innerHTML = '<span style="color:var(--error); font-weight:bold; animation: pulse 1s infinite;"><i class="fas fa-exclamation-triangle"></i> OFFLINE</span>';
+        }
 
         // === ESP32 ===
         const espFreeHeap = data.free_heap || 0;

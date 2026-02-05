@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aquaponics - Full System Logs</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --text-color: #f8fafc;
+            --log-bg: #1e293b;
+            --accent-color: #38bdf8;
+            --error-color: #ef4444;
+            --warn-color: #f59e0b;
+            --success-color: #10b981;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            color: var(--accent-color);
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary {
+            background: var(--accent-color);
+            color: #000;
+            border: none;
+        }
+
+        .btn-primary:hover {
+            background: #0ea5e9;
+        }
+
+        #logViewer {
+            flex: 1;
+            background: var(--log-bg);
+            border-radius: 12px;
+            padding: 15px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #cbd5e1;
+            line-height: 1.5;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: rgba(255,255,255,0.5);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1><i class="fas fa-file-alt"></i> Full System Logs</h1>
+        <div style="display: flex; gap: 10px;">
+            <button onclick="fetchLogs()" class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
+            <button onclick="clearLogsFile()" class="btn" style="border-color: var(--error-color); color: var(--error-color);"><i class="fas fa-trash"></i> DELETE LOGS</button>
+            <a href="/" class="btn btn-primary"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+        </div>
+    </header>
+
+    <div id="logViewer">
+        <div class="loading"><i class="fas fa-spinner fa-spin"></i> Loading logs...</div>
+    </div>
+
+    <script>
+        async function fetchLogs() {
+            const viewer = document.getElementById('logViewer');
+            try {
+                const response = await fetch('/api/full_logs_file');
+                if (!response.ok) throw new Error('Failed to load logs');
+                
+                const text = await response.text();
+                
+                if (text.trim() === "") {
+                     viewer.textContent = "Log file is empty.";
+                     return;
+                }
+
+                // Basic syntax highlighting
+                // We do this by escaping HTML then replacing keywords
+                const safeText = text.replace(/&/g, "&amp;")
+                                   .replace(/</g, "&lt;")
+                                   .replace(/>/g, "&gt;");
+                
+                const highlighted = safeText
+                    .replace(/\[ERROR\]/g, '<span style="color: var(--error-color)">[ERROR]</span>')
+                    .replace(/\[WARN\]/g, '<span style="color: var(--warn-color)">[WARN]</span>')
+                    .replace(/\[INFO\]/g, '<span style="color: var(--success-color)">[INFO]</span>');
+
+                viewer.innerHTML = highlighted;
+                
+                // Scroll to bottom
+                viewer.scrollTop = viewer.scrollHeight;
+                
+            } catch (error) {
+                viewer.innerHTML = `<div style="color: var(--error-color); text-align: center;">
+                    <i class="fas fa-exclamation-triangle"></i> Error loading logs: ${error.message}
+                </div>`;
+            }
+        }
+
+        async function clearLogsFile() {
+             if(!confirm("Are you sure you want to DELETE all logs? This cannot be undone.")) return;
+             
+             try {
+                const res = await fetch('/api/clear_logs', { method: 'POST' });
+                if(res.ok) {
+                    fetchLogs(); // Reload
+                } else {
+                    alert("Failed to clear logs");
+                }
+             } catch(e) {
+                 alert("Error: " + e.message);
+             }
+        }
+
+        // Load on start
+        window.onload = fetchLogs;
+    </script>
+</body>
+</html>
