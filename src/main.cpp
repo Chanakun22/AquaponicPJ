@@ -138,10 +138,6 @@ void loop() {
     wifiLoop();      // Handle WiFi connection / config portal
     telnetLoop();    // Handle Telnet clients
     otaLoop();       // Handle OTA updates
-    // ======== Network Services ========
-    wifiLoop();      // Handle WiFi connection / config portal
-    telnetLoop();    // Handle Telnet clients
-    otaLoop();       // Handle OTA updates
     netpieLoop();    // Handle Netpie MQTT
     localMqttLoop(); // Handle Local MQTT (Pi)
     

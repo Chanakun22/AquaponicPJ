@@ -1,12 +1,142 @@
-from flask import Flask, jsonify, send_file
+from flask import Flask, jsonify, send_file, request
 import paho.mqtt.client as mqtt
 import json
 import threading
 import psutil
 import time
 from datetime import datetime, timedelta
+import os
 
 app = Flask(__name__)
+
+# === Settings File ===
+SETTINGS_FILE = "settings.json"
+
+def load_settings():
+    """Load settings from JSON file"""
+    default = {
+        "thresholds": {
+            "ph_min": 6.0, "ph_max": 7.5,
+            "water_temp_min": 22, "water_temp_max": 30,
+            "air_temp_min": 25, "air_temp_max": 35,
+            "humidity_min": 50, "humidity_max": 80,
+            "tds_min": 300, "tds_max": 600
+        },
+        "light": {
+            "enabled": False,
+            "on_day": 1, "on_time": "06:00",
+            "off_day": 5, "off_time": "18:00"
+        },
+        "notifications": {
+            "line_token": "",
+            "alert_cooldown_min": 15,
+            "enabled": False
+        },
+        "display": {
+            "graph_days": 3,
+            "refresh_sec": 5,
+            "device_name": "Aquaponics System"
+        }
+    }
+    try:
+        if os.path.exists(SETTINGS_FILE):
+            with open(SETTINGS_FILE, "r") as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"Error loading settings: {e}")
+    return default
+
+
+
+# Load settings on startup
+app_settings = load_settings()
+
+# === Line Notify ===
+import requests
+
+# Track last alert time per sensor to implement cooldown
+_last_alert_time = {}
+
+def send_line_notify(message):
+    """Send notification via Line Notify"""
+    global app_settings
+    token = app_settings.get("notifications", {}).get("line_token", "")
+    if not token:
+        print("⚠️ Line Notify: No token configured")
+        return False
+    
+    try:
+        # Use LINE Messaging API (Broadcast)
+        url = "https://api.line.me/v2/bot/message/broadcast"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}"
+        }
+        payload = {
+            "messages": [
+                {
+                    "type": "text",
+                    "text": message
+                }
+            ]
+        }
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=5)
+        
+        if response.status_code == 200:
+            print(f"✅ LINE Alert sent: {message}")
+            save_log(f"📱 LINE Alert: {message}")
+            return True
+        else:
+            print(f"❌ LINE Alert failed: {response.status_code} - {response.text}")
+            return False
+    except Exception as e:
+        print(f"❌ LINE Error: {e}")
+        return False
+
+def check_thresholds(data):
+    """Check sensor data against thresholds and send alerts"""
+    global app_settings, _last_alert_time
+    
+    # Check if notifications are enabled
+    notifications = app_settings.get("notifications", {})
+    if not notifications.get("enabled", False):
+        return
+    
+    thresholds = app_settings.get("thresholds", {})
+    cooldown_min = notifications.get("alert_cooldown_min", 15)
+    now = time.time()
+    
+    alerts = []
+    
+    # Check each sensor
+    checks = [
+        ("ph", data.get("ph", 0), thresholds.get("ph_min", 0), thresholds.get("ph_max", 14), "pH"),
+        ("water_temp", data.get("water_temp", 0), thresholds.get("water_temp_min", 0), thresholds.get("water_temp_max", 100), "อุณหภูมิน้ำ"),
+        ("air_temp", data.get("air_temp", 0), thresholds.get("air_temp_min", 0), thresholds.get("air_temp_max", 100), "อุณหภูมิอากาศ"),
+        ("humidity", data.get("humidity", 0), thresholds.get("humidity_min", 0), thresholds.get("humidity_max", 100), "ความชื้น"),
+        ("tds", data.get("tds", 0), thresholds.get("tds_min", 0), thresholds.get("tds_max", 2000), "TDS"),
+    ]
+    
+    for key, value, min_val, max_val, name in checks:
+        if value is None or value == 0:
+            continue
+        
+        # Check if out of range
+        if value < min_val or value > max_val:
+            # Check cooldown
+            last_time = _last_alert_time.get(key, 0)
+            if now - last_time > cooldown_min * 60:
+                if value < min_val:
+                    alerts.append(f"⚠️ {name} ต่ำเกินไป: {value} (ต่ำกว่า {min_val})")
+                else:
+                    alerts.append(f"⚠️ {name} สูงเกินไป: {value} (สูงกว่า {max_val})")
+                _last_alert_time[key] = now
+    
+    # Send alerts if any
+    if alerts:
+        message = "\n🌿 Aquaponics Alert!\n" + "\n".join(alerts)
+        send_line_notify(message)
 
 # เก็บข้อมูลล่าสุดไว้ในตัวแปร Memory
 last_data = {
@@ -41,7 +171,8 @@ def init_db():
     try:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
-        # Create table if not exists
+        
+        # Sensor Data Table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS sensors (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,6 +185,16 @@ def init_db():
                 light REAL
             )
         ''')
+        
+        # Settings History Table (New)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS settings_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                settings_json TEXT
+            )
+        ''')
+        
         conn.commit()
         conn.close()
         print("✅ Database initialized")
@@ -62,6 +203,33 @@ def init_db():
 
 # Initialize DB on start
 init_db()
+
+def save_settings_to_db(settings):
+    """Save settings snapshot to database"""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO settings_history (settings_json) VALUES (?)', (json.dumps(settings),))
+        conn.commit()
+        conn.close()
+        # print("💾 Settings saved to DB history")
+    except Exception as e:
+        print(f"❌ Failed to save settings to DB: {e}")
+
+def save_settings(settings):
+    """Save settings to JSON file and Database"""
+    try:
+        # 1. Save to File (Actual Config)
+        with open(SETTINGS_FILE, "w") as f:
+            json.dump(settings, f, indent=2)
+            
+        # 2. Save to DB (History/Backup)
+        save_settings_to_db(settings)
+        
+        return True
+    except Exception as e:
+        print(f"Error saving settings: {e}")
+        return False
 
 # === Log Storage (In-Memory + File) ===
 from collections import deque
@@ -86,10 +254,11 @@ def save_log(msg):
 def on_connect(client, userdata, flags, rc):
     print(f"✅ MQTT Connected with result code {rc}")
     client.subscribe("aquaponics/sensors")
-    client.subscribe("aquaponics/logs") # Subscribe to logs
+    client.subscribe("aquaponics/logs")
+
 
 def on_message(client, userdata, msg):
-    global last_data, last_esp_update, esp_online
+    global last_data, last_esp_update, esp_online, app_settings
     try:
         topic = msg.topic
         payload = msg.payload.decode()
@@ -98,6 +267,8 @@ def on_message(client, userdata, msg):
             print(f"📝 Log: {payload}")
             save_log(payload)
             return
+        
+
 
         # It's sensor data
         # Update heartbeat
@@ -116,6 +287,9 @@ def on_message(client, userdata, msg):
         # === Save to DB (Filtered) ===
         # Save only every 60 seconds to save space
         save_data_to_db(data)
+        
+        # === Check Thresholds & Send Alerts ===
+        check_thresholds(data)
             
     except Exception as e:
         print(f"❌ Error parsing MQTT: {e}")
@@ -152,15 +326,20 @@ def save_data_to_db(data):
         print(f"DB Insert Error: {e}")
 
 # === Start MQTT in Background Thread ===
+mqtt_client = None  # Global reference for publishing
+
+
+
 def start_mqtt():
-    client = mqtt.Client()
-    client.on_connect = on_connect
-    client.on_message = on_message
+    global mqtt_client
+    mqtt_client = mqtt.Client()
+    mqtt_client.on_connect = on_connect
+    mqtt_client.on_message = on_message
     
     try:
         # "localhost" เพราะ Mosquitto อยู่เครื่องเดียวกับ app.py
-        client.connect("localhost", 1883, 60)
-        client.loop_forever()
+        mqtt_client.connect("localhost", 1883, 60)
+        mqtt_client.loop_forever()
     except Exception as e:
         print(f"❌ Could not connect to MQTT Broker: {e}")
         save_log(f"MQTT Error: {e}")
@@ -170,9 +349,42 @@ def start_mqtt():
 def index():
     return send_file('index.html')
 
+@app.route('/graphs')
+def graphs_page():
+    return send_file('graphs.html')
+
+@app.route('/full_logs')
+def full_logs_page():
+    return send_file('full_logs.html')
+
 @app.route('/api/sensors')
 def get_sensors():
     return jsonify(last_data)
+
+@app.route('/settings')
+def settings_page():
+    return send_file('settings.html')
+
+@app.route('/api/settings', methods=['GET'])
+def get_settings():
+    global app_settings
+    return jsonify(app_settings)
+
+@app.route('/api/settings', methods=['POST'])
+def post_settings():
+    global app_settings
+    try:
+        new_settings = request.get_json()
+        if new_settings:
+            app_settings = new_settings
+            if save_settings(app_settings):
+
+                return jsonify({"status": "ok", "message": "Settings saved"})
+            else:
+                return jsonify({"status": "error", "message": "Failed to save"}), 500
+        return jsonify({"status": "error", "message": "Invalid data"}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 # === Heartbeat Monitor ===
 last_esp_update = 0

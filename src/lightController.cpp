@@ -244,3 +244,18 @@ void lightCtrlPrintSchedule(void) {
     LOG_INFO("==============================");
 }
 
+int lightCtrlGetOnDay(void) { return _onDay; }
+int lightCtrlGetOffDay(void) { return _offDay; }
+
+static char _onTimeBuff[6];
+const char* lightCtrlGetOnTime(void) {
+    snprintf(_onTimeBuff, sizeof(_onTimeBuff), "%02d:%02d", _onHour, _onMinute);
+    return _onTimeBuff;
+}
+
+static char _offTimeBuff[6];
+const char* lightCtrlGetOffTime(void) {
+    snprintf(_offTimeBuff, sizeof(_offTimeBuff), "%02d:%02d", _offHour, _offMinute);
+    return _offTimeBuff;
+}
+

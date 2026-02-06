@@ -406,6 +406,19 @@
             <span id="deviceIp">--</span>
           </div>
         </div>
+
+        <!-- Navigation Buttons -->
+        <div style="display: flex; gap: 10px;">
+          <a href="/graphs" class="status-pill" style="text-decoration: none; cursor: pointer;">
+            <i class="fa-solid fa-chart-line"></i> Graphs
+          </a>
+          <a href="/full_logs" class="status-pill" style="text-decoration: none; cursor: pointer;">
+            <i class="fa-solid fa-file-alt"></i> Logs
+          </a>
+          <a href="/settings" class="status-pill" style="text-decoration: none; cursor: pointer; background: rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.3);">
+            <i class="fa-solid fa-cog"></i> Settings
+          </a>
+        </div>
       </header>
 
       <!-- Connection -->
@@ -755,29 +768,29 @@
         }
       }
 
+      let lastLogsHash = "";
+
       function updateLogs(logs) {
           const container = document.getElementById("logContainer");
-          // Clear current logs to avoid duplicates (simplest approach for now)
-          // Or smarter: check last entry. For now, simple replace is okay as it refreshes 2s.
-          // actually full replace might cause jitter.
-          // Let's just prepend new ones? No, the API returns the FULL list of last 50.
           
-          container.innerHTML = ""; 
-          
-          logs.forEach(log => {
-              const entry = document.createElement("div");
-              
-              // Colorize based on content
-              let type = "";
-              if(log.includes("[ERROR]")) type = "error";
-              else if(log.includes("[WARN]")) type = "warn";
-              else if(log.includes("[INFO]")) type = "info";
-              else type = ""; // default
+          // Simple hash/string comparison to see if logs changed
+          const currentLogsHash = JSON.stringify(logs);
+          if (currentLogsHash === lastLogsHash) return; // No change, do nothing
+          lastLogsHash = currentLogsHash;
 
-              entry.className = `log-line ${type}`;
-              entry.textContent = log; 
-              container.appendChild(entry);
-          });
+          // Build HTML string first (smoother than clear + append loop)
+          const newHtml = logs.map(log => {
+              let type = "";
+              if(log.includes("[ERROR]") || log.includes("❌")) type = "error";
+              else if(log.includes("[WARN]") || log.includes("⚠️")) type = "warn";
+              else if(log.includes("[INFO]") || log.includes("✅")) type = "info";
+              else type = ""; 
+              
+              const safeLog = log.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+              return `<div class="log-line ${type}">${safeLog}</div>`;
+          }).join("");
+          
+          container.innerHTML = newHtml;
       }
 
       function updateSensors(data) {

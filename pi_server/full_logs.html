@@ -269,7 +269,10 @@
 
         async function fetchLogs() {
             const viewer = document.getElementById('logViewer');
-            viewer.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Loading logs...</div>';
+            // Only show loading if first load
+            if (viewer.innerHTML.includes('Loading logs') && allLogs.length === 0) {
+                 viewer.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Loading logs...</div>';
+            }
             
             try {
                 const response = await fetch('/api/full_logs_file');

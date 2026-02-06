@@ -61,4 +61,12 @@ bool lightCtrlGetTime(char* buffer, size_t bufferSize);
  */
 bool lightCtrlIsEnabled(void);
 
+/**
+ * @brief Getters for schedule parameters
+ */
+int lightCtrlGetOnDay(void);
+const char* lightCtrlGetOnTime(void);
+int lightCtrlGetOffDay(void);
+const char* lightCtrlGetOffTime(void);
+
 #endif // LIGHT_CONTROLLER_H

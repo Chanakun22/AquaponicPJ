@@ -1,0 +1,31 @@
+{
+  "thresholds": {
+    "ph_min": 6.0,
+    "ph_max": 7.5,
+    "water_temp_min": 22,
+    "water_temp_max": 30,
+    "air_temp_min": 25,
+    "air_temp_max": 35,
+    "humidity_min": 50,
+    "humidity_max": 80,
+    "tds_min": 300,
+    "tds_max": 600
+  },
+  "light": {
+    "enabled": false,
+    "on_day": 1,
+    "on_time": "06:00",
+    "off_day": 5,
+    "off_time": "18:00"
+  },
+  "notifications": {
+    "line_token": "",
+    "alert_cooldown_min": 15,
+    "enabled": false
+  },
+  "display": {
+    "graph_days": 3,
+    "refresh_sec": 5,
+    "device_name": "Aquaponics System"
+  }
+}

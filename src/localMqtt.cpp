@@ -14,6 +14,7 @@
 #include <ArduinoJson.h>
 #include "netpie.h"
 
+
 // ============================================================================
 // PRIVATE VARIABLES
 // ============================================================================
@@ -56,6 +57,22 @@ static bool _resolveBrokerIp() {
 }
 
 /**
+ * @brief MQTT Callback for receiving commands from Pi
+ */
+static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
+    // Parse JSON payload
+    StaticJsonDocument<256> doc;
+    DeserializationError err = deserializeJson(doc, payload, length);
+    
+    if (err) {
+        LOG_ERROR("Local MQTT JSON parse error: %s", err.c_str());
+        return;
+    }
+    
+
+}
+
+/**
  * @brief Attempt to connect to Local MQTT Broker
  */
 static bool _reconnect() {
@@ -66,6 +83,7 @@ static bool _reconnect() {
     }
 
     _localMqtt.setServer(_brokerIp, LOCAL_MQTT_PORT);
+    _localMqtt.setCallback(_onMqttMessage);  // Set callback for incoming messages
     LOG_INFO("Connecting to Local MQTT (%s)...", _brokerIp.toString().c_str());
 
     // Create a random client ID
@@ -73,7 +91,8 @@ static bool _reconnect() {
 
     if (_localMqtt.connect(clientId.c_str())) {
         LOG_INFO("✅ Connected to Local MQTT!");
-        // Optional: Subscribe to local control topics here
+
+        
         return true;
     } else {
         LOG_WARN("Local MQTT connect failed, rc=%d", _localMqtt.state());
@@ -161,3 +180,5 @@ void localMqttPublishLog(const char* logMsg) {
     // Simple text payload
     _localMqtt.publish(LOCAL_MQTT_TOPIC_LOGS, logMsg);
 }
+
+

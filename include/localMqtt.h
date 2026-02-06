@@ -39,4 +39,6 @@ bool localMqttIsConnected(void);
 
 void localMqttPublishLog(const char* logMsg);
 
+
+
 #endif // LOCAL_MQTT_H
