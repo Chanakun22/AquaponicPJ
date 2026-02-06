@@ -82,7 +82,7 @@ static float validateLight(float light) {
 void setup() {
     // เริ่มต้น Serial
     Serial.begin(SERIAL_BAUD_RATE);
-    delay(100);
+    // delay(100); // Removed per Engineering Standard 1.1
     
     LOG_MODULE_START("Aquaponics Sensor System");
     LOG_INFO("Firmware Version: %s", systemGetVersion());

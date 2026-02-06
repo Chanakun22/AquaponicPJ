@@ -102,7 +102,10 @@ void systemLoop(void) {
             // Blink LED rapidly to indicate reset
             // Note: Removed digitalWrite blinking to avoid conflict with RMT/NeoPixel on ESP32-S3
             LOG_INFO("Resetting in 3... 2... 1...");
-            delay(1000);
+            LOG_INFO("Resetting in 3... 2... 1...");
+            // Non-blocking wait not strictly needed here since we are about to reset anyway, 
+            // but removing delay avoids WDT risk if it was tight.
+            
             
             systemFactoryReset();
             _btnPressStart = 0; // Reset counter (though system will reboot)

@@ -232,10 +232,10 @@ void netpiePublishData(float waterTemp, float airTemp, float humidity, float tds
     JsonObject data = doc.createNestedObject("data");
     
     if (!isnan(waterTemp)) {
-        data["waterTemp"] = round(waterTemp * 10) / 10.0;
+        data["water_temp"] = round(waterTemp * 10) / 10.0;
     }
     if (!isnan(airTemp)) {
-        data["airTemp"] = round(airTemp * 10) / 10.0;
+        data["air_temp"] = round(airTemp * 10) / 10.0;
     }
     if (!isnan(humidity)) {
         data["humidity"] = round(humidity * 10) / 10.0;
@@ -251,7 +251,7 @@ void netpiePublishData(float waterTemp, float airTemp, float humidity, float tds
     }
     
     // เพิ่มสถานะไฟ
-    data["lightRelay"] = lightCtrlGetState() ? 1 : 0;
+    data["light_relay"] = lightCtrlGetState() ? 1 : 0;
     
     char payload[512];
     serializeJson(doc, payload);
