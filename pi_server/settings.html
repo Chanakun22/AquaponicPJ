@@ -325,6 +325,52 @@
                 </select>
             </div>
         </div>
+
+            <!-- TDS Calibration -->
+        <div class="card">
+            <h2><i class="fas fa-flask"></i> TDS Calibration</h2>
+            
+            <div class="form-group">
+                <label>Current TDS Voltage (Raw)</label>
+                <div class="form-row">
+                    <input type="text" id="current_voltage" readonly style="background:#000;color:#38bdf8;font-weight:bold;text-align:center;">
+                    <button class="btn" onclick="refreshVoltage()"><i class="fas fa-sync-alt"></i></button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Low Point (Standard Solution)</label>
+                <div class="form-row">
+                    <input type="number" id="low_temp" value="25" step="0.1" placeholder="Temp" style="width: 80px;">
+                    <span>°C</span>
+                    <input type="number" id="low_ppm" placeholder="ppm" step="1">
+                    <span>ppm @</span>
+                    <input type="number" id="low_voltage" placeholder="Voltage" step="0.001">
+                    <span>V</span>
+                    <button class="btn btn-primary" onclick="readLowVoltage()">Read</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>High Point (Standard Solution)</label>
+                <div class="form-row">
+                    <input type="number" id="high_temp" value="25" step="0.1" placeholder="Temp" style="width: 80px;">
+                    <span>°C</span>
+                    <input type="number" id="high_ppm" placeholder="ppm" step="1">
+                    <span>ppm @</span>
+                    <input type="number" id="high_voltage" placeholder="Voltage" step="0.001">
+                    <span>V</span>
+                    <button class="btn btn-primary" onclick="readHighVoltage()">Read</button>
+                </div>
+            </div>
+
+            <div class="form-group" style="text-align:center;margin-top:15px;">
+                <button class="btn btn-success" onclick="saveTdsCalibration()">
+                    <i class="fas fa-check"></i> Save Calibration
+                </button>
+                <span id="cal_status" style="margin-left:15px;color:#888;"></span>
+            </div>
+        </div>
     </div>
 
     <div class="footer-actions">
@@ -402,7 +448,8 @@
                     device_name: document.getElementById('device_name').value,
                     graph_days: parseInt(document.getElementById('graph_days').value),
                     refresh_sec: parseInt(document.getElementById('refresh_sec').value)
-                }
+                },
+                tds_calibration: settings.tds_calibration || {}
             };
         }
 
@@ -443,8 +490,99 @@
 
         document.getElementById('notify_enabled').addEventListener('change', updateNotifyStatus);
 
+        // === TDS Calibration Functions ===
+        async function refreshVoltage() {
+            try {
+                const res = await fetch('/api/tds_voltage');
+                const data = await res.json();
+                document.getElementById('current_voltage').value = data.voltage.toFixed(3) + ' V';
+            } catch (e) {
+                document.getElementById('current_voltage').value = 'Error';
+            }
+        }
+
+        function calculateCompensatedVoltage(rawV, tempElementId) {
+            const temp = parseFloat(document.getElementById(tempElementId).value) || 25.0;
+            // Formula: Vcomp = Vraw / (1 + 0.02 * (T - 25))
+            const compV = rawV / (1.0 + 0.02 * (temp - 25.0));
+            return compV;
+        }
+
+        function readLowVoltage() {
+            refreshVoltage().then(() => {
+                const currentV = parseFloat(document.getElementById('current_voltage').value);
+                if (!isNaN(currentV)) {
+                    const compV = calculateCompensatedVoltage(currentV, 'low_temp');
+                    document.getElementById('low_voltage').value = compV.toFixed(3);
+                    showToast(`Low point captured! (Compensated @ ${document.getElementById('low_temp').value}°C) ✅`);
+                }
+            });
+        }
+
+        function readHighVoltage() {
+            refreshVoltage().then(() => {
+                const currentV = parseFloat(document.getElementById('current_voltage').value);
+                if (!isNaN(currentV)) {
+                    const compV = calculateCompensatedVoltage(currentV, 'high_temp');
+                    document.getElementById('high_voltage').value = compV.toFixed(3);
+                    showToast(`High point captured! (Compensated @ ${document.getElementById('high_temp').value}°C) ✅`);
+                }
+            });
+        }
+
+        async function saveTdsCalibration() {
+            const data = {
+                low_temp: parseFloat(document.getElementById('low_temp').value) || 25,
+                low_ppm: parseFloat(document.getElementById('low_ppm').value) || 0,
+                low_voltage: parseFloat(document.getElementById('low_voltage').value) || 0,
+                high_temp: parseFloat(document.getElementById('high_temp').value) || 25,
+                high_ppm: parseFloat(document.getElementById('high_ppm').value) || 0,
+                high_voltage: parseFloat(document.getElementById('high_voltage').value) || 0
+            };
+
+            if (data.low_voltage <= 0 || data.high_voltage <= 0) {
+                showToast('Please read voltage for both points first!', true);
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/tds_calibrate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                if (result.status === 'ok') {
+                    showToast('TDS Calibration saved! ✅');
+                    document.getElementById('cal_status').textContent = 'Calibrated ✅';
+                    // Update global settings object to reflect new calibration
+                    settings.tds_calibration = { ...settings.tds_calibration, ...data, calibrated: true };
+                } else {
+                    showToast('Error: ' + result.message, true);
+                }
+            } catch (e) {
+                showToast('Failed to save calibration', true);
+            }
+        }
+
+        function populateTdsCalibration() {
+            const cal = settings.tds_calibration || {};
+            document.getElementById('low_temp').value = cal.low_temp || 25;
+            document.getElementById('low_ppm').value = cal.low_ppm || 500;
+            document.getElementById('low_voltage').value = cal.low_voltage || '';
+            document.getElementById('high_temp').value = cal.high_temp || 25;
+            document.getElementById('high_ppm').value = cal.high_ppm || 1000;
+            document.getElementById('high_voltage').value = cal.high_voltage || '';
+            document.getElementById('cal_status').textContent = cal.calibrated ? 'Calibrated ✅' : 'Not Calibrated';
+            refreshVoltage();
+        }
+
         // Load on start
-        window.onload = loadSettings;
+        window.onload = function() {
+            loadSettings().then(() => {
+                populateTdsCalibration();
+            });
+        };
     </script>
 </body>
 </html>

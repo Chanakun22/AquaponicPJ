@@ -158,6 +158,12 @@ static void _mqttCallback(char* topic, byte* payload, unsigned int length) {
 static bool _mqttReconnect(void) {
     LOG_INFO("Connecting to MQTT broker...");
     
+    // DEBUG: Check credentials (remove specific values after debugging)
+    LOG_DEBUG("ID: %s", NETPIE_CLIENT_ID);
+    LOG_DEBUG("Token: %s", NETPIE_TOKEN);
+    // LOG_DEBUG("Secret: %s", NETPIE_SECRET); // Keep secret hidden but check ID/Token format
+    
+    // NETPIE_CLIENT_ID, NETPIE_TOKEN, NETPIE_SECRET are macros from config.h/secrets.ini
     if (_mqtt.connect(NETPIE_CLIENT_ID, NETPIE_TOKEN, NETPIE_SECRET)) {
         LOG_INFO("MQTT connected!");
         
@@ -165,14 +171,13 @@ static bool _mqttReconnect(void) {
         _mqtt.subscribe("@msg/#");
         _mqtt.subscribe("@private/shadow/data/get/response");
         _mqtt.subscribe("@shadow/data/get/response");
-        _mqtt.subscribe("@shadow/data/updated");  // ⬅️ รับ real-time updates!
+        _mqtt.subscribe("@shadow/data/updated");
         
-        LOG_DEBUG("Subscribed to MQTT topics (including shadow updates)");
+        LOG_DEBUG("Subscribed to MQTT topics");
         
-        // Request shadow data ครั้งแรก
+        // Request shadow data
         _mqtt.publish("@shadow/data/get", "{}");
         _shadowRequested = true;
-        LOG_DEBUG("Shadow data requested");
         
         return true;
     } else {

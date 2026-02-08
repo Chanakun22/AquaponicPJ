@@ -11,16 +11,16 @@
 WiFiServer _telnetServer(23);
 WiFiClient _telnetClient;
 bool _isAuthenticated = false;
-static String _inputBuffer = "";
+static char _inputBuffer[64];
+static size_t _bufferIndex = 0;
 
-// Default password if not defined
-#ifndef SECRET_TELNET_PASSWORD
-#define SECRET_TELNET_PASSWORD "admin"
-#endif
+
 
 void telnetSetup(void) {
     _telnetServer.begin();
     _telnetServer.setNoDelay(true);
+    memset(_inputBuffer, 0, sizeof(_inputBuffer));
+    _bufferIndex = 0;
 }
 
 void telnetLoop(void) {
@@ -30,7 +30,8 @@ void telnetLoop(void) {
             if (_telnetClient) _telnetClient.stop();
             _telnetClient = _telnetServer.available();
             _isAuthenticated = false;
-            _inputBuffer = "";
+            memset(_inputBuffer, 0, sizeof(_inputBuffer));
+            _bufferIndex = 0;
             
             _telnetClient.println("==================================");
             _telnetClient.println("Aquaponics Debug Console");
@@ -55,40 +56,52 @@ void telnetLoop(void) {
         while (_telnetClient.available()) {
             char c = _telnetClient.read();
             
-            // Password handling
-            if (!_isAuthenticated) {
-                if (c == '\n' || c == '\r') {
-                    if (_inputBuffer.length() > 0) {
-                        if (_inputBuffer == SECRET_TELNET_PASSWORD) {
+            // Handle Backspace
+            if (c == 0x08 || c == 0x7F) {
+                if (_bufferIndex > 0) {
+                    _bufferIndex--;
+                    _inputBuffer[_bufferIndex] = 0;
+                    _telnetClient.print("\b \b"); // Erase character visually
+                }
+                continue;
+            }
+
+            // Handle newline (Command execution)
+            if (c == '\n' || c == '\r') {
+                if (_bufferIndex > 0) {
+                    _telnetClient.println(); // New line for output
+                    
+                    if (!_isAuthenticated) {
+                        // Password Check
+                        if (strcmp(_inputBuffer, TELNET_PASSWORD) == 0) {
                             _isAuthenticated = true;
-                            _telnetClient.println("\r\nAccess Granted.");
+                            _telnetClient.println("Access Granted.");
                             _telnetClient.println("เข้าสู่ระบบเรียบร้อย✅");
                         } else {
-                            _telnetClient.println("\r\nAccess Denied.");
+                            _telnetClient.println("Access Denied.");
                             _telnetClient.print("Password: ");
                         }
-                        _inputBuffer = "";
+                    } else {
+                        // Command Processing
+                        commandProcess(_inputBuffer, CMD_OUTPUT_TELNET);
                     }
-                } else if (isPrintable(c)) {
-                    _inputBuffer += c;
-                    _telnetClient.print("*"); // Mask password
+                    
+                    // Reset Buffer
+                    memset(_inputBuffer, 0, sizeof(_inputBuffer));
+                    _bufferIndex = 0;
                 }
-            } 
-            // Authenticated command handling
-            else {
-                if (c == '\n' || c == '\r') {
-                    if (_inputBuffer.length() > 0) {
-                        // Convert String to char array for commandProcess
-                        char cmdBuf[64];
-                        _inputBuffer.toCharArray(cmdBuf, sizeof(cmdBuf));
-                        
-                        // Process command via commandHandler
-                        commandProcess(cmdBuf, CMD_OUTPUT_TELNET);
-                        
-                        _inputBuffer = "";
+            } else if (isPrintable(c)) {
+                // Add to buffer if space exists (leave 1 byte for null terminator)
+                if (_bufferIndex < sizeof(_inputBuffer) - 1) {
+                    _inputBuffer[_bufferIndex++] = c;
+                    _inputBuffer[_bufferIndex] = 0; // Ensure null termination
+                    
+                    // Echo character (mask if password)
+                    if (!_isAuthenticated) {
+                        _telnetClient.print("*");
+                    } else {
+                        _telnetClient.print(c);
                     }
-                } else if (isPrintable(c)) {
-                    _inputBuffer += c;
                 }
             }
         }

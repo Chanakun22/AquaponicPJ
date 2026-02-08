@@ -40,4 +40,25 @@ void tdsLoop(float temperature);
  */
 bool tdsIsReady(void);
 
+/**
+ * @brief อ่าน voltage ปัจจุบันของ TDS sensor (สำหรับ calibration)
+ * @return voltage ในหน่วย V
+ */
+float tdsGetVoltage(void);
+
+/**
+ * @brief ตั้งค่า 2-Point Calibration
+ * @param lowPpm ค่า ppm ของน้ำยามาตรฐานจุดต่ำ
+ * @param lowVoltage voltage ที่อ่านได้ที่จุดต่ำ
+ * @param highPpm ค่า ppm ของน้ำยามาตรฐานจุดสูง
+ * @param highVoltage voltage ที่อ่านได้ที่จุดสูง
+ */
+void tdsSetCalibration(float lowPpm, float lowVoltage, float highPpm, float highVoltage);
+
+/**
+ * @brief ตรวจสอบว่า sensor ได้รับการ calibrate แล้วหรือยัง
+ * @return true ถ้า calibrated
+ */
+bool tdsIsCalibrated(void);
+
 #endif // TDS_SENSOR_H

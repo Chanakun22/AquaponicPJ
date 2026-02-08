@@ -210,82 +210,87 @@ void commandSetup(void) {
 }
 
 void commandProcess(char* cmd, CommandOutput_t output) {
-    // Trim whitespace
+    // Trim whitespace (Right side)
     size_t len = strlen(cmd);
     while (len > 0 && (cmd[len-1] == ' ' || cmd[len-1] == '\r' || cmd[len-1] == '\n')) {
         cmd[--len] = '\0';
     }
     
+    // Trim whitespace (Left side) -> Shift pointer? No, just skip in comparison or memmove
+    // Simple implementation: skip leading spaces
+    char* cleanCmd = cmd;
+    while (*cleanCmd == ' ') cleanCmd++;
+    
     // Skip empty commands
-    if (len == 0) return;
+    if (strlen(cleanCmd) == 0) return;
     
-    LOG_DEBUG("[CMD] Processing: %s", cmd);
+    LOG_DEBUG("[CMD] Processing: %s", cleanCmd);
     
-    // === Command Parsing ===
+    // === Command Parsing using strncmp/strcmp ===
     
-    if (strcmp(cmd, "help") == 0 || strcmp(cmd, "?") == 0) {
+    if (strcmp(cleanCmd, "help") == 0 || strcmp(cleanCmd, "?") == 0) {
         _showHelp(output);
     }
-    else if (strcmp(cmd, "clear") == 0 || strcmp(cmd, "cls") == 0) {
+    else if (strcmp(cleanCmd, "clear") == 0 || strcmp(cleanCmd, "cls") == 0) {
         // ANSI escape code to clear screen and move cursor to home
         commandPrintf(output, "\033[2J\033[H");
     }
-    else if (strcmp(cmd, "status") == 0) {
+    else if (strcmp(cleanCmd, "status") == 0) {
         _showStatus(output);
     }
-    else if (strcmp(cmd, "test") == 0) {
+    else if (strcmp(cleanCmd, "test") == 0) {
         _runSystemTest(output);
     }
-    else if (strcmp(cmd, "health") == 0) {
+    else if (strcmp(cleanCmd, "health") == 0) {
         _showHealth(output);
     }
-    else if (strcmp(cmd, "wifi") == 0) {
+    else if (strcmp(cleanCmd, "wifi") == 0) {
         _showWifi(output);
     }
-    else if (strcmp(cmd, "mqtt") == 0) {
+    else if (strcmp(cleanCmd, "mqtt") == 0) {
         _showMqtt(output);
     }
-    else if (strcmp(cmd, "ph") == 0) {
+    else if (strcmp(cleanCmd, "ph") == 0) {
         commandPrintf(output, "[PH] pH: %.2f, Voltage: %.1f mV\r\n", phRead(), phReadVoltage());
     }
-    else if (strcmp(cmd, "cal7") == 0) {
+    else if (strcmp(cleanCmd, "cal7") == 0) {
         commandPrintf(output, "[PH] Calibrating pH 7.0...\r\n");
         phCalibratePh7();
         commandPrintf(output, "[PH] Calibration complete!\r\n");
     }
-    else if (strcmp(cmd, "cal4") == 0) {
+    else if (strcmp(cleanCmd, "cal4") == 0) {
         commandPrintf(output, "[PH] Calibrating pH 4.0...\r\n");
         phCalibratePh4();
         commandPrintf(output, "[PH] Calibration complete!\r\n");
     }
-    else if (strcmp(cmd, "light on") == 0) {
+    else if (strcmp(cleanCmd, "light on") == 0) {
         lightCtrlSetState(true);
         commandPrintf(output, "[LIGHT] Forced ON\r\n");
     }
-    else if (strcmp(cmd, "light off") == 0) {
+    else if (strcmp(cleanCmd, "light off") == 0) {
         lightCtrlSetState(false);
         commandPrintf(output, "[LIGHT] Forced OFF\r\n");
     }
-    else if (strcmp(cmd, "light auto") == 0) {
+    else if (strcmp(cleanCmd, "light auto") == 0) {
         lightCtrlSetEnabled(1);  // Re-enable schedule
         commandPrintf(output, "[LIGHT] Auto mode (schedule enabled)\r\n");
     }
-    else if (strcmp(cmd, "version") == 0) {
+    else if (strcmp(cleanCmd, "version") == 0) {
         commandPrintf(output, "Firmware: %s\r\n", systemGetVersion());
         commandPrintf(output, "Build: %s %s\r\n", __DATE__, __TIME__);
     }
-    else if (strcmp(cmd, "reboot") == 0) {
+    else if (strcmp(cleanCmd, "reboot") == 0) {
         commandPrintf(output, "[SYS] Rebooting...\r\n");
-        Serial.flush();  // ให้ข้อความส่งออกก่อน (non-blocking)
+        Serial.flush();
         ESP.restart();
     }
-    else if (strcmp(cmd, "reset") == 0) {
+    else if (strcmp(cleanCmd, "reset") == 0) {
         commandPrintf(output, "[SYS] Factory Reset...\r\n");
-        Serial.flush();  // ให้ข้อความส่งออกก่อน (non-blocking)
+        Serial.flush();
         systemFactoryReset();
     }
     else {
-        commandPrintf(output, "[CMD] Unknown: %s (type 'help')\r\n", cmd);
+        commandPrintf(output, "[CMD] Unknown: %s (type 'help')\r\n", cleanCmd);
     }
 }
 

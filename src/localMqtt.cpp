@@ -13,6 +13,7 @@
 #include <ESPmDNS.h>
 #include <ArduinoJson.h>
 #include "netpie.h"
+#include "TdsSensor.h"  // For TDS calibration
 
 
 // ============================================================================
@@ -25,6 +26,8 @@ static unsigned long _lastReconnectAttempt = 0;
 static unsigned long _lastPublishTime = 0;
 static IPAddress _brokerIp;
 static bool _isIpResolved = false;
+static uint8_t _connectionFailCount = 0;
+static const uint8_t MAX_FAIL_BEFORE_RERESOLUTION = 3; // Re-resolve mDNS หลังล้มเหลว 3 ครั้ง
 
 // ============================================================================
 // PRIVATE FUNCTIONS
@@ -32,6 +35,7 @@ static bool _isIpResolved = false;
 
 /**
  * @brief Attempt to resolve Pi Hostname via mDNS
+ * @note Uses short timeout (1 sec) to avoid blocking sensors
  */
 static bool _resolveBrokerIp() {
     LOG_INFO("Resolving mDNS: %s.local ...", LOCAL_MQTT_HOSTNAME);
@@ -42,8 +46,9 @@ static bool _resolveBrokerIp() {
         // Continue anyway, maybe it was started in wifiConn?
     }
 
-    // Query mDNS
-    IPAddress ip = MDNS.queryHost(LOCAL_MQTT_HOSTNAME);
+    // Query mDNS with SHORT timeout (1000ms) to avoid blocking sensors
+    // Default timeout is ~5 seconds which would block sensor readings
+    IPAddress ip = MDNS.queryHost(LOCAL_MQTT_HOSTNAME, 1000);
     
     if (ip != IPAddress(0, 0, 0, 0)) {
         _brokerIp = ip;
@@ -69,15 +74,36 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
         return;
     }
     
-
+    // Handle TDS Calibration
+    if (String(topic) == "aquaponics/config/tds_cal") {
+        float lowPpm = doc["low_ppm"] | 0.0f;
+        float lowVoltage = doc["low_voltage"] | 0.0f;
+        float highPpm = doc["high_ppm"] | 0.0f;
+        float highVoltage = doc["high_voltage"] | 0.0f;
+        
+        if (lowVoltage > 0 && highVoltage > 0 && lowVoltage != highVoltage) {
+            tdsSetCalibration(lowPpm, lowVoltage, highPpm, highVoltage);
+            LOG_INFO("TDS Calibration received from Pi!");
+        } else {
+            LOG_ERROR("Invalid TDS calibration data received");
+        }
+    }
 }
 
 /**
  * @brief Attempt to connect to Local MQTT Broker
  */
 static bool _reconnect() {
+    // Re-resolve mDNS if connection failed multiple times (IP may have changed)
+    if (_connectionFailCount >= MAX_FAIL_BEFORE_RERESOLUTION) {
+        LOG_WARN("Multiple connection failures, re-resolving mDNS...");
+        _isIpResolved = false;
+        _connectionFailCount = 0;
+    }
+    
     if (!_isIpResolved) {
         if (!_resolveBrokerIp()) {
+            _connectionFailCount++;
             return false;
         }
     }
@@ -91,11 +117,16 @@ static bool _reconnect() {
 
     if (_localMqtt.connect(clientId.c_str())) {
         LOG_INFO("✅ Connected to Local MQTT!");
-
+        _connectionFailCount = 0; // Reset counter on success
+        
+        // Subscribe to calibration topic
+        _localMqtt.subscribe("aquaponics/config/tds_cal");
+        LOG_INFO("Subscribed to TDS calibration topic");
         
         return true;
     } else {
         LOG_WARN("Local MQTT connect failed, rc=%d", _localMqtt.state());
+        _connectionFailCount++;
         return false;
     }
 }
@@ -147,6 +178,10 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
     if (tds >= 0) doc["tds"] = round(tds * 10) / 10.0;
     if (light >= 0) doc["light"] = round(light * 10) / 10.0;
     if (ph >= 0) doc["ph"] = round(ph * 100) / 100.0;
+    
+    // Add TDS voltage for calibration
+    float tdsVoltage = tdsGetVoltage();
+    if (tdsVoltage >= 0) doc["tds_voltage"] = round(tdsVoltage * 1000) / 1000.0;
     
     // Add Network Connectivity Status
     doc["mqtt_connected"] = netpieIsConnected(); // Status for Dashboard

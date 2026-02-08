@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="100" fill="#0f1115"/>
+  <circle cx="256" cy="256" r="200" fill="#1e293b"/>
+  <!-- Leaf shape -->
+  <path d="M256 100 Q400 100 400 256 Q400 412 256 412 Q112 412 112 256 Q112 100 256 100 Z" fill="#00f2aa"/>
+  <!-- Water drop overlay -->
+  <path d="M256 150 Q350 250 350 320 A100 100 0 0 1 162 320 Q162 250 256 150 Z" fill="#00c8ff" opacity="0.8"/>
+</svg>

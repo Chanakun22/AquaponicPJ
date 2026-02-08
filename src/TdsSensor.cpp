@@ -1,55 +1,124 @@
 /**
  * @file TdsSensor.cpp
- * @brief Implementation สำหรับ TDS Sensor
+ * @brief Implementation สำหรับ TDS Sensor พร้อม 2-Point Calibration + NVS Storage
  */
 
 #include "TdsSensor.h"
 #include "logger.h"
+#include <Preferences.h>
 
 // ============================================================================
 // PRIVATE VARIABLES
 // ============================================================================
 
+static Preferences _tdsPrefs;
 static unsigned long _tdsLastReadTime = 0;
 static int _tdsBuffer[TDS_SAMPLE_COUNT];
 static int _tdsBufferIndex = 0;
 static int _tdsSampleCollected = 0;  // จำนวน sample ที่เก็บได้
 static bool _tdsReady = false;       // flag บอกว่าเก็บ sample ครบหรือยัง
 
+// Calibration variables
+static float _kValue = 1.0f;      // Gain factor (scaling)
+static float _offset = 0.0f;      // Offset factor (shifting)
+
+// Raw Calibration Data (Stored in NVS)
+static bool _isCalibrated = false;
+static float _calLowPpm = 0.0f;
+static float _calLowVoltage = 0.0f;
+static float _calHighPpm = 0.0f;
+static float _calHighVoltage = 0.0f;
+
+// Standard DFRobot Polynomial for TDS (ppm) from Voltage (V)
+// Relation: TDS = (133.42*v^3 - 255.86*v^2 + 857.39*v) * 0.5
+static float _getStandardTds(float voltage) {
+    if (voltage <= 0) return 0;
+    return (133.42f * voltage * voltage * voltage 
+          - 255.86f * voltage * voltage 
+          + 857.39f * voltage) * 0.5f;
+}
+
 // ============================================================================
 // PRIVATE FUNCTIONS
 // ============================================================================
 
-/**
- * @brief คำนวณหาค่ากลาง (Median) จากอาเรย์
- * @param bArray อาเรย์ข้อมูล
- * @param iFilterLen ขนาดอาเรย์
- * @return ค่ากลาง
- */
-static int _getMedian(int bArray[], int iFilterLen) {
-    int bTab[iFilterLen];
-    
-    // คัดลอกข้อมูล
-    for (int i = 0; i < iFilterLen; i++) {
-        bTab[i] = bArray[i];
+static void _calculateCalibrationFactors() {
+    if (_calHighVoltage == _calLowVoltage) {
+        _kValue = 1.0f;
+        _offset = 0.0f;
+        return;
     }
     
-    // เรียงลำดับจากน้อยไปมาก (Bubble Sort)
-    for (int j = 0; j < iFilterLen - 1; j++) {
-        for (int i = 0; i < iFilterLen - j - 1; i++) {
+    // Calculate expected base TDS from voltages
+    float baseLow = _getStandardTds(_calLowVoltage);
+    float baseHigh = _getStandardTds(_calHighVoltage);
+    
+    // Calculate K and Offset to map Base -> Actual
+    // Actual = K * Base + Offset
+    _kValue = (_calHighPpm - _calLowPpm) / (baseHigh - baseLow);
+    _offset = _calLowPpm - (_kValue * baseLow);
+    
+    LOG_INFO("Calibrated K: %.4f, Offset: %.4f", _kValue, _offset);
+}
+
+static void _loadCalibrationFromNVS() {
+    _tdsPrefs.begin("tdsSensor", true);
+    _isCalibrated = _tdsPrefs.getBool("calibrated", false);
+    if (_isCalibrated) {
+        _calLowPpm = _tdsPrefs.getFloat("lowPpm", 0);
+        _calLowVoltage = _tdsPrefs.getFloat("lowV", 0);
+        _calHighPpm = _tdsPrefs.getFloat("highPpm", 0);
+        _calHighVoltage = _tdsPrefs.getFloat("highV", 0);
+        _calculateCalibrationFactors(); // Recalculate K/Offset
+    }
+    _tdsPrefs.end();
+}
+
+static void _saveCalibrationToNVS() {
+    _tdsPrefs.begin("tdsSensor", false);
+    _tdsPrefs.putBool("calibrated", _isCalibrated);
+    _tdsPrefs.putFloat("lowPpm", _calLowPpm);
+    _tdsPrefs.putFloat("lowV", _calLowVoltage);
+    _tdsPrefs.putFloat("highPpm", _calHighPpm);
+    _tdsPrefs.putFloat("highV", _calHighVoltage);
+    _tdsPrefs.end();
+    LOG_INFO("TDS Calibration saved to NVS");
+}
+
+// Median Filtering Algorithm
+static int _getMedian(int* bArray, int iFilterLen) {
+    int bTab[iFilterLen];
+    for (byte i = 0; i < iFilterLen; i++)
+        bTab[i] = bArray[i];
+        
+    int i, j, bTemp;
+    for (j = 0; j < iFilterLen - 1; j++) {
+        for (i = 0; i < iFilterLen - j - 1; i++) {
             if (bTab[i] > bTab[i + 1]) {
-                int temp = bTab[i];
+                bTemp = bTab[i];
                 bTab[i] = bTab[i + 1];
-                bTab[i + 1] = temp;
+                bTab[i + 1] = bTemp;
             }
         }
     }
     
-    // คืนค่ากลาง
-    if ((iFilterLen & 1) > 0) {
-        return bTab[(iFilterLen - 1) / 2];
+    if ((iFilterLen & 1) > 0)
+        bTemp = bTab[(iFilterLen - 1) / 2];
+    else
+        bTemp = (bTab[iFilterLen / 2] + bTab[iFilterLen / 2 - 1]) / 2;
+        
+    return bTemp;
+}
+
+static float _calculateTdsFromVoltage(float voltage) {
+    // 1. Get Base TDS from Standard Polynomial
+    float baseTds = _getStandardTds(voltage);
+    
+    // 2. Apply Calibration Adjustment
+    if (_isCalibrated) {
+        return (_kValue * baseTds) + _offset;
     } else {
-        return (bTab[iFilterLen / 2] + bTab[iFilterLen / 2 - 1]) / 2;
+        return baseTds;
     }
 }
 
@@ -60,6 +129,9 @@ static int _getMedian(int bArray[], int iFilterLen) {
 void tdsSetup(void) {
     pinMode(TDS_PIN, INPUT);
     
+    // โหลด calibration จาก NVS
+    _loadCalibrationFromNVS();
+    
     // เริ่มต้นค่า buffer ให้เป็น 0
     for (int i = 0; i < TDS_SAMPLE_COUNT; i++) {
         _tdsBuffer[i] = 0;
@@ -69,31 +141,17 @@ void tdsSetup(void) {
     _tdsReady = false;
     
     LOG_INFO("TDS sensor initialized, collecting %d samples...", TDS_SAMPLE_COUNT);
+    
+    if (_isCalibrated) {
+        LOG_INFO("TDS Calibration loaded from NVS: Low=%.0f ppm @ %.3fV, High=%.0f ppm @ %.3fV", 
+                 _calLowPpm, _calLowVoltage, _calHighPpm, _calHighVoltage);
+    } else {
+        LOG_WARN("TDS not calibrated, using default formula");
+    }
 }
 
-float tdsRead(float temperature) {
-    // อ่านค่า ADC เก็บลง Buffer
-    _tdsBuffer[_tdsBufferIndex] = analogRead(TDS_PIN);
-    _tdsBufferIndex++;
-    
-    // นับจำนวน sample ที่เก็บได้
-    if (!_tdsReady) {
-        _tdsSampleCollected++;
-        if (_tdsSampleCollected >= TDS_SAMPLE_COUNT) {
-            _tdsReady = true;
-            LOG_INFO("TDS buffer ready! Starting measurements...");
-        }
-    }
-    
-    // วน buffer กลับมาเริ่มต้น
-    if (_tdsBufferIndex >= TDS_SAMPLE_COUNT) {
-        _tdsBufferIndex = 0;
-    }
-    
-    // ถ้ายังเก็บ sample ไม่ครบ ให้คืน -1
-    if (!_tdsReady) {
-        return -1.0f;
-    }
+float tdsGetVoltage(void) {
+    if (!_tdsReady) return -1.0f;
     
     // คัดลอกไปใส่ตัวแปรชั่วคราวเพื่อคำนวณ
     int tempBuffer[TDS_SAMPLE_COUNT];
@@ -101,42 +159,80 @@ float tdsRead(float temperature) {
         tempBuffer[i] = _tdsBuffer[i];
     }
     
-    // แปลงค่า ADC เฉลี่ย (Median) เป็น Voltage
-    float averageVoltage = _getMedian(tempBuffer, TDS_SAMPLE_COUNT) * TDS_VREF / TDS_ADC_RESOLUTION;
-    
-    // ชดเชยอุณหภูมิ (Temperature Compensation)
-    float compensationCoefficient = 1.0 + 0.02 * (temperature - 25.0);
-    float compensationVoltage = averageVoltage / compensationCoefficient;
-    
-    // สูตรแปลง Voltage เป็น TDS ppm
-    float tdsValue = (133.42 * compensationVoltage * compensationVoltage * compensationVoltage 
-                    - 255.86 * compensationVoltage * compensationVoltage 
-                    + 857.39 * compensationVoltage) * 0.5;
-    
-    return tdsValue;
+    // แปลงค่า ADC Median เป็น Voltage
+    return _getMedian(tempBuffer, TDS_SAMPLE_COUNT) * TDS_VREF / TDS_ADC_RESOLUTION;
 }
 
 bool tdsIsReady(void) {
     return _tdsReady;
 }
 
+bool tdsIsCalibrated(void) {
+    return _isCalibrated;
+}
+
+
+
+float tdsRead(float temperature) {
+    _tdsBuffer[_tdsBufferIndex] = analogRead(TDS_PIN);
+    _tdsBufferIndex = (_tdsBufferIndex + 1) % TDS_SAMPLE_COUNT;
+    
+    if (!_tdsReady && _tdsBufferIndex == 0) {
+        _tdsReady = true;
+        LOG_INFO("TDS buffer full, sensors ready!");
+    }
+    
+    if (!_tdsReady) return -1.0f;
+    
+    float voltage = tdsGetVoltage();
+    
+    // --- Advanced Temperature Compensation ---
+    // Standard linear factor is 1/(1+0.02(T-25))
+    // Optimized for nutrient solution (approx 0.019 coeff)
+    float tempP = temperature;
+    if (tempP < 0) tempP = 25; // Safety fallback
+    
+    float compensationCoefficient = 1.0f + 0.019f * (tempP - 25.0f);
+    float compensationVoltage = voltage / compensationCoefficient;
+    
+    float tdsValue = _calculateTdsFromVoltage(compensationVoltage);
+    if (tdsValue < 0) tdsValue = 0;
+    
+    // --- Moving Average Filter (Alpha 0.1) ---
+    static float _tdsMovingAverage = -1.0f;
+    if (_tdsMovingAverage < 0) {
+        _tdsMovingAverage = tdsValue;
+    } else {
+        _tdsMovingAverage = (tdsValue * 0.1f) + (_tdsMovingAverage * 0.9f);
+    }
+    
+    return _tdsMovingAverage;
+}
+
+void tdsSetCalibration(float lowPpm, float lowVoltage, float highPpm, float highVoltage) {
+    _calLowPpm = lowPpm;
+    _calLowVoltage = lowVoltage;
+    _calHighPpm = highPpm;
+    _calHighVoltage = highVoltage;
+    
+    if (highVoltage != lowVoltage) {
+        _calculateCalibrationFactors(); // Calculate K & Offset
+        _isCalibrated = true;
+        _saveCalibrationToNVS();
+        
+        LOG_INFO("TDS Calibration set (Hybrid Mode):");
+        LOG_INFO("  K: %.4f, Offset: %.4f", _kValue, _offset);
+    } else {
+        LOG_ERROR("TDS Calibration failed: voltages are the same!");
+        _isCalibrated = false;
+    }
+}
+
 void tdsLoop(float temperature) {
     // ตรวจสอบเวลา (Non-blocking delay)
     if (millis() - _tdsLastReadTime >= TDS_READ_INTERVAL) {
         _tdsLastReadTime = millis();
-        
-        float tds = tdsRead(temperature);
-        
-        // แสดงผลเฉพาะเมื่อเก็บ sample ครบแล้ว
-        if (_tdsReady) {
-            // Serial.print(F("[TDS] Value: "));
-            // Serial.print(tds, 1);
-            // Serial.println(F(" ppm"));
-        } else {
-            // Serial.print(F("[TDS] Collecting samples: "));
-            // Serial.print(_tdsSampleCollected);
-            // Serial.print(F("/"));
-            // Serial.println(TDS_SAMPLE_COUNT);
-        }
+        tdsRead(temperature);
     }
 }
+

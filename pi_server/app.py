@@ -36,6 +36,13 @@ def load_settings():
             "graph_days": 3,
             "refresh_sec": 5,
             "device_name": "Aquaponics System"
+        },
+        "tds_calibration": {
+            "low_ppm": 500,
+            "low_voltage": 0.0,
+            "high_ppm": 1000,
+            "high_voltage": 0.0,
+            "calibrated": False
         }
     }
     try:
@@ -365,6 +372,14 @@ def get_sensors():
 def settings_page():
     return send_file('settings.html')
 
+@app.route('/pwa/<path:filename>')
+def serve_pwa(filename):
+    return send_file(f'pwa/{filename}')
+
+@app.route('/live')
+def live_page():
+    return send_file('live.html')
+
 @app.route('/api/settings', methods=['GET'])
 def get_settings():
     global app_settings
@@ -383,6 +398,61 @@ def post_settings():
             else:
                 return jsonify({"status": "error", "message": "Failed to save"}), 500
         return jsonify({"status": "error", "message": "Invalid data"}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# === TDS Calibration API ===
+@app.route('/api/tds_voltage')
+def get_tds_voltage():
+    """Get current TDS voltage from ESP32 sensor data"""
+    voltage = last_data.get("tds_voltage", 0)
+    return jsonify({"voltage": voltage})
+
+@app.route('/api/tds_calibrate', methods=['POST'])
+def post_tds_calibrate():
+    """Save TDS calibration and send to ESP32 via MQTT"""
+    global app_settings, mqtt_client
+    try:
+        data = request.get_json()
+        low_temp = float(data.get("low_temp", 25.0))
+        low_ppm = float(data.get("low_ppm", 0))
+        low_voltage = float(data.get("low_voltage", 0))
+        high_temp = float(data.get("high_temp", 25.0))
+        high_ppm = float(data.get("high_ppm", 0))
+        high_voltage = float(data.get("high_voltage", 0))
+        
+        # Validate
+        if low_voltage <= 0 or high_voltage <= 0:
+            return jsonify({"status": "error", "message": "Invalid voltage values"}), 400
+        if low_voltage == high_voltage:
+            return jsonify({"status": "error", "message": "Low and High voltage cannot be the same"}), 400
+            
+        # Save to settings
+        app_settings["tds_calibration"] = {
+            "low_temp": low_temp,
+            "low_ppm": low_ppm,
+            "low_voltage": low_voltage,
+            "high_temp": high_temp,
+            "high_ppm": high_ppm,
+            "high_voltage": high_voltage,
+            "calibrated": True
+        }
+        save_settings(app_settings)
+        
+        # Publish to ESP32 via MQTT
+        if mqtt_client and mqtt_client.is_connected():
+            import json
+            payload = json.dumps({
+                "low_ppm": low_ppm,
+                "low_voltage": low_voltage,
+                "high_ppm": high_ppm,
+                "high_voltage": high_voltage
+            })
+            mqtt_client.publish("aquaponics/config/tds_cal", payload)
+            print(f"📤 TDS Calibration sent to ESP32: {payload}")
+            save_log(f"TDS Calibration updated: Low={low_ppm}ppm, High={high_ppm}ppm")
+        
+        return jsonify({"status": "ok", "message": "TDS Calibration saved and sent to ESP32"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -463,16 +533,21 @@ def clear_logs_file():
 
 @app.route('/api/history')
 def get_history():
+    global app_settings
     try:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
-        # Get last 3 days of records (3 * 24 * 60 = 4320 mins)
+        
+        # Read graph_days from settings (default 3)
+        days = app_settings.get("display", {}).get("graph_days", 3)
+        limit = days * 24 * 60  # 1 record per minute
+        
         cursor.execute('''
             SELECT timestamp, water_temp, air_temp, humidity, tds, ph, light
             FROM sensors 
             ORDER BY id DESC 
-            LIMIT 4320
-        ''')
+            LIMIT ?
+        ''', (limit,))
         rows = cursor.fetchall()
         conn.close()
         
@@ -531,6 +606,14 @@ if __name__ == '__main__':
     monitor_thread = threading.Thread(target=monitor_heartbeat)
     monitor_thread.daemon = True
     monitor_thread.start()
+
+    # Auto-start Camera
+    try:
+        import subprocess
+        print("🎥 Starting Camera Service...")
+        subprocess.Popen(["./start_cam.sh"], shell=True)
+    except Exception as e:
+        print(f"❌ Camera Start Error: {e}")
     
     print("🚀 Starting Web Server on port 80...")
     app.run(host='0.0.0.0', port=80, debug=False)

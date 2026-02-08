@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎥 Live Camera - Smart Aquaponics</title>
+    
+    <!-- PWA -->
+    <link rel="manifest" href="/pwa/manifest.json">
+    <meta name="theme-color" content="#00f2aa">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="/pwa/icon.svg">
+
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --primary-color: #00f2aa;
+            --secondary-color: #00c8ff;
+            --bg-color: #0f1115;
+            --card-bg: #1e293b;
+            --text-color: #e2e8f0;
+            --danger-color: #ff4d4d;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header h2 {
+            margin: 0;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .btn-back {
+            background: none;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: var(--text-color);
+            padding: 8px 15px;
+            border-radius: 10px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-back:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--primary-color);
+        }
+
+        /* Camera Container */
+        .video-container {
+            position: relative;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            margin-bottom: 20px;
+            aspect-ratio: 16/9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .video-stream {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            /* Rotate if needed */
+            /* transform: rotate(180deg); */
+        }
+        
+        .placeholder {
+            position: absolute;
+            color: #666;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            z-index: 0;
+        }
+
+        .video-stream {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Status Badge */
+        .status-badge {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            z-index: 2;
+            backdrop-filter: blur(4px);
+        }
+        
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #ff4d4d; /* Red = Offline */
+            box-shadow: 0 0 5px #ff4d4d;
+        }
+        
+        .dot.online {
+            background-color: #00f2aa;
+            box-shadow: 0 0 8px #00f2aa;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(0, 242, 170, 0.7); }
+            70% { box-shadow: 0 0 0 6px rgba(0, 242, 170, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 242, 170, 0); }
+        }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .btn-control {
+            background: var(--card-bg);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-color);
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: 0.3s;
+        }
+
+        .btn-control:hover {
+            border-color: var(--primary-color);
+            background: rgba(0, 242, 170, 0.1);
+        }
+
+        .server-info {
+            margin-top: 20px;
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <a href="/" class="btn-back">
+            <i class="fas fa-arrow-left"></i> Back
+        </a>
+        <h2>Live Camera</h2>
+        <div style="width: 70px;"></div> <!-- Spacer -->
+    </div>
+
+    <!-- Video Feed -->
+    <div class="video-container">
+        <div class="placeholder">
+            <i class="fas fa-video-slash fa-3x"></i>
+            <span>Connecting to camera...</span>
+        </div>
+        
+        <div class="status-badge">
+            <div class="dot" id="statusDot"></div>
+            <span id="statusText">Offline</span>
+        </div>
+
+        <!-- The Image Stream -->
+        <img id="camStream" class="video-stream" src="" alt="Live Stream" onerror="handleError()">
+    </div>
+
+    <div class="controls">
+        <button class="btn-control" onclick="reloadStream()">
+            <i class="fas fa-sync-alt"></i> Reload
+        </button>
+        <button class="btn-control" onclick="toggleMirror()">
+            <i class="fas fa-exchange-alt"></i> Mirror
+        </button>
+    </div>
+
+    <div class="server-info">
+        Stream Source: <span id="streamUrl">Loading...</span>
+    </div>
+
+    <script>
+        // Get current host IP
+        const host = window.location.hostname;
+        const port = "8081"; // Libcamera-vid standard port for http
+        
+        // Full stream URL
+        // Using HTTP allows MJPEG stream
+        const streamUrl = `http://${host}:${port}/stream.mjpg`;
+        // const streamUrl = `http://192.168.1.43:8081`; // Debug
+
+        document.getElementById("streamUrl").innerText = streamUrl;
+        
+        const img = document.getElementById("camStream");
+        const dot = document.getElementById("statusDot");
+        const text = document.getElementById("statusText");
+
+        function startStream() {
+            img.src = streamUrl;
+            img.style.display = "block";
+            
+            // Assume online if src set, specific error handling below
+            setOnline(true);
+        }
+
+        function handleError() {
+            console.log("Stream Error/Offline");
+            img.style.display = "none";
+            setOnline(false);
+        }
+
+        function setOnline(isOnline) {
+            if(isOnline) {
+                dot.classList.add("online");
+                dot.classList.remove("offline");
+                text.textContent = "Live";
+                text.style.color = "#00f2aa";
+            } else {
+                dot.classList.remove("online");
+                dot.classList.add("offline");
+                text.textContent = "Offline";
+                text.style.color = "#ff4d4d";
+            }
+        }
+
+        function reloadStream() {
+            // Force reload by adding timestamp
+            img.src = streamUrl + "?t=" + new Date().getTime();
+            img.style.display = "block";
+        }
+
+        let isMirrored = false;
+        function toggleMirror() {
+            isMirrored = !isMirrored;
+            img.style.transform = isMirrored ? "scaleX(-1)" : "none";
+        }
+
+        // Auto start
+        window.onload = startStream;
+        
+        // Periodically check if image is loading (simple ping)
+        // Note: For MJPEG, onerror usually fires if connection drops
+    </script>
+
+</body>
+</html>

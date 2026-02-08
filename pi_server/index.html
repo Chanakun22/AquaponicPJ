@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>🌿 Smart Aquaponics AI</title>
     
+    <!-- PWA -->
+    <link rel="manifest" href="/pwa/manifest.json">
+    <meta name="theme-color" content="#00f2aa">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="/pwa/icon.svg">
+    
     <!-- Fonts & Icons -->
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -387,7 +394,7 @@
         <div class="brand">
           <i class="fa-solid fa-leaf"></i>
           <div>
-            <h1>Aquaponics AI</h1>
+            <h1 id="deviceName">Aquaponics AI</h1>
             <div style="font-size: 0.8rem; color: var(--text-muted); letter-spacing: 1px;">SYSTEM V2.3 • PRODUCTION</div>
           </div>
         </div>
@@ -409,6 +416,9 @@
 
         <!-- Navigation Buttons -->
         <div style="display: flex; gap: 10px;">
+          <a href="/live" class="status-pill" style="text-decoration: none; cursor: pointer; border-color: var(--primary); color: var(--primary);">
+            <i class="fa-solid fa-video"></i> Live
+          </a>
           <a href="/graphs" class="status-pill" style="text-decoration: none; cursor: pointer;">
             <i class="fa-solid fa-chart-line"></i> Graphs
           </a>
@@ -681,7 +691,7 @@
         return "Contaminated!";
       }
 
-      function connect() {
+      async function connect() {
         // Auto-use window location if input is empty or just initialized
         let ip = document.getElementById("ipInput").value.trim();
         
@@ -713,7 +723,22 @@
 
         if (updateInterval) clearInterval(updateInterval);
         fetchData();
-        updateInterval = setInterval(fetchData, 2000);
+        
+        // Fetch settings and use refresh_sec (default 2 sec)
+        try {
+            const settingsRes = await fetch(`${deviceIp}/api/settings`);
+            const settings = await settingsRes.json();
+            const refreshMs = (settings.display?.refresh_sec || 2) * 1000;
+            updateInterval = setInterval(fetchData, refreshMs);
+            addLog("info", `Refresh rate: ${refreshMs/1000}s`);
+            
+            // Apply device_name to header
+            const deviceName = settings.display?.device_name || "Aquaponics AI";
+            document.getElementById("deviceName").textContent = deviceName;
+            document.title = `🌿 ${deviceName}`;
+        } catch(e) {
+            updateInterval = setInterval(fetchData, 2000); // Fallback
+        }
       }
 
       // Auto-connect on load
@@ -910,6 +935,17 @@
           dot.classList.add("offline");
           text.textContent = "Disconnected";
         }
+      }
+    </script>
+    
+    <!-- PWA Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/pwa/sw.js')
+            .then(reg => console.log('[PWA] Service Worker registered'))
+            .catch(err => console.log('[PWA] SW registration failed:', err));
+        });
       }
     </script>
   </body>

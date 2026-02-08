@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aquaponics - Historical Graphs</title>
-    <!-- Chart.js -->
+    <!-- Chart.js + Zoom Plugin -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
@@ -29,9 +31,11 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
         }
 
-        h1 { margin: 0; color: var(--accent-color); }
+        h1 { margin: 0; color: var(--accent-color); font-size: 1.4rem; }
 
         .btn {
             background: rgba(255, 255, 255, 0.1);
@@ -45,36 +49,54 @@
             align-items: center;
             gap: 8px;
             transition: all 0.2s;
+            font-size: 0.9rem;
         }
         .btn:hover { background: rgba(255, 255, 255, 0.2); }
         .btn-primary { background: var(--accent-color); color: #000; border: none; }
 
         .charts-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
         }
 
         .chart-card {
             background: var(--card-bg);
             border-radius: 16px;
-            padding: 20px;
+            padding: 15px;
             border: 1px solid rgba(255,255,255,0.1);
         }
 
-        h2 { font-size: 1.1rem; margin-top: 0; color: #cbd5e1; display: flex; align-items: center; gap: 8px; }
+        h2 { font-size: 1rem; margin-top: 0; color: #cbd5e1; display: flex; align-items: center; gap: 8px; }
         
-        canvas {
-            max-height: 300px;
+        .chart-container {
+            position: relative;
+            height: 250px;
+            width: 100%;
+        }
+        
+        .zoom-hint {
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.5);
+            text-align: center;
+            margin-top: 8px;
+        }
+
+        @media (max-width: 600px) {
+            body { padding: 10px; }
+            h1 { font-size: 1.1rem; }
+            .btn { padding: 6px 12px; font-size: 0.8rem; }
+            .chart-container { height: 200px; }
         }
     </style>
 </head>
 <body>
     <header>
-        <h1><i class="fas fa-chart-line"></i> Historical Data (3 Days)</h1>
-        <div style="display: flex; gap: 10px;">
+        <h1><i class="fas fa-chart-line"></i> <span id="pageTitle">Historical Data</span></h1>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button onclick="resetZoom()" class="btn"><i class="fas fa-search-minus"></i> Reset Zoom</button>
             <button onclick="loadCharts()" class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
-            <a href="/" class="btn btn-primary"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+            <a href="/" class="btn btn-primary"><i class="fas fa-arrow-left"></i> Back</a>
         </div>
     </header>
 
@@ -82,19 +104,22 @@
         <!-- 1. Environment Chart -->
         <div class="chart-card">
             <h2><i class="fas fa-temperature-high"></i> Environment (Air & Water)</h2>
-            <canvas id="envChart"></canvas>
+            <div class="chart-container"><canvas id="envChart"></canvas></div>
+            <div class="zoom-hint">🖱️ Scroll to Zoom | Drag to Pan</div>
         </div>
 
         <!-- 2. Water Quality Chart -->
         <div class="chart-card">
             <h2><i class="fas fa-vial"></i> Water Quality (pH & TDS)</h2>
-            <canvas id="waterChart"></canvas>
+            <div class="chart-container"><canvas id="waterChart"></canvas></div>
+            <div class="zoom-hint">🖱️ Scroll to Zoom | Drag to Pan</div>
         </div>
 
         <!-- 3. Light Chart -->
         <div class="chart-card">
             <h2><i class="fas fa-sun"></i> Light Intensity</h2>
-            <canvas id="lightChart"></canvas>
+            <div class="chart-container"><canvas id="lightChart"></canvas></div>
+            <div class="zoom-hint">🖱️ Scroll to Zoom | Drag to Pan</div>
         </div>
     </div>
 
@@ -188,14 +213,31 @@
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { labels: { color: '#cbd5e1' } }
+                    legend: { labels: { color: '#cbd5e1' } },
+                    zoom: {
+                        pan: {
+                            enabled: true,
+                            mode: 'x',
+                        },
+                        zoom: {
+                            wheel: { enabled: true },
+                            pinch: { enabled: true },
+                            mode: 'x',
+                        }
+                    }
                 },
                 scales: {
                     y: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#94a3b8' } },
                     x: { grid: { display: false }, ticks: { color: '#94a3b8', maxTicksLimit: 8 } }
                 },
-                elements: { point: { radius: 0, hitRadius: 10 } } // Hide points for cleaner look
+                elements: { point: { radius: 0, hitRadius: 10 } }
             };
+        }
+
+        function resetZoom() {
+            if (envChart) envChart.resetZoom();
+            if (waterChart) waterChart.resetZoom();
+            if (lightChart) lightChart.resetZoom();
         }
 
         window.onload = loadCharts;

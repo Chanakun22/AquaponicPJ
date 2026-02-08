@@ -49,7 +49,7 @@
 /**
  * @section TDS Sensor Settings
  */
-#define TDS_VREF            3.3     // แรงดันอ้างอิง (V) - ESP32 = 3.3V
+#define TDS_VREF            3.3     // แรงดันอ้างอิง ADC ของ ESP32 (ไม่ใช่ไฟเลี้ยง sensor)
 #define TDS_ADC_RESOLUTION  4096.0  // ความละเอียด ADC (12-bit = 4096)
 #define TDS_SAMPLE_COUNT    30      // จำนวนจุด sampling
 
@@ -81,7 +81,7 @@
 /**
  * @section DS18B20 Settings
  */
-#define TEMP_READ_INTERVAL  1000    // ช่วงเวลาอ่านค่า (ms)
+#define TEMP_READ_INTERVAL  200    // ช่วงเวลาอ่านค่า (ms)
 
 /**
  * @section BH1750 Light Sensor Settings
@@ -107,13 +107,7 @@
 #define LOG_LEVEL           LOG_LEVEL_INFO
 #endif
 
-/**
- * @section OTA Update Settings
- */
-#define OTA_ENABLED         1       // 1=Enable OTA, 0=Disable
-#define OTA_PORT            3232     // OTA update port
-#define OTA_HOSTNAME        "aquaponics-sensor"  // OTA hostname
-#define OTA_PASSWORD        SECRET_OTA_PASSWORD
+
 
 /**
  * @section Factory Reset Settings
@@ -126,42 +120,70 @@
  */
 #define TDS_READ_INTERVAL   1000    // ช่วงเวลาอ่านค่า TDS (ms)
 
-// ============================================================================
-// WIFI CONFIGURATION
-// ============================================================================
+// Helper Macros
+#define XSTRINGIFY(s) STRINGIFY(s)
+#define STRINGIFY(s) #s
 
-/**
- * @section WiFiManager Settings
- * @brief ตั้งค่า Access Point สำหรับ WiFiManager
- */
-#define WIFI_AP_NAME        SECRET_WIFI_AP_NAME
-#define WIFI_AP_PASSWORD    SECRET_WIFI_AP_PASS
+// ==========================================
+// WIFI Configuration
+// ==========================================
+#ifndef SECRET_WIFI_AP_NAME
+#define SECRET_WIFI_AP_NAME AquaponicsPJ // Default if not defined
+#endif
+#ifndef SECRET_WIFI_AP_PASS
+#define SECRET_WIFI_AP_PASS admin1234
+#endif
+
+#define WIFI_AP_NAME        XSTRINGIFY(SECRET_WIFI_AP_NAME)
+#define WIFI_AP_PASS        XSTRINGIFY(SECRET_WIFI_AP_PASS)
 #define WIFI_CONNECT_TIMEOUT 180              // Timeout เชื่อมต่อ (วินาที)
 #define WIFI_CHECK_INTERVAL  30000            // ตรวจสอบสถานะทุก (ms)
 
-// ============================================================================
-// NETPIE CONFIGURATION
-// ============================================================================
+// ==========================================
+// OTA Configuration
+// ==========================================
+#define OTA_ENABLED         1       // 1=Enable OTA, 0=Disable
+#define OTA_PORT            3232     // OTA update port
+#define OTA_HOSTNAME        "aquaponics-sensor"  // OTA hostname
 
-/**
- * @section NETPIE MQTT Settings
- * @brief ข้อมูลสำหรับเชื่อมต่อ NETPIE IoT Platform
- */
-#define NETPIE_CLIENT_ID    SECRET_NETPIE_CLIENT_ID
-#define NETPIE_TOKEN        SECRET_NETPIE_TOKEN
-#define NETPIE_SECRET       SECRET_NETPIE_SECRET
+#ifndef SECRET_OTA_PASSWORD
+#define SECRET_OTA_PASSWORD admin123
+#endif
 
-/**
- * @section MQTT Broker Settings
- */
+#define OTA_PASSWORD        XSTRINGIFY(SECRET_OTA_PASSWORD)
+
+// ==========================================
+// NETPIE MQTT Configuration
+// ==========================================
 #define MQTT_BROKER         "mqtt.netpie.io"
 #define MQTT_PORT           1883
 #define MQTT_RECONNECT_INTERVAL 5000          // รอ reconnect ทุก (ms)
+#define NETPIE_PUBLISH_INTERVAL 10000         // ส่งข้อมูลทุก (ms) = 10 วินาที
 
-/**
- * @section Data Publishing Settings
- */
-#define NETPIE_PUBLISH_INTERVAL 60000         // ส่งข้อมูลทุก (ms) = 60 วินาที
+#ifndef SECRET_NETPIE_CLIENT_ID
+#define SECRET_NETPIE_CLIENT_ID unknown_client
+#endif
+#ifndef SECRET_NETPIE_TOKEN
+#define SECRET_NETPIE_TOKEN     unknown_token
+#endif
+#ifndef SECRET_NETPIE_SECRET
+#define SECRET_NETPIE_SECRET    unknown_secret
+#endif
+
+#define NETPIE_CLIENT_ID    XSTRINGIFY(SECRET_NETPIE_CLIENT_ID)
+#define NETPIE_TOKEN        XSTRINGIFY(SECRET_NETPIE_TOKEN)
+#define NETPIE_SECRET       XSTRINGIFY(SECRET_NETPIE_SECRET)
+
+// ==========================================
+// Telnet Configuration
+// ==========================================
+#define TELNET_PORT         23
+
+#ifndef SECRET_TELNET_PASSWORD
+#define SECRET_TELNET_PASSWORD admin1234
+#endif
+
+#define TELNET_PASSWORD     XSTRINGIFY(SECRET_TELNET_PASSWORD)
 
 // ============================================================================
 // LOCAL MQTT CONFIGURATION (RASPBERRY PI)

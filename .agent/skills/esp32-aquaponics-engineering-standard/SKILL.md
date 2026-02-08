@@ -124,6 +124,47 @@ client.publish(MQTT_TOPIC_SENSORS, payload);
 - **Timezone:** Display strictly in **Thai Time (UTC+7)**, converted from Server UTC.
 - **History:** Support multiple ranges (24H, 3 Days) via distinct API queries.
 
+### 3.4 ⚠️ Settings Integration Rule (Critical)
+
+**ปัญหาที่เคยเกิด:** มี UI Setting ใน `settings.html` แต่ Backend (`app.py`) ไม่ได้อ่านค่าไปใช้งานจริง (Dead Setting)
+
+**กฎเหล็ก:**
+
+1.  **ห้าม** สร้าง Setting ใน UI โดยไม่มี Backend ที่รับค่าไปใช้งาน
+2.  **ห้าม** Hardcode ค่าที่ควรอ่านจาก Settings (เช่น `LIMIT 4320` แทนที่จะอ่าน `graph_days`)
+3.  **ทุก Setting ต้องมี:**
+    - UI Input (`settings.html`)
+    - API Endpoint (`app.py`) ที่ Save/Load
+    - Consumer Code ที่อ่านค่าไปใช้งานจริง
+
+**ตัวอย่างที่ผิด vs ถูก:**
+
+```javascript
+// ❌ ผิด - Hardcode ค่า (ไม่สนใจ Settings)
+setInterval(fetchData, 2000); // ไม่อ่าน refresh_sec จาก Settings
+
+// ✅ ถูก - อ่านค่าจาก Settings
+const refreshMs = (settings.display?.refresh_sec || 2) * 1000;
+setInterval(fetchData, refreshMs);
+```
+
+```python
+# ❌ ผิด - Hardcode limit
+cursor.execute('SELECT * FROM sensors LIMIT 4320')
+
+# ✅ ถูก - อ่านค่าจาก Settings
+days = app_settings.get("display", {}).get("graph_days", 3)
+limit = days * 24 * 60
+cursor.execute('SELECT * FROM sensors LIMIT ?', (limit,))
+```
+
+**Checklist ก่อนเพิ่ม Setting ใหม่:**
+
+- [ ] มี Input ใน UI (`settings.html`)
+- [ ] มี API ที่ Save ค่าลง `settings.json`
+- [ ] มี Code ที่อ่านค่าจาก Settings ไปใช้งานจริง
+- [ ] ทดสอบว่าเปลี่ยนค่าใน Settings แล้วระบบเปลี่ยนตาม
+
 ---
 
 ## 4. ✅ PRE-DEPLOYMENT CHECKLIST

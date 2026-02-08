@@ -76,13 +76,132 @@ static float validateLight(float light) {
 }
 
 // ============================================================================
+// FREERTOS TASKS
+// ============================================================================
+
+void TaskNetworking(void *pvParameters) {
+    (void) pvParameters;
+    
+    // Setup (Already called in setup(), but good to ensure readiness)
+    
+    for (;;) {
+        // Handle WiFi connection / config portal
+        wifiLoop();
+        
+        // Handle Telnet clients
+        telnetLoop();
+        
+        // Handle OTA updates
+        otaLoop();
+        
+        // Handle Netpie MQTT
+        netpieLoop();
+        
+        // Handle Local MQTT (Pi)
+        localMqttLoop();
+        
+        // Command Handling from Serial/Telnet is safe here or needs mutex?
+        // Serial is hardware, Telnet is network. 
+        // commandCheckSerial() uses Serial.read(), safe to poll here or in separate task.
+        commandCheckSerial();
+        
+        // Publish Data if connected
+        static unsigned long lastPublish = 0;
+        if (millis() - lastPublish >= 2000) { // Throttled publish check
+            lastPublish = millis();
+            if (wifiIsConnected()) {
+                if (netpieIsConnected()) {
+                    netpiePublishData(currentWaterTemp, currentAirTemp, currentHumidity, currentTds, currentLight, currentPh);
+                }
+                localMqttPublishData(currentWaterTemp, currentAirTemp, currentHumidity, currentTds, currentLight, currentPh);
+            }
+        }
+        
+        // Yield to other tasks
+        vTaskDelay(pdMS_TO_TICKS(10)); // 10ms delay to prevent WDT and allow other tasks
+    }
+}
+
+void TaskSensors(void *pvParameters) {
+    (void) pvParameters;
+    
+    for (;;) {
+        // Water Temp (OneWire is slow, blocking)
+        float rawWaterTemp = tempRead();
+        currentWaterTemp = validateTemperature(rawWaterTemp);
+        tempLoop(); // Maintains sensor state if needed
+        
+        // Air Temp & Humidity
+        float rawAirTemp = dhtReadTemperature();
+        float rawHumidity = dhtReadHumidity();
+        currentAirTemp = validateTemperature(rawAirTemp);
+        currentHumidity = validateHumidity(rawHumidity);
+        dhtLoop();
+        
+        // TDS (Average/Filtering)
+        // TDS needs frequent sampling
+        if (!isnan(currentWaterTemp)) {
+            tdsLoop(currentWaterTemp);
+            if (tdsIsReady()) {
+                currentTds = validateTds(tdsRead(currentWaterTemp));
+            }
+        } else {
+            tdsLoop(25.0);
+            if (tdsIsReady()) {
+                 currentTds = validateTds(tdsRead(25.0));
+            }
+        }
+        
+        // Light
+        if (lightIsReady()) {
+            currentLight = validateLight(lightRead());
+        }
+        lightLoop();
+        
+        // pH
+        if (!isnan(currentWaterTemp)) {
+            phSetTemperature(currentWaterTemp);
+        }
+        phLoop();
+        if (phIsReady()) {
+            currentPh = validatePh(phRead());
+        }
+        
+        // Health Check & Watchdog Reset (if this task is monitored)
+        #if defined(ESP32) && WATCHDOG_ENABLED
+        esp_task_wdt_reset();
+        #endif
+        
+        vTaskDelay(pdMS_TO_TICKS(100)); // Run at 10Hz approx.
+    }
+}
+
+void TaskControl(void *pvParameters) {
+    (void) pvParameters;
+    
+    for (;;) {
+        // System Management (Button checks etc)
+        systemLoop();
+        
+        // Light Controller Schedule
+        lightCtrlLoop();
+        
+        // System Health / Heap Check
+        if (!systemIsHealthy()) {
+             LOG_ERROR("System unhealthy! Free heap: %lu", ESP.getFreeHeap());
+        }
+        
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
+// ============================================================================
 // MAIN FUNCTIONS
 // ============================================================================
 
 void setup() {
     // เริ่มต้น Serial
     Serial.begin(SERIAL_BAUD_RATE);
-    // delay(100); // Removed per Engineering Standard 1.1
     
     LOG_MODULE_START("Aquaponics Sensor System");
     LOG_INFO("Firmware Version: %s", systemGetVersion());
@@ -93,7 +212,7 @@ void setup() {
     
 #if defined(ESP32) && WATCHDOG_ENABLED
     esp_task_wdt_init(WATCHDOG_TIMEOUT_SEC, true);
-    esp_task_wdt_add(NULL);
+    esp_task_wdt_add(NULL); // Add main loop/current task
     LOG_INFO("Watchdog Timer enabled (%d seconds)", WATCHDOG_TIMEOUT_SEC);
 #endif
     
@@ -103,7 +222,7 @@ void setup() {
     // เริ่มต้น WiFi (Non-Blocking)
     wifiSetup();
     
-    // เริ่มต้น Telnet Server (สำหรับ Debug ผ่าน WiFi)
+    // เริ่มต้น Telnet Server
     telnetSetup();
     
     // เริ่มต้น OTA
@@ -124,83 +243,36 @@ void setup() {
     // Command Handler
     commandSetup();
     
-
+    LOG_INFO("Starting FreeRTOS Tasks...");
     
-    LOG_INFO("All modules initialized");
+    // Create Tasks
+    // Core 0: WiFi/Network (Protocol stack runs here usually)
+    // Core 1: Arduino Loop / Sensors / Control
+    
+    xTaskCreatePinnedToCore(
+        TaskNetworking,   "Networking",   8192,  NULL,  1,  NULL,  0 // Core 0
+    );
+    
+    xTaskCreatePinnedToCore(
+        TaskSensors,      "Sensors",      8192,  NULL,  1,  NULL,  1 // Core 1
+    );
+    
+    xTaskCreatePinnedToCore(
+        TaskControl,      "Control",      4096,  NULL,  1,  NULL,  1 // Core 1
+    );
+
+    LOG_INFO("All modules initialized & Tasks started");
     LOG_MODULE_END("Aquaponics Sensor System");
 }
 
 void loop() {
-    // ======== System Management ========
-    systemLoop();
-    
-    // ======== Network Services ========
-    wifiLoop();      // Handle WiFi connection / config portal
-    telnetLoop();    // Handle Telnet clients
-    otaLoop();       // Handle OTA updates
-    netpieLoop();    // Handle Netpie MQTT
-    localMqttLoop(); // Handle Local MQTT (Pi)
-    
-    // ======== Light Controller ========
-    lightCtrlLoop();
-    
-    // ======== Sensors ========
-    
-    // Water Temp
-    float rawWaterTemp = tempRead();
-    currentWaterTemp = validateTemperature(rawWaterTemp);
-    tempLoop();
-    
-    // Air Temp & Humidity
-    float rawAirTemp = dhtReadTemperature();
-    float rawHumidity = dhtReadHumidity();
-    currentAirTemp = validateTemperature(rawAirTemp);
-    currentHumidity = validateHumidity(rawHumidity);
-    dhtLoop();
-    
-    // TDS (compensate with water temp)
-    if (tdsIsReady()) {
-        float rawTds = tdsRead(isnan(currentWaterTemp) ? 25.0 : currentWaterTemp);
-        currentTds = validateTds(rawTds);
-    }
-    tdsLoop(isnan(currentWaterTemp) ? 25.0 : currentWaterTemp);
-    
-    // Light
-    if (lightIsReady()) {
-        float rawLight = lightRead();
-        currentLight = validateLight(rawLight);
-    }
-    lightLoop();
-    
-    // pH (compensate with water temp)
-    if (!isnan(currentWaterTemp)) {
-        phSetTemperature(currentWaterTemp);
-    }
-    if (phIsReady()) {
-        float rawPh = phRead();
-        currentPh = validatePh(rawPh);
-    }
-    phLoop();
-    
-    // ======== Command Handling (Serial) ========
-    commandCheckSerial();
-    
-    // ======== Publish Data ========
-    if (wifiIsConnected()) {
-        if (netpieIsConnected()) {
-             netpiePublishData(currentWaterTemp, currentAirTemp, currentHumidity, currentTds, currentLight, currentPh);
-        }
-        localMqttPublishData(currentWaterTemp, currentAirTemp, currentHumidity, currentTds, currentLight, currentPh);
-    }
-    
-    // ======== Health Check ========
-    if (!systemIsHealthy()) {
-        #if defined(ESP32)
-        LOG_ERROR("System unhealthy! Free heap: %lu", ESP.getFreeHeap());
-        #endif
-    }
-    
-#if defined(ESP32) && WATCHDOG_ENABLED
+    // Arduino Main Loop Task
+    // ต้อง Feed Watchdog เพื่อป้องกันระบบรีสตาร์ท (สาเหตุที่เครื่องรีเซ็ตทุก 60 วิ)
+    #if defined(ESP32) && WATCHDOG_ENABLED
     esp_task_wdt_reset();
-#endif
+    #endif
+    
+    // Empty loop - tasks handle everything
+    // Can be used for background low-priority work
+    vTaskDelay(pdMS_TO_TICKS(1000));
 }

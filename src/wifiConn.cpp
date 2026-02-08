@@ -20,6 +20,8 @@ static unsigned long _wifiLastCheckTime = 0;
 static bool _wifiConnected = false;
 static unsigned long _factoryResetStartTime = 0;
 static bool _factoryResetButtonPressed = false;
+static unsigned long _lastReconnectAttempt = 0;
+static const unsigned long RECONNECT_INTERVAL = 30000; // พยายาม reconnect ทุก 30 วินาที
 
 // ============================================================================
 // PRIVATE FUNCTIONS
@@ -62,7 +64,7 @@ void wifiSetup(void) {
     LOG_INFO("Connecting to saved WiFi or starting AP: %s", WIFI_AP_NAME);
     
     // Attempt connection
-    bool connected = _wifiMgr.autoConnect(WIFI_AP_NAME, WIFI_AP_PASSWORD);
+    bool connected = _wifiMgr.autoConnect(WIFI_AP_NAME, WIFI_AP_PASS);
     
     if (connected) {
         _wifiConnected = true;
@@ -72,6 +74,8 @@ void wifiSetup(void) {
         LOG_INFO("IP Address: %s", WiFi.localIP().toString().c_str());
         LOG_INFO("========================================");
         
+        // Enable auto-reconnect
+        WiFi.setAutoReconnect(true);
         WiFi.setSleep(false);
         esp_wifi_set_ps(WIFI_PS_NONE);
     } else {
@@ -100,16 +104,30 @@ void wifiLoop(void) {
         // Detect disconnect
         if (_wifiConnected && !currentStatus) {
             _wifiConnected = false;
-            LOG_WARN("WiFi disconnected! Sensors still working...");
+            LOG_WARN("WiFi disconnected! Will attempt reconnection...");
+            _lastReconnectAttempt = 0; // Reset reconnect timer to try immediately
         }
         // Detect reconnect
         else if (!_wifiConnected && currentStatus) {
             _wifiConnected = true;
             systemIncrementWifiReconnects();
-            LOG_INFO("WiFi Connected! IP: %s", WiFi.localIP().toString().c_str());
+            LOG_INFO("WiFi Reconnected! IP: %s", WiFi.localIP().toString().c_str());
             
-            // Should verify if portal needs to be stopped? 
-            // WiFiManager handles this usually, but good to be sure.
+            // Re-apply power saving settings
+            WiFi.setSleep(false);
+            esp_wifi_set_ps(WIFI_PS_NONE);
+        }
+    }
+    
+    // Auto-reconnect logic when WiFi is disconnected (non-blocking)
+    if (!_wifiConnected && WiFi.status() != WL_CONNECTED) {
+        if (millis() - _lastReconnectAttempt >= RECONNECT_INTERVAL) {
+            _lastReconnectAttempt = millis();
+            LOG_INFO("Attempting WiFi reconnection...");
+            
+            // Try reconnect without blocking
+            WiFi.disconnect();
+            WiFi.reconnect();
         }
     }
 }
