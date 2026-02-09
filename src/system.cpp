@@ -67,6 +67,9 @@ void systemInit(void) {
     // Load persisted statistics
     _loadPersistedStats();
     
+    // Load Sensor States
+    systemSensorInit();
+    
     // Get initial heap
     #if defined(ESP32)
     _minFreeHeap = ESP.getFreeHeap();
@@ -244,9 +247,60 @@ String systemGetResetReasonString(void) {
         case ESP_RST_SDIO:      return "SDIO";
         default:                return "Other";
     }
-    #else
-    return "Unknown (Non-ESP)";
     #endif
+}
+
+// ============================================================================
+// SENSOR MANAGEMENT IMPLEMENTATION
+// ============================================================================
+
+static bool _sensorEnabled[SENSOR_COUNT] = { true, true, true, true, true };
+static const char* _sensorKeys[SENSOR_COUNT] = { "sns_tds", "sns_ph", "sns_water", "sns_air", "sns_light" };
+
+void systemSensorInit(void) {
+    _prefs.begin("system", true); // Read-only
+    
+    for (int i = 0; i < SENSOR_COUNT; i++) {
+        _sensorEnabled[i] = _prefs.getBool(_sensorKeys[i], true);
+        LOG_INFO("Sensor [%d] %s: %s", i, _sensorKeys[i], _sensorEnabled[i] ? "ENABLED" : "DISABLED");
+    }
+    
+    _prefs.end();
+}
+
+void systemSetSensorEnabled(SensorId_t id, bool enabled) {
+    if (id < 0 || id >= SENSOR_COUNT) return;
+    
+    if (_sensorEnabled[id] != enabled) {
+        _sensorEnabled[id] = enabled;
+        
+        _prefs.begin("system", false); // Read-write
+        _prefs.putBool(_sensorKeys[id], enabled);
+        _prefs.end();
+        
+        LOG_INFO("Set Sensor [%d] to %s", id, enabled ? "ENABLED" : "DISABLED");
+    }
+}
+
+void systemSetAllSensorsEnabled(bool states[SENSOR_COUNT]) {
+    // Open NVS once for all writes (prevents race condition)
+    _prefs.begin("system", false);
+    
+    for (int i = 0; i < SENSOR_COUNT; i++) {
+        if (_sensorEnabled[i] != states[i]) {
+            _sensorEnabled[i] = states[i];
+            _prefs.putBool(_sensorKeys[i], states[i]);
+            LOG_INFO("Set Sensor [%d] to %s", i, states[i] ? "ENABLED" : "DISABLED");
+        }
+    }
+    
+    _prefs.end();
+    LOG_INFO("All sensor states saved to NVS");
+}
+
+bool systemGetSensorEnabled(SensorId_t id) {
+    if (id < 0 || id >= SENSOR_COUNT) return false;
+    return _sensorEnabled[id];
 }
 
 

@@ -59,6 +59,44 @@ String systemGetResetReasonString(void);
  */
 void systemLoop(void);
 
+// ============================================================================
+// SENSOR MANAGEMENT
+// ============================================================================
+
+typedef enum {
+    SENSOR_TDS = 0,
+    SENSOR_PH,
+    SENSOR_WATER_TEMP,
+    SENSOR_AIR_TEMP, // & Humidity (DHT)
+    SENSOR_LIGHT,
+    SENSOR_COUNT
+} SensorId_t;
+
+/**
+ * @brief Initialize sensor enabled states from NVS
+ */
+void systemSensorInit(void);
+
+/**
+ * @brief Set sensor enabled state and save to NVS
+ */
+void systemSetSensorEnabled(SensorId_t id, bool enabled);
+
+/**
+ * @brief Set all sensor enabled states in a single NVS transaction
+ * @param states Array of SENSOR_COUNT booleans
+ */
+void systemSetAllSensorsEnabled(bool states[SENSOR_COUNT]);
+
+/**
+ * @brief Get sensor enabled state
+ */
+bool systemGetSensorEnabled(SensorId_t id);
+
+// ============================================================================
+// SYSTEM HEALTH MONITORING
+// ============================================================================
+
 /**
  * @brief Get system health status
  */

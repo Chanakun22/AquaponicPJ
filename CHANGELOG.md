@@ -6,6 +6,31 @@ All notable changes to the **Smart Aquaponics AI** project will be documented in
 
 - Deployment automation scripts (`setup.sh`, `aquaponics.service`).
 
+## [2026-02-09-3] - Sensor Toggle & Dashboard Enhancements
+
+### Added
+
+- **Sensor Toggle Feature (ESP32 + Pi):**
+  - Added ability to enable/disable individual sensors (TDS, pH, Water Temp, Air Temp, Light) via Web Dashboard.
+  - Implemented `SensorId_t` enum and `systemSetSensorEnabled()`/`systemGetSensorEnabled()` in `system.cpp`.
+  - Sensor states persisted in NVS (survives reboot).
+  - MQTT topic `aquaponics/config/sensors` for receiving toggle commands from Pi.
+  - MQTT topic `aquaponics/status/sensors` for state feedback from ESP32 to Pi.
+- **Dashboard Disabled Indicator:**
+  - Sensor cards on Dashboard now show "DISABLED" badge (red) when sensor is OFF.
+  - Cards appear grayed out (grayscale + opacity) for visual clarity.
+
+### Fixed
+
+- **TDS Calibration UI:** Fixed invisible text in number inputs caused by CSS color issue. Redesigned layout to 2-column grid.
+- **State Synchronization:** ESP32 now publishes its sensor config on MQTT connect and after updates, ensuring Pi settings stay in sync.
+
+### Changed
+
+- `settings.html`: Added "Sensor Management" section with toggle switches.
+- `app.py`: Added `/api/settings` POST endpoint and MQTT subscription to `aquaponics/status/sensors`.
+- `main.cpp`: `TaskSensors` now checks `systemGetSensorEnabled()` before reading each sensor.
+
 ## [2026-02-09-2] - Security Hardening & Stability
 
 ### Fixed

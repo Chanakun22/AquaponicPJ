@@ -28,6 +28,9 @@ static IPAddress _brokerIp;
 static bool _isIpResolved = false;
 static uint8_t _connectionFailCount = 0;
 static const uint8_t MAX_FAIL_BEFORE_RERESOLUTION = 3; // Re-resolve mDNS หลังล้มเหลว 3 ครั้ง
+static void _onMqttMessage(char* topic, byte* payload, unsigned int length);
+static bool _reconnect(void);
+static void _publishSensorConfig(void);
 
 // ============================================================================
 // PRIVATE FUNCTIONS
@@ -88,6 +91,30 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
             LOG_ERROR("Invalid TDS calibration data received");
         }
     }
+    
+    // Handle Sensor Toggle Configuration (batch update to prevent NVS race condition)
+    if (String(topic) == LOCAL_MQTT_TOPIC_CONFIG_SENSORS) {
+        bool states[SENSOR_COUNT];
+        // Read current states as defaults
+        for (int i = 0; i < SENSOR_COUNT; i++) {
+            states[i] = systemGetSensorEnabled((SensorId_t)i);
+        }
+        
+        // Override with values from MQTT message
+        if (doc.containsKey("tds")) states[SENSOR_TDS] = doc["tds"];
+        if (doc.containsKey("ph")) states[SENSOR_PH] = doc["ph"];
+        if (doc.containsKey("water")) states[SENSOR_WATER_TEMP] = doc["water"];
+        if (doc.containsKey("air")) states[SENSOR_AIR_TEMP] = doc["air"];
+        if (doc.containsKey("light")) states[SENSOR_LIGHT] = doc["light"];
+        
+        // Single NVS transaction for all sensors
+        systemSetAllSensorsEnabled(states);
+        
+        LOG_INFO("Sensor config updated via MQTT (batch)");
+        
+        // Send feedback
+        _publishSensorConfig();
+    }
 }
 
 /**
@@ -119,9 +146,10 @@ static bool _reconnect() {
         LOG_INFO("✅ Connected to Local MQTT!");
         _connectionFailCount = 0; // Reset counter on success
         
-        // Subscribe to calibration topic
-        _localMqtt.subscribe("aquaponics/config/tds_cal");
-        LOG_INFO("Subscribed to TDS calibration topic");
+        // Subscribe to calibration and sensor config topics with QoS 1
+        _localMqtt.subscribe("aquaponics/config/tds_cal", 1);
+        _localMqtt.subscribe(LOCAL_MQTT_TOPIC_CONFIG_SENSORS, 1);
+        LOG_INFO("Subscribed to MQTT topics (QoS 1)");
         
         return true;
     } else {
@@ -214,6 +242,22 @@ void localMqttPublishLog(const char* logMsg) {
     
     // Simple text payload
     _localMqtt.publish(LOCAL_MQTT_TOPIC_LOGS, logMsg);
+}
+
+static void _publishSensorConfig(void) {
+    if (!_localMqtt.connected()) return;
+
+    StaticJsonDocument<256> doc;
+    doc["tds"] = systemGetSensorEnabled(SENSOR_TDS);
+    doc["ph"] = systemGetSensorEnabled(SENSOR_PH);
+    doc["water"] = systemGetSensorEnabled(SENSOR_WATER_TEMP);
+    doc["air"] = systemGetSensorEnabled(SENSOR_AIR_TEMP);
+    doc["light"] = systemGetSensorEnabled(SENSOR_LIGHT);
+    
+    char buffer[256];
+    serializeJson(doc, buffer);
+    _localMqtt.publish(LOCAL_MQTT_TOPIC_STATUS_SENSORS, buffer);
+    LOG_INFO("Sent Sensor Config Feedback: %s", buffer);
 }
 
 

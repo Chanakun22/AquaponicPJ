@@ -37,6 +37,13 @@ def load_settings():
             "refresh_sec": 5,
             "device_name": "Aquaponics System"
         },
+        "sensor_config": {
+            "tds": True,
+            "ph": True,
+            "water": True,
+            "air": True,
+            "light": True
+        },
         "tds_calibration": {
             "low_ppm": 500,
             "low_voltage": 0.0,
@@ -262,6 +269,7 @@ def on_connect(client, userdata, flags, rc):
     print(f"✅ MQTT Connected with result code {rc}")
     client.subscribe("aquaponics/sensors")
     client.subscribe("aquaponics/logs")
+    client.subscribe("aquaponics/status/sensors")
 
 
 def on_message(client, userdata, msg):
@@ -273,6 +281,18 @@ def on_message(client, userdata, msg):
         if topic == "aquaponics/logs":
             print(f"📝 Log: {payload}")
             save_log(payload)
+            return
+            
+        if topic == "aquaponics/status/sensors":
+            try:
+                new_config = json.loads(payload)
+                # Update local settings if different
+                if app_settings.get("sensor_config") != new_config:
+                    app_settings["sensor_config"] = new_config
+                    save_settings(app_settings)
+                    print(f"🔄 Synced Sensor Config from ESP32: {new_config}")
+            except Exception as e:
+                print(f"❌ Error syncing sensor config: {e}")
             return
         
 
@@ -392,6 +412,17 @@ def post_settings():
         new_settings = request.get_json()
         if new_settings:
             app_settings = new_settings
+            # Check if sensor config changed and publish to MQTT
+            if "sensor_config" in new_settings:
+                try:
+                    sensor_payload = json.dumps(new_settings["sensor_config"])
+                    if mqtt_client and mqtt_client.is_connected():
+                         # Note: Client connection check might fail if threaded, but try best effort
+                         mqtt_client.publish("aquaponics/config/sensors", sensor_payload, qos=1, retain=True)
+                         print(f"📤 Sensor Config sent to ESP32: {sensor_payload}")
+                except Exception as ex:
+                    print(f"MQTT Publish Error: {ex}")
+
             if save_settings(app_settings):
 
                 return jsonify({"status": "ok", "message": "Settings saved"})

@@ -22,8 +22,10 @@ static float _lastWaterTemp = NAN;
 enum TempState { TEMP_IDLE, TEMP_WAITING };
 static TempState _tempState = TEMP_IDLE;
 
-// DS18B20 conversion time (750ms for 12-bit resolution)
-static const unsigned long CONVERSION_DELAY_MS = 750;
+// DS18B20 conversion time (750ms for 12-bit resolution) + safety margin
+static const unsigned long CONVERSION_DELAY_MS = 800;
+static uint8_t _retryCount = 0;
+const uint8_t MAX_RETRIES = 3;
 
 // ============================================================================
 // PUBLIC FUNCTIONS
@@ -59,20 +61,33 @@ void tempLoop(void) {
                 _sensors.requestTemperatures();
                 _tempRequestTime = currentTime;
                 _tempState = TEMP_WAITING;
+                _retryCount = 0; // Reset retry counter on new cycle
             }
             break;
             
         case TEMP_WAITING:
-            // รอ conversion เสร็จ (750ms สำหรับ 12-bit)
+            // รอ conversion เสร็จ (800ms สำหรับ 12-bit including margin)
             if (currentTime - _tempRequestTime >= CONVERSION_DELAY_MS) {
                 float temp = _sensors.getTempCByIndex(0);
                 
-                // ตรวจสอบค่าผิดพลาด (-127 = ไม่มีเซ็นเซอร์)
-                if (temp == -127.0f) {
-                    LOG_WARN("Failed to read temperature from DS18B20");
-                    _lastWaterTemp = NAN;
+                // ตรวจสอบค่าผิดพลาด (-127 = ไม่มีเซ็นเซอร์ หรือ Error)
+                if (temp == -127.0f || temp == 85.0f) { // 85.0 is also power-on reset value
+                    if (_retryCount < MAX_RETRIES) {
+                        _retryCount++;
+                        LOG_WARN("DS18B20 read fail (%.1f), retrying... (%d/%d)", temp, _retryCount, MAX_RETRIES);
+                        
+                        // Request again immediately
+                        _sensors.requestTemperatures();
+                        _tempRequestTime = currentTime;
+                        // Stay in TEMP_WAITING
+                        return; 
+                    } else {
+                        LOG_ERROR("Failed to read temperature from DS18B20 after %d retries", MAX_RETRIES);
+                        _lastWaterTemp = NAN;
+                    }
                 } else {
                     _lastWaterTemp = temp;
+                    // LOG_INFO("Temp read success: %.2f", temp);
                 }
                 
                 _tempLastReadTime = currentTime;

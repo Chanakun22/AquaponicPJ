@@ -110,9 +110,11 @@ static float _voltageToPhNeutral(int adcValue) {
  * @brief บันทึกค่า Calibration ลง NVS
  */
 static void _saveCalibrationToNVS(void) {
+    _prefs.begin("phSensor", false);  // Open read-write
     _prefs.putInt("volt7", _calibVoltage7);
     _prefs.putInt("volt4", _calibVoltage4);
     _prefs.putFloat("slope", _calibSlope);
+    _prefs.end();  // Close to flush data to flash
     LOG_INFO("pH calibration saved to NVS");
 }
 
@@ -120,9 +122,11 @@ static void _saveCalibrationToNVS(void) {
  * @brief โหลดค่า Calibration จาก NVS
  */
 static void _loadCalibrationFromNVS(void) {
+    _prefs.begin("phSensor", true);  // Open read-only
     _calibVoltage7 = _prefs.getInt("volt7", PH_VOLTAGE_AT_7);
     _calibVoltage4 = _prefs.getInt("volt4", 0);
     _calibSlope = _prefs.getFloat("slope", 0);
+    _prefs.end();  // Close after reading
     
     LOG_INFO("Loaded pH calibration from NVS:");
     LOG_INFO("  Voltage@pH7: %d (%.1f mV)", _calibVoltage7, (_calibVoltage7 / 4095.0) * 3300.0);
@@ -140,9 +144,6 @@ static void _loadCalibrationFromNVS(void) {
 
 void phSetup(void) {
     Serial.println(F("[PH] Initializing pH Sensor..."));
-    
-    // เปิด NVS namespace
-    _prefs.begin("phSensor", false);
     
     // โหลดค่า Calibration จาก NVS
     _loadCalibrationFromNVS();
@@ -268,7 +269,10 @@ void phCalibratePh4(void) {
 }
 
 void phClearCalibration(void) {
+    _prefs.begin("phSensor", false);  // Open read-write
     _prefs.clear();
+    _prefs.end();  // Close to flush
+    
     _calibVoltage7 = PH_VOLTAGE_AT_7;
     _calibVoltage4 = 0;
     _calibSlope = 0;

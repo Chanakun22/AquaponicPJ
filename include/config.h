@@ -81,7 +81,7 @@
 /**
  * @section DS18B20 Settings
  */
-#define TEMP_READ_INTERVAL  200    // ช่วงเวลาอ่านค่า (ms)
+#define TEMP_READ_INTERVAL  1000    // ช่วงเวลาอ่านค่า (ms)
 
 /**
  * @section BH1750 Light Sensor Settings
@@ -198,6 +198,8 @@
 #define LOCAL_PUBLISH_INTERVAL 2000          // ส่งข้อมูลทุก 2 วินาที (เร็วกว่า NETPIE)
 #define LOCAL_MQTT_TOPIC_SENSORS "aquaponics/sensors"  // MQTT Topic สำหรับข้อมูล Sensor
 #define LOCAL_MQTT_TOPIC_LOGS    "aquaponics/logs"     // MQTT Topic สำหรับ System Logs
+#define LOCAL_MQTT_TOPIC_CONFIG_SENSORS "aquaponics/config/sensors" // MQTT Topic สำหรับ Config Sensors (Pi -> ESP)
+#define LOCAL_MQTT_TOPIC_STATUS_SENSORS "aquaponics/status/sensors" // MQTT Topic สำหรับ Status Sensors (ESP -> Pi)
 
 /**
  * @section NTP Settings

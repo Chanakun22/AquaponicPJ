@@ -384,6 +384,27 @@
         .connect-bar { flex-direction: column; }
         .val-main { font-size: 2.8rem; }
       }
+
+      /* Disabled Sensor Badge */
+      .card.sensor-disabled {
+        opacity: 0.5;
+        filter: grayscale(50%);
+      }
+      
+      .card.sensor-disabled::after {
+        content: "DISABLED";
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: var(--danger);
+        color: #fff;
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 4px 8px;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
     </style>
   </head>
   <body>
@@ -443,7 +464,7 @@
       <div class="dashboard-grid">
         
         <!-- Water Temp -->
-        <div class="card water">
+        <div class="card water" id="card-water">
           <div class="card-header">
             <div class="card-title"><i class="fa-solid fa-water"></i> Water Temp</div>
             <i class="fa-solid fa-ellipsis" style="color: var(--text-muted)"></i>
@@ -456,7 +477,7 @@
         </div>
 
         <!-- Air Temp -->
-        <div class="card air">
+        <div class="card air" id="card-air">
           <div class="card-header">
             <div class="card-title"><i class="fa-solid fa-temperature-half"></i> Air Temp</div>
             <i class="fa-solid fa-ellipsis" style="color: var(--text-muted)"></i>
@@ -469,7 +490,7 @@
         </div>
 
         <!-- TDS -->
-        <div class="card tds">
+        <div class="card tds" id="card-tds">
           <div class="card-header">
             <div class="card-title"><i class="fa-solid fa-vial"></i> TDS Level</div>
             <i class="fa-solid fa-ellipsis" style="color: var(--text-muted)"></i>
@@ -482,7 +503,7 @@
         </div>
 
         <!-- pH & Light (Combined for balance) -->
-        <div class="card ph">
+        <div class="card ph" id="card-phlight">
             <div class="card-header">
               <div class="card-title"><i class="fa-solid fa-flask"></i> pH & Light</div>
               <i class="fa-solid fa-ellipsis" style="color: var(--text-muted)"></i>
@@ -777,6 +798,15 @@
           updateHealth(health);
           updateInfo(info);
           
+          // Update sensor disabled state from settings
+          try {
+            const settingsRes = await fetch(`${deviceIp}/api/settings`, { timeout: 3000 });
+            if(settingsRes.ok) {
+              const settings = await settingsRes.json();
+              updateSensorDisabledState(settings.sensor_config);
+            }
+          } catch(e) { console.log("Settings fetch for sensor state failed", e); }
+          
           if (!wasOnline) {
             // addLog("info", "Connected successfully."); // Don't spam local logs if we have remote
           }
@@ -832,6 +862,29 @@
         document.getElementById("lightState").textContent = data.light_state ? "DAY MODE" : "NIGHT MODE";
 
         document.getElementById("lastUpdate").textContent = new Date().toLocaleTimeString("en-US", {hour12: false});
+      }
+
+      // Toggle disabled indicator on sensor cards
+      function updateSensorDisabledState(sensorConfig) {
+        if (!sensorConfig) return;
+        
+        const toggleCard = (cardId, isEnabled) => {
+          const card = document.getElementById(cardId);
+          if (card) {
+            if (isEnabled === false) {
+              card.classList.add("sensor-disabled");
+            } else {
+              card.classList.remove("sensor-disabled");
+            }
+          }
+        };
+        
+        toggleCard("card-water", sensorConfig.water);
+        toggleCard("card-air", sensorConfig.air);
+        toggleCard("card-tds", sensorConfig.tds);
+        // pH and Light are in the same card, disable if EITHER is false
+        const phLightEnabled = (sensorConfig.ph !== false) && (sensorConfig.light !== false);
+        toggleCard("card-phlight", phLightEnabled);
       }
 
       function updateHealth(data) {

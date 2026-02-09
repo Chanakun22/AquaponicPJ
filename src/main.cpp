@@ -127,44 +127,65 @@ void TaskSensors(void *pvParameters) {
     
     for (;;) {
         // Water Temp (OneWire is slow, blocking)
-        float rawWaterTemp = tempRead();
-        currentWaterTemp = validateTemperature(rawWaterTemp);
-        tempLoop(); // Maintains sensor state if needed
+        if (systemGetSensorEnabled(SENSOR_WATER_TEMP)) {
+            float rawWaterTemp = tempRead();
+            currentWaterTemp = validateTemperature(rawWaterTemp);
+            tempLoop(); // Maintains sensor state if needed
+        } else {
+            currentWaterTemp = NAN; // Reset if disabled
+        }
         
         // Air Temp & Humidity
-        float rawAirTemp = dhtReadTemperature();
-        float rawHumidity = dhtReadHumidity();
-        currentAirTemp = validateTemperature(rawAirTemp);
-        currentHumidity = validateHumidity(rawHumidity);
-        dhtLoop();
+        if (systemGetSensorEnabled(SENSOR_AIR_TEMP)) {
+            float rawAirTemp = dhtReadTemperature();
+            float rawHumidity = dhtReadHumidity();
+            currentAirTemp = validateTemperature(rawAirTemp);
+            currentHumidity = validateHumidity(rawHumidity);
+            dhtLoop();
+        } else {
+            currentAirTemp = NAN;
+            currentHumidity = NAN;
+        }
         
         // TDS (Average/Filtering)
         // TDS needs frequent sampling
-        if (!isnan(currentWaterTemp)) {
-            tdsLoop(currentWaterTemp);
-            if (tdsIsReady()) {
-                currentTds = validateTds(tdsRead(currentWaterTemp));
+        if (systemGetSensorEnabled(SENSOR_TDS)) {
+            if (!isnan(currentWaterTemp)) {
+                tdsLoop(currentWaterTemp);
+                if (tdsIsReady()) {
+                    currentTds = validateTds(tdsRead(currentWaterTemp));
+                }
+            } else {
+                tdsLoop(25.0);
+                if (tdsIsReady()) {
+                     currentTds = validateTds(tdsRead(25.0));
+                }
             }
         } else {
-            tdsLoop(25.0);
-            if (tdsIsReady()) {
-                 currentTds = validateTds(tdsRead(25.0));
-            }
+            currentTds = -1;
         }
         
         // Light
-        if (lightIsReady()) {
-            currentLight = validateLight(lightRead());
+        if (systemGetSensorEnabled(SENSOR_LIGHT)) {
+            if (lightIsReady()) {
+                currentLight = validateLight(lightRead());
+            }
+            lightLoop();
+        } else {
+            currentLight = -1;
         }
-        lightLoop();
         
         // pH
-        if (!isnan(currentWaterTemp)) {
-            phSetTemperature(currentWaterTemp);
-        }
-        phLoop();
-        if (phIsReady()) {
-            currentPh = validatePh(phRead());
+        if (systemGetSensorEnabled(SENSOR_PH)) {
+            if (!isnan(currentWaterTemp)) {
+                phSetTemperature(currentWaterTemp);
+            }
+            phLoop();
+            if (phIsReady()) {
+                currentPh = validatePh(phRead());
+            }
+        } else {
+            currentPh = -1;
         }
         
         // Health Check & Watchdog Reset (if this task is monitored)

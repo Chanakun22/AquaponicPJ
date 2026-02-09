@@ -132,6 +132,18 @@
             min-width: 0;
         }
 
+        /* Fix for invisible text in number inputs */
+        .form-row input[type="number"] {
+            color: #fff !important;
+            background: rgba(0,0,0,0.5) !important;
+            -webkit-text-fill-color: #fff;
+        }
+        
+        .form-row input[type="number"]::placeholder {
+            color: rgba(255,255,255,0.4);
+            -webkit-text-fill-color: rgba(255,255,255,0.4);
+        }
+
         .toggle-container {
             display: flex;
             align-items: center;
@@ -272,6 +284,54 @@
 
 
 
+        <!-- Sensor Management -->
+        <div class="card">
+            <h2><i class="fas fa-microchip"></i> Sensor Management</h2>
+            <div class="form-group">
+                <label>Active Sensors</label>
+                
+                <div class="toggle-container" style="justify-content: space-between; margin-bottom: 10px;">
+                    <span>TDS Sensor</span>
+                    <label class="toggle">
+                        <input type="checkbox" id="sns_tds">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                
+                <div class="toggle-container" style="justify-content: space-between; margin-bottom: 10px;">
+                    <span>pH Sensor</span>
+                    <label class="toggle">
+                        <input type="checkbox" id="sns_ph">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                
+                <div class="toggle-container" style="justify-content: space-between; margin-bottom: 10px;">
+                    <span>Water Temp</span>
+                    <label class="toggle">
+                        <input type="checkbox" id="sns_water">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="toggle-container" style="justify-content: space-between; margin-bottom: 10px;">
+                    <span>Air Temp & Humidity</span>
+                    <label class="toggle">
+                        <input type="checkbox" id="sns_air">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="toggle-container" style="justify-content: space-between; margin-bottom: 10px;">
+                    <span>Light Sensor</span>
+                    <label class="toggle">
+                        <input type="checkbox" id="sns_light">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
         <!-- Notifications -->
         <div class="card">
             <h2><i class="fas fa-bell"></i> Notifications</h2>
@@ -340,27 +400,37 @@
 
             <div class="form-group">
                 <label>Low Point (Standard Solution)</label>
-                <div class="form-row">
-                    <input type="number" id="low_temp" value="25" step="0.1" placeholder="Temp" style="width: 80px;">
-                    <span>°C</span>
-                    <input type="number" id="low_ppm" placeholder="ppm" step="1">
-                    <span>ppm @</span>
-                    <input type="number" id="low_voltage" placeholder="Voltage" step="0.001">
-                    <span>V</span>
-                    <button class="btn btn-primary" onclick="readLowVoltage()">Read</button>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:10px;">
+                    <div>
+                        <span style="font-size:0.8rem; color:rgba(255,255,255,0.5);">Temperature</span>
+                        <input type="number" id="low_temp" value="25" step="0.1" style="width:100%; color:#fff; background:#000; padding:8px; border:1px solid #333; border-radius:6px;">
+                    </div>
+                    <div>
+                        <span style="font-size:0.8rem; color:rgba(255,255,255,0.5);">PPM Value</span>
+                        <input type="number" id="low_ppm" placeholder="500" step="1" style="width:100%; color:#fff; background:#000; padding:8px; border:1px solid #333; border-radius:6px;">
+                    </div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <input type="text" id="low_voltage" placeholder="0.000 V" readonly style="flex:1; color:#38bdf8; background:#000; padding:8px; border:1px solid #333; border-radius:6px; text-align:center; font-weight:bold;">
+                    <button class="btn btn-primary" onclick="readLowVoltage()"><i class="fas fa-download"></i> Read</button>
                 </div>
             </div>
 
             <div class="form-group">
                 <label>High Point (Standard Solution)</label>
-                <div class="form-row">
-                    <input type="number" id="high_temp" value="25" step="0.1" placeholder="Temp" style="width: 80px;">
-                    <span>°C</span>
-                    <input type="number" id="high_ppm" placeholder="ppm" step="1">
-                    <span>ppm @</span>
-                    <input type="number" id="high_voltage" placeholder="Voltage" step="0.001">
-                    <span>V</span>
-                    <button class="btn btn-primary" onclick="readHighVoltage()">Read</button>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:10px;">
+                    <div>
+                        <span style="font-size:0.8rem; color:rgba(255,255,255,0.5);">Temperature</span>
+                        <input type="number" id="high_temp" value="25" step="0.1" style="width:100%; color:#fff; background:#000; padding:8px; border:1px solid #333; border-radius:6px;">
+                    </div>
+                    <div>
+                        <span style="font-size:0.8rem; color:rgba(255,255,255,0.5);">PPM Value</span>
+                        <input type="number" id="high_ppm" placeholder="1000" step="1" style="width:100%; color:#fff; background:#000; padding:8px; border:1px solid #333; border-radius:6px;">
+                    </div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <input type="text" id="high_voltage" placeholder="0.000 V" readonly style="flex:1; color:#38bdf8; background:#000; padding:8px; border:1px solid #333; border-radius:6px; text-align:center; font-weight:bold;">
+                    <button class="btn btn-primary" onclick="readHighVoltage()"><i class="fas fa-download"></i> Read</button>
                 </div>
             </div>
 
@@ -412,6 +482,13 @@
 
 
 
+            // Sensor Config
+            document.getElementById('sns_tds').checked = settings.sensor_config?.tds ?? true;
+            document.getElementById('sns_ph').checked = settings.sensor_config?.ph ?? true;
+            document.getElementById('sns_water').checked = settings.sensor_config?.water ?? true;
+            document.getElementById('sns_air').checked = settings.sensor_config?.air ?? true;
+            document.getElementById('sns_light').checked = settings.sensor_config?.light ?? true;
+
             // Notifications
             document.getElementById('notify_enabled').checked = settings.notifications?.enabled ?? false;
             document.getElementById('line_token').value = settings.notifications?.line_token ?? "";
@@ -437,6 +514,13 @@
                     humidity_max: parseInt(document.getElementById('humidity_max').value),
                     tds_min: parseInt(document.getElementById('tds_min').value),
                     tds_max: parseInt(document.getElementById('tds_max').value)
+                },
+                sensor_config: {
+                    tds: document.getElementById('sns_tds').checked,
+                    ph: document.getElementById('sns_ph').checked,
+                    water: document.getElementById('sns_water').checked,
+                    air: document.getElementById('sns_air').checked,
+                    light: document.getElementById('sns_light').checked
                 },
                 light: settings.light || {},
                 notifications: {
