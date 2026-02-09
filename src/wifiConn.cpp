@@ -18,31 +18,11 @@
 static WiFiManager _wifiMgr;
 static unsigned long _wifiLastCheckTime = 0;
 static bool _wifiConnected = false;
-static unsigned long _factoryResetStartTime = 0;
-static bool _factoryResetButtonPressed = false;
 static unsigned long _lastReconnectAttempt = 0;
 static const unsigned long RECONNECT_INTERVAL = 30000; // พยายาม reconnect ทุก 30 วินาที
 
-// ============================================================================
-// PRIVATE FUNCTIONS
-// ============================================================================
-
-/**
- * @brief Handle factory reset button (non-blocking)
- */
-static void _checkFactoryResetButton(void) {
-    if (digitalRead(FACTORY_RESET_PIN) == LOW) {
-        if (!_factoryResetButtonPressed) {
-            _factoryResetButtonPressed = true;
-            _factoryResetStartTime = millis();
-        } else if (millis() - _factoryResetStartTime >= FACTORY_RESET_TIME) {
-            LOG_WARN("Factory reset triggered!");
-            systemFactoryReset();
-        }
-    } else {
-        _factoryResetButtonPressed = false;
-    }
-}
+// NOTE: Factory Reset button ถูกจัดการใน systemLoop() (system.cpp) แล้ว
+// เพื่อหลีกเลี่ยงการตรวจสอบซ้ำซ้อนและ race condition
 
 // ============================================================================
 // PUBLIC FUNCTIONS
@@ -51,8 +31,7 @@ static void _checkFactoryResetButton(void) {
 void wifiSetup(void) {
     LOG_INFO("Initializing WiFiManager (Non-blocking)...");
     
-    // Setup factory reset button
-    pinMode(FACTORY_RESET_PIN, INPUT_PULLUP);
+    // NOTE: Factory Reset pin ถูก init ใน systemInit() แล้ว
     
     // Configure WiFiManager
     // IMPORTANT: Set non-blocking mode
@@ -92,8 +71,7 @@ void wifiLoop(void) {
     // Process WiFiManager (handles config portal if active)
     _wifiMgr.process();
     
-    // Check factory reset button (non-blocking)
-    _checkFactoryResetButton();
+    // NOTE: Factory Reset button ถูกตรวจสอบใน systemLoop() แล้ว
     
     // Periodic connection check (non-blocking)
     if (millis() - _wifiLastCheckTime >= WIFI_CHECK_INTERVAL) {

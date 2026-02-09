@@ -190,7 +190,8 @@ void systemFactoryReset(void) {
     
     LOG_INFO("All settings cleared. Restarting...");
     
-    delay(1000);
+    // ใช้ vTaskDelay แทน delay() เพื่อหลีกเลี่ยง Watchdog timeout
+    vTaskDelay(pdMS_TO_TICKS(1000));
     ESP.restart();
 }
 
@@ -247,6 +248,8 @@ String systemGetResetReasonString(void) {
         case ESP_RST_SDIO:      return "SDIO";
         default:                return "Other";
     }
+    #else
+    return "Unknown";  // Non-ESP32 platform
     #endif
 }
 

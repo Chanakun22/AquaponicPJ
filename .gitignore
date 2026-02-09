@@ -9,3 +9,4 @@ pi_server/app.py
 PI_COMMANDS.md
 tools/monitor/index.html
 secrets.ini
+repomix-output.xml

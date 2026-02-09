@@ -90,10 +90,6 @@ static void _parseShadowData(const char* json) {
         
         if (hasLightData) {
             lightCtrlPrintSchedule();
-            
-
-            
-
         }
         
         // pH Calibration Commands
@@ -118,10 +114,11 @@ static void _parseShadowData(const char* json) {
 static void _mqttCallback(char* topic, byte* payload, unsigned int length) {
     LOG_DEBUG("MQTT message received: %s", topic);
     
-    // แปลง payload เป็น string
-    char message[length + 1];
-    memcpy(message, payload, length);
-    message[length] = '\0';
+    // ใช้ static buffer แทน VLA เพื่อป้องกัน stack overflow
+    static char message[1024];
+    size_t copyLen = (length < sizeof(message) - 1) ? length : sizeof(message) - 1;
+    memcpy(message, payload, copyLen);
+    message[copyLen] = '\0';
     
     // Shadow response (ตอนเริ่มต้น) หรือ Shadow updated (real-time)
     if (strstr(topic, "@shadow/data/get/response") || 
@@ -211,6 +208,8 @@ void netpieLoop(void) {
             _lastReconnectAttempt = now;
             if (_mqttReconnect()) {
                 _lastReconnectAttempt = 0;
+                // หมายเหตุ: นับ reconnect เฉพาะเมื่อสำเร็จ (หมายถึง reconnect 1 ครั้ง)
+                // สถิตินี้ใช้ดูว่า connection หลุดกี่ครั้ง
                 systemIncrementMqttReconnects();
             }
         }

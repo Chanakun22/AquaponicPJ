@@ -148,18 +148,13 @@ void TaskSensors(void *pvParameters) {
         }
         
         // TDS (Average/Filtering)
-        // TDS needs frequent sampling
+        // tdsLoop() เก็บ sample ภายใน (เรียก tdsRead ให้แล้ว)
+        // ดึงค่าจาก tdsRead เฉพาะตอนที่ buffer พร้อม
         if (systemGetSensorEnabled(SENSOR_TDS)) {
-            if (!isnan(currentWaterTemp)) {
-                tdsLoop(currentWaterTemp);
-                if (tdsIsReady()) {
-                    currentTds = validateTds(tdsRead(currentWaterTemp));
-                }
-            } else {
-                tdsLoop(25.0);
-                if (tdsIsReady()) {
-                     currentTds = validateTds(tdsRead(25.0));
-                }
+            float tempForTds = !isnan(currentWaterTemp) ? currentWaterTemp : 25.0f;
+            tdsLoop(tempForTds);
+            if (tdsIsReady()) {
+                currentTds = validateTds(tdsRead(tempForTds));
             }
         } else {
             currentTds = -1;
@@ -232,7 +227,18 @@ void setup() {
     systemInit();
     
 #if defined(ESP32) && WATCHDOG_ENABLED
-    esp_task_wdt_init(WATCHDOG_TIMEOUT_SEC, true);
+    // ESP-IDF 5.x (Arduino 3.x) uses new WDT API with config struct
+    #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+        esp_task_wdt_config_t wdt_config = {
+            .timeout_ms = WATCHDOG_TIMEOUT_SEC * 1000,
+            .idle_core_mask = (1 << portNUM_PROCESSORS) - 1,  // Monitor all cores
+            .trigger_panic = true
+        };
+        esp_task_wdt_init(&wdt_config);
+    #else
+        // Legacy API for ESP-IDF 4.x (Arduino 2.x)
+        esp_task_wdt_init(WATCHDOG_TIMEOUT_SEC, true);
+    #endif
     esp_task_wdt_add(NULL); // Add main loop/current task
     LOG_INFO("Watchdog Timer enabled (%d seconds)", WATCHDOG_TIMEOUT_SEC);
 #endif

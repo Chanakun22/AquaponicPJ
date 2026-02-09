@@ -27,7 +27,7 @@
 #define DHT_PIN             15      // ขา Digital สำหรับ DHT22
 
 // DS18B20 Temperature Sensor (OneWire)
-#define ONE_WIRE_PIN        4       // ขา OneWire สำหรับ DS18B20
+#define ONE_WIRE_PIN        13      // ขา OneWire สำหรับ DS18B20
 
 // pH Sensor (Analog)
 #define PH_SENSOR_PIN       6       // ขา Analog สำหรับ pH Sensor
@@ -81,7 +81,7 @@
 /**
  * @section DS18B20 Settings
  */
-#define TEMP_READ_INTERVAL  1000    // ช่วงเวลาอ่านค่า (ms)
+#define TEMP_READ_INTERVAL  2000    // ช่วงเวลาอ่านค่า (ms)
 
 /**
  * @section BH1750 Light Sensor Settings

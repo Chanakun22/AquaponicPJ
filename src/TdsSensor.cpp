@@ -160,7 +160,17 @@ float tdsGetVoltage(void) {
     }
     
     // แปลงค่า ADC Median เป็น Voltage
-    return _getMedian(tempBuffer, TDS_SAMPLE_COUNT) * TDS_VREF / TDS_ADC_RESOLUTION;
+    float rawVoltage = _getMedian(tempBuffer, TDS_SAMPLE_COUNT) * TDS_VREF / TDS_ADC_RESOLUTION;
+    
+    // Moving Average Filter for smooth display (Alpha 0.15)
+    static float _voltageMovingAverage = -1.0f;
+    if (_voltageMovingAverage < 0) {
+        _voltageMovingAverage = rawVoltage;
+    } else {
+        _voltageMovingAverage = (rawVoltage * 0.15f) + (_voltageMovingAverage * 0.85f);
+    }
+    
+    return _voltageMovingAverage;
 }
 
 bool tdsIsReady(void) {
