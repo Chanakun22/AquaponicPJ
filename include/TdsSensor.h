@@ -61,4 +61,10 @@ void tdsSetCalibration(float lowPpm, float lowVoltage, float highPpm, float high
  */
 bool tdsIsCalibrated(void);
 
+/**
+ * @brief ดึงค่า TDS ล่าสุดที่คำนวณแล้วจาก tdsLoop() โดยไม่ทำ analogRead ซ้ำ
+ * @return ค่า TDS ในหน่วย ppm หรือ -1 ถ้ายังไม่พร้อม
+ */
+float tdsGetLastValue(void);
+
 #endif // TDS_SENSOR_H

@@ -441,6 +441,70 @@
                 <span id="cal_status" style="margin-left:15px;color:#888;"></span>
             </div>
         </div>
+
+        <!-- pH Calibration -->
+        <div class="card">
+            <h2><i class="fas fa-vial"></i> pH Calibration</h2>
+            
+            <div class="form-group">
+                <label>Current pH Reading</label>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:10px;">
+                    <div>
+                        <span style="font-size:0.8rem; color:rgba(255,255,255,0.5);">pH Value</span>
+                        <input type="text" id="ph_current_value" readonly 
+                            style="width:100%; color:#10b981; background:#000; padding:10px; border:1px solid #333; border-radius:6px; text-align:center; font-size:1.3rem; font-weight:bold;">
+                    </div>
+                    <div>
+                        <span style="font-size:0.8rem; color:rgba(255,255,255,0.5);">Voltage (mV)</span>
+                        <input type="text" id="ph_current_voltage" readonly 
+                            style="width:100%; color:#38bdf8; background:#000; padding:10px; border:1px solid #333; border-radius:6px; text-align:center; font-size:1.3rem; font-weight:bold;">
+                    </div>
+                </div>
+                <button class="btn" onclick="refreshPhVoltage()" style="width:100%;">
+                    <i class="fas fa-sync-alt"></i> Refresh pH Reading
+                </button>
+            </div>
+
+            <hr style="border-color:rgba(255,255,255,0.1); margin:15px 0;">
+
+            <div class="form-group">
+                <label style="font-size:0.95rem; color:var(--accent-color);">
+                    <i class="fas fa-flask"></i> Step 1: Calibrate pH 7.0 (Neutral)
+                </label>
+                <p style="font-size:0.8rem; color:rgba(255,255,255,0.5); margin:5px 0 10px;">
+                    จุ่ม probe ใน buffer solution pH 7.0 → รอค่า stabilize (30 วิ) → กดปุ่ม
+                </p>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <button class="btn btn-primary" onclick="calibratePh('cal7')" style="flex:1;">
+                        <i class="fas fa-bullseye"></i> Calibrate pH 7.0
+                    </button>
+                    <span id="ph_cal7_status" style="font-size:0.85rem; color:#888;">—</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label style="font-size:0.95rem; color:var(--accent-color);">
+                    <i class="fas fa-flask"></i> Step 2: Calibrate pH 4.0 (Acid)
+                </label>
+                <p style="font-size:0.8rem; color:rgba(255,255,255,0.5); margin:5px 0 10px;">
+                    ล้าง probe ด้วยน้ำสะอาด → จุ่มใน buffer solution pH 4.0 → รอค่า stabilize → กดปุ่ม
+                </p>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <button class="btn btn-primary" onclick="calibratePh('cal4')" style="flex:1;">
+                        <i class="fas fa-bullseye"></i> Calibrate pH 4.0
+                    </button>
+                    <span id="ph_cal4_status" style="font-size:0.85rem; color:#888;">—</span>
+                </div>
+            </div>
+
+            <hr style="border-color:rgba(255,255,255,0.1); margin:15px 0;">
+
+            <div class="form-group" style="text-align:center;">
+                <button class="btn" onclick="clearPhCalibration()" style="color:var(--error-color); border-color:var(--error-color);">
+                    <i class="fas fa-trash"></i> Clear pH Calibration
+                </button>
+            </div>
+        </div>
     </div>
 
     <div class="footer-actions">
@@ -661,10 +725,106 @@
             refreshVoltage();
         }
 
+        // === pH Calibration Functions ===
+        let phRefreshInterval = null;
+
+        async function refreshPhVoltage() {
+            try {
+                const res = await fetch('/api/ph_voltage');
+                const data = await res.json();
+                document.getElementById('ph_current_voltage').value = (data.voltage || 0).toFixed(1) + ' mV';
+                document.getElementById('ph_current_value').value = (data.ph_value || 0).toFixed(2);
+            } catch (e) {
+                document.getElementById('ph_current_voltage').value = 'Error';
+                document.getElementById('ph_current_value').value = 'Error';
+            }
+        }
+
+        async function calibratePh(action) {
+            const label = action === 'cal7' ? 'pH 7.0 (Neutral)' : 'pH 4.0 (Acid)';
+            const statusId = action === 'cal7' ? 'ph_cal7_status' : 'ph_cal4_status';
+            
+            if (!confirm(`⚠️ ยืนยันการ Calibrate ${label}?\n\nตรวจสอบให้แน่ใจว่า:\n1. Probe จุ่มอยู่ใน buffer solution ${label}\n2. ค่า voltage เสถียรแล้ว (รอ 30 วินาที)\n\nกดตกลงเพื่อ Calibrate`)) {
+                return;
+            }
+
+            try {
+                document.getElementById(statusId).textContent = '⏳ Calibrating...';
+                
+                const res = await fetch('/api/ph_calibrate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: action })
+                });
+                const result = await res.json();
+                
+                if (result.status === 'ok') {
+                    showToast(`${label} Calibration สำเร็จ! ✅`);
+                    document.getElementById(statusId).textContent = 'Done ✅';
+                    document.getElementById(statusId).style.color = '#10b981';
+                    
+                    // Refresh pH reading after calibration
+                    setTimeout(refreshPhVoltage, 2000);
+                } else {
+                    showToast('Error: ' + result.message, true);
+                    document.getElementById(statusId).textContent = 'Failed ❌';
+                    document.getElementById(statusId).style.color = '#ef4444';
+                }
+            } catch (e) {
+                showToast('Failed to send calibration command', true);
+                document.getElementById(statusId).textContent = 'Error ❌';
+                document.getElementById(statusId).style.color = '#ef4444';
+            }
+        }
+
+        async function clearPhCalibration() {
+            if (!confirm('⚠️ ยืนยันการลบค่า pH Calibration?\n\nค่า calibrate ทั้งหมดจะถูกลบ และกลับไปใช้ค่า default')) {
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/ph_calibrate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'clear' })
+                });
+                const result = await res.json();
+                
+                if (result.status === 'ok') {
+                    showToast('pH Calibration cleared ✅');
+                    document.getElementById('ph_cal7_status').textContent = '—';
+                    document.getElementById('ph_cal7_status').style.color = '#888';
+                    document.getElementById('ph_cal4_status').textContent = '—';
+                    document.getElementById('ph_cal4_status').style.color = '#888';
+                    setTimeout(refreshPhVoltage, 2000);
+                } else {
+                    showToast('Error: ' + result.message, true);
+                }
+            } catch (e) {
+                showToast('Failed to clear calibration', true);
+            }
+        }
+
+        function populatePhCalibration() {
+            const phCal = settings.ph_calibration || {};
+            document.getElementById('ph_cal7_status').textContent = phCal.cal7_done ? 'Done ✅' : '—';
+            document.getElementById('ph_cal7_status').style.color = phCal.cal7_done ? '#10b981' : '#888';
+            document.getElementById('ph_cal4_status').textContent = phCal.cal4_done ? 'Done ✅' : '—';
+            document.getElementById('ph_cal4_status').style.color = phCal.cal4_done ? '#10b981' : '#888';
+            
+            // Initial pH reading
+            refreshPhVoltage();
+            
+            // Auto-refresh pH voltage every 3 seconds
+            if (phRefreshInterval) clearInterval(phRefreshInterval);
+            phRefreshInterval = setInterval(refreshPhVoltage, 3000);
+        }
+
         // Load on start
         window.onload = function() {
             loadSettings().then(() => {
                 populateTdsCalibration();
+                populatePhCalibration();
             });
         };
     </script>

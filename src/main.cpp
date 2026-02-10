@@ -154,7 +154,7 @@ void TaskSensors(void *pvParameters) {
             float tempForTds = !isnan(currentWaterTemp) ? currentWaterTemp : 25.0f;
             tdsLoop(tempForTds);
             if (tdsIsReady()) {
-                currentTds = validateTds(tdsRead(tempForTds));
+                currentTds = validateTds(tdsGetLastValue());
             }
         } else {
             currentTds = -1;

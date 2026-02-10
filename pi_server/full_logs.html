@@ -358,7 +358,7 @@
             }
 
             // Render as structured lines (newest first for readability)
-            const html = logs.reverse().map(log => {
+            const html = [...logs].reverse().map(log => {
                 const typeClass = 'type-' + log.type;
                 const typeLabel = log.type.toUpperCase();
                 const safeMsg = escapeHtml(log.message);

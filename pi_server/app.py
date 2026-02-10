@@ -50,6 +50,12 @@ def load_settings():
             "high_ppm": 1000,
             "high_voltage": 0.0,
             "calibrated": False
+        },
+        "ph_calibration": {
+            "cal7_done": False,
+            "cal4_done": False,
+            "last_voltage": 0.0,
+            "last_ph": 0.0
         }
     }
     try:
@@ -270,6 +276,7 @@ def on_connect(client, userdata, flags, rc):
     client.subscribe("aquaponics/sensors")
     client.subscribe("aquaponics/logs")
     client.subscribe("aquaponics/status/sensors")
+    client.subscribe("aquaponics/status/ph_cal")
 
 
 def on_message(client, userdata, msg):
@@ -293,6 +300,21 @@ def on_message(client, userdata, msg):
                     print(f"🔄 Synced Sensor Config from ESP32: {new_config}")
             except Exception as e:
                 print(f"❌ Error syncing sensor config: {e}")
+            return
+        
+        if topic == "aquaponics/status/ph_cal":
+            try:
+                ph_status = json.loads(payload)
+                app_settings.setdefault("ph_calibration", {})
+                app_settings["ph_calibration"]["last_voltage"] = ph_status.get("ph_voltage", 0)
+                app_settings["ph_calibration"]["last_ph"] = ph_status.get("ph_value", 0)
+                if ph_status.get("calibrated"):
+                    app_settings["ph_calibration"]["cal7_done"] = True
+                save_settings(app_settings)
+                print(f"🔄 pH Calibration status updated: {ph_status}")
+                save_log(f"pH Calibration updated: voltage={ph_status.get('ph_voltage')}mV, pH={ph_status.get('ph_value')}")
+            except Exception as e:
+                print(f"❌ Error handling pH cal status: {e}")
             return
         
 
@@ -487,6 +509,51 @@ def post_tds_calibrate():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+# === pH Calibration API ===
+@app.route('/api/ph_voltage')
+def get_ph_voltage():
+    """Get current pH voltage and value from ESP32 sensor data"""
+    voltage = last_data.get("ph_voltage", 0)
+    ph_value = last_data.get("ph_value", 0)
+    return jsonify({"voltage": voltage, "ph_value": ph_value})
+
+@app.route('/api/ph_calibrate', methods=['POST'])
+def post_ph_calibrate():
+    """Send pH calibration command to ESP32 via MQTT"""
+    global app_settings, mqtt_client
+    try:
+        data = request.get_json()
+        action = data.get("action", "")
+        
+        if action not in ["cal7", "cal4", "clear"]:
+            return jsonify({"status": "error", "message": "Invalid action. Use cal7, cal4, or clear"}), 400
+        
+        # Publish to ESP32 via MQTT
+        if mqtt_client and mqtt_client.is_connected():
+            payload = json.dumps({"action": action})
+            mqtt_client.publish("aquaponics/config/ph_cal", payload, qos=1)
+            print(f"📤 pH Calibration command sent to ESP32: {action}")
+            save_log(f"pH Calibration triggered: {action}")
+            
+            # Update local settings
+            app_settings.setdefault("ph_calibration", {})
+            if action == "cal7":
+                app_settings["ph_calibration"]["cal7_done"] = True
+            elif action == "cal4":
+                app_settings["ph_calibration"]["cal4_done"] = True
+            elif action == "clear":
+                app_settings["ph_calibration"] = {
+                    "cal7_done": False, "cal4_done": False,
+                    "last_voltage": 0, "last_ph": 0
+                }
+            save_settings(app_settings)
+            
+            return jsonify({"status": "ok", "message": f"pH {action} command sent to ESP32"})
+        else:
+            return jsonify({"status": "error", "message": "MQTT not connected"}), 503
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 # === Heartbeat Monitor ===
 last_esp_update = 0
 esp_online = False
@@ -543,11 +610,8 @@ def graphs_view():
 @app.route('/api/full_logs_file')
 def get_full_logs_file():
     try:
-        # Read the last 2000 lines to avoid crashing if file is huge
-        lines = []
         with open(LOG_FILE, "r") as f:
-            # Simple read for now
-             return f.read()
+            return f.read()
     except:
         return "No logs found."
 
@@ -629,7 +693,6 @@ def get_history():
 if __name__ == '__main__':
     # Start MQTT Thread
     mqtt_thread = threading.Thread(target=start_mqtt)
-    mqtt_thread.daemon = True
     mqtt_thread.daemon = True
     mqtt_thread.start()
     

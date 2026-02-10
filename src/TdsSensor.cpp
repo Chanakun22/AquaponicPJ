@@ -17,6 +17,7 @@ static int _tdsBuffer[TDS_SAMPLE_COUNT];
 static int _tdsBufferIndex = 0;
 static int _tdsSampleCollected = 0;  // จำนวน sample ที่เก็บได้
 static bool _tdsReady = false;       // flag บอกว่าเก็บ sample ครบหรือยัง
+static float _tdsLastResult = -1.0f; // ค่า TDS ล่าสุดจาก tdsRead()
 
 // Calibration variables
 static float _kValue = 1.0f;      // Gain factor (scaling)
@@ -216,7 +217,12 @@ float tdsRead(float temperature) {
         _tdsMovingAverage = (tdsValue * 0.1f) + (_tdsMovingAverage * 0.9f);
     }
     
+    _tdsLastResult = _tdsMovingAverage;
     return _tdsMovingAverage;
+}
+
+float tdsGetLastValue(void) {
+    return _tdsLastResult;
 }
 
 void tdsSetCalibration(float lowPpm, float lowVoltage, float highPpm, float highVoltage) {

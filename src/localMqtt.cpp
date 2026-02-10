@@ -14,6 +14,7 @@
 #include <ArduinoJson.h>
 #include "netpie.h"
 #include "TdsSensor.h"  // For TDS calibration
+#include "phSensor.h"   // For pH calibration
 
 
 // ============================================================================
@@ -31,6 +32,7 @@ static const uint8_t MAX_FAIL_BEFORE_RERESOLUTION = 3; // Re-resolve mDNS หล
 static void _onMqttMessage(char* topic, byte* payload, unsigned int length);
 static bool _reconnect(void);
 static void _publishSensorConfig(void);
+static void _publishPhCalibrationStatus(void);
 
 // ============================================================================
 // PRIVATE FUNCTIONS
@@ -92,6 +94,33 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
         }
     }
     
+    // Handle pH Calibration
+    if (String(topic) == "aquaponics/config/ph_cal") {
+        const char* action = doc["action"] | "";
+        
+        if (strcmp(action, "cal7") == 0) {
+            if (phIsReady()) {
+                phCalibratePh7();
+                LOG_INFO("pH 7.0 Calibration triggered from Pi Dashboard!");
+                _publishPhCalibrationStatus();
+            } else {
+                LOG_ERROR("pH sensor not ready for calibration");
+            }
+        } else if (strcmp(action, "cal4") == 0) {
+            if (phIsReady()) {
+                phCalibratePh4();
+                LOG_INFO("pH 4.0 Calibration triggered from Pi Dashboard!");
+                _publishPhCalibrationStatus();
+            } else {
+                LOG_ERROR("pH sensor not ready for calibration");
+            }
+        } else if (strcmp(action, "clear") == 0) {
+            phClearCalibration();
+            LOG_INFO("pH Calibration cleared from Pi Dashboard!");
+            _publishPhCalibrationStatus();
+        }
+    }
+    
     // Handle Sensor Toggle Configuration (batch update to prevent NVS race condition)
     if (String(topic) == LOCAL_MQTT_TOPIC_CONFIG_SENSORS) {
         bool states[SENSOR_COUNT];
@@ -148,6 +177,7 @@ static bool _reconnect() {
         
         // Subscribe to calibration and sensor config topics with QoS 1
         _localMqtt.subscribe("aquaponics/config/tds_cal", 1);
+        _localMqtt.subscribe("aquaponics/config/ph_cal", 1);
         _localMqtt.subscribe(LOCAL_MQTT_TOPIC_CONFIG_SENSORS, 1);
         LOG_INFO("Subscribed to MQTT topics (QoS 1)");
         
@@ -211,6 +241,11 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
     float tdsVoltage = tdsGetVoltage();
     if (tdsVoltage >= 0) doc["tds_voltage"] = round(tdsVoltage * 1000) / 1000.0;
     
+    // Add pH voltage for calibration (mV)
+    float phVoltage = phReadVoltage();
+    if (phVoltage >= 0) doc["ph_voltage"] = round(phVoltage * 10) / 10.0;
+    if (phIsReady()) doc["ph_value"] = round(phRead() * 100) / 100.0;
+    
     // Add Network Connectivity Status
     doc["mqtt_connected"] = netpieIsConnected(); // Status for Dashboard
     doc["wifi_rssi"] = WiFi.RSSI();
@@ -258,6 +293,20 @@ static void _publishSensorConfig(void) {
     serializeJson(doc, buffer);
     _localMqtt.publish(LOCAL_MQTT_TOPIC_STATUS_SENSORS, buffer);
     LOG_INFO("Sent Sensor Config Feedback: %s", buffer);
+}
+
+static void _publishPhCalibrationStatus(void) {
+    if (!_localMqtt.connected()) return;
+
+    StaticJsonDocument<256> doc;
+    doc["ph_voltage"] = round(phReadVoltage() * 10) / 10.0;
+    doc["ph_value"] = round(phRead() * 100) / 100.0;
+    doc["calibrated"] = true;
+    
+    char buffer[256];
+    serializeJson(doc, buffer);
+    _localMqtt.publish("aquaponics/status/ph_cal", buffer);
+    LOG_INFO("Sent pH Calibration Status: %s", buffer);
 }
 
 

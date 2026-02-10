@@ -183,6 +183,11 @@ void systemFactoryReset(void) {
     prefs.clear();
     prefs.end();
     
+    // Clear TDS calibration
+    prefs.begin("tdsSensor", false);
+    prefs.clear();
+    prefs.end();
+    
     // Clear system stats
     prefs.begin("system", false);
     prefs.clear();
