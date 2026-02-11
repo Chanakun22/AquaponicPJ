@@ -3,408 +3,552 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aquaponics - Full System Logs</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <title>📋 System Logs - Aquaponics</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
-            --bg-color: #0f172a;
-            --text-color: #f8fafc;
-            --log-bg: #1e293b;
-            --accent-color: #38bdf8;
-            --error-color: #ef4444;
+            --bg-dark: #0f1115;
+            --bg-panel: #181b21;
+            --primary: #00f2aa;
+            --secondary: #00c8ff;
+            --warning: #ffbf00;
+            --danger: #ff2a6d;
+            --text-main: #ffffff;
+            --text-muted: #8b9bb4;
+            --glass-bg: rgba(24, 27, 33, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-blur: 20px;
+            --radius: 24px;
+            --radius-sm: 12px;
+
+            /* Log type colors */
+            --info-color: #10b981;
             --warn-color: #f59e0b;
-            --success-color: #10b981;
+            --error-color: #ef4444;
             --debug-color: #a78bfa;
         }
 
-        * { box-sizing: border-box; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             font-family: 'Outfit', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0;
+            background-color: var(--bg-dark);
+            background-image:
+                radial-gradient(circle at 10% 20%, rgba(0, 242, 170, 0.03) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(0, 200, 255, 0.03) 0%, transparent 40%);
+            color: var(--text-main);
+            height: 100vh;
             padding: 20px;
             display: flex;
             flex-direction: column;
-            height: 100vh;
+            overflow: hidden;
         }
 
-        header {
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            gap: 16px;
+        }
+
+        /* ===== HEADER ===== */
+        .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-            gap: 10px;
+            padding: 16px 24px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            flex-shrink: 0;
         }
 
-        h1 {
-            margin: 0;
-            font-size: 1.5rem;
-            color: var(--accent-color);
-        }
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .header-left h1 { font-size: 1.3rem; font-weight: 600; }
+        .header-left h1 i { color: var(--primary); margin-right: 6px; }
+
+        .header-right { display: flex; gap: 8px; flex-wrap: wrap; }
 
         .btn {
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            padding: 8px 16px;
-            border-radius: 8px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            font-family: inherit;
-            transition: all 0.2s;
-            font-size: 0.9rem;
+            padding: 8px 16px; border-radius: 8px; border: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.06); color: var(--text-main); cursor: pointer;
+            font-family: inherit; font-size: 0.85rem; display: inline-flex; align-items: center;
+            gap: 6px; transition: all 0.2s; text-decoration: none;
+        }
+        .btn:hover { background: rgba(255,255,255,0.12); transform: translateY(-1px); }
+        .btn-primary { background: var(--primary); color: #000; border: none; font-weight: 600; }
+        .btn-primary:hover { background: #00d896; }
+        .btn-danger { border-color: var(--danger); color: var(--danger); }
+        .btn-danger:hover { background: rgba(255,42,109,0.15); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        /* ===== TOOLBAR ===== */
+        .toolbar {
+            display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+            padding: 14px 20px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            flex-shrink: 0;
         }
 
-        .btn:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateY(-1px);
+        .toolbar-group { display: flex; align-items: center; gap: 6px; }
+        .toolbar-group label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+        .toolbar input, .toolbar select {
+            padding: 7px 12px; border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.15);
+            background: rgba(0,0,0,0.4); color: #fff;
+            font-family: inherit; font-size: 0.85rem;
         }
+        .toolbar input:focus, .toolbar select:focus { outline: none; border-color: var(--primary); }
+        .toolbar input[type="text"] { width: 180px; }
 
-        .btn-primary {
-            background: var(--accent-color);
-            color: #000;
-            border: none;
+        /* Type Pills */
+        .pills { display: flex; gap: 4px; }
+        .pill {
+            padding: 5px 12px; border-radius: 20px; cursor: pointer;
+            font-size: 0.78rem; font-weight: 500; user-select: none;
+            transition: all 0.2s; border: 1px solid transparent;
+            background: rgba(255,255,255,0.06);
         }
-
-        .btn-primary:hover {
-            background: #0ea5e9;
-        }
-
-        /* ===== FILTER TOOLBAR ===== */
-        .filter-bar {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
-            margin-bottom: 15px;
-            padding: 15px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 10px;
-            align-items: center;
-        }
-
-        .filter-group {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .filter-group label {
-            font-size: 0.75rem;
-            color: rgba(255,255,255,0.6);
-            text-transform: uppercase;
-        }
-
-        .filter-group input, .filter-group select {
-            padding: 8px 12px;
-            border-radius: 6px;
-            border: 1px solid rgba(255,255,255,0.2);
-            background: rgba(0,0,0,0.3);
-            color: white;
-            font-family: inherit;
-            font-size: 0.9rem;
-        }
-
-        .filter-group input:focus, .filter-group select:focus {
-            outline: none;
-            border-color: var(--accent-color);
-        }
-
-        /* Type Filter Pills */
-        .type-filters {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
-        .type-pill {
-            padding: 6px 12px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 0.8rem;
-            user-select: none;
-            transition: all 0.2s;
-            border: 1px solid transparent;
-        }
-
-        .type-pill.active {
-            font-weight: 600;
-        }
-
-        .pill-all { background: rgba(255,255,255,0.1); }
-        .pill-all.active { background: var(--accent-color); color: #000; }
-
-        .pill-info { background: rgba(16, 185, 129, 0.2); border-color: var(--success-color); }
-        .pill-info.active { background: var(--success-color); color: #000; }
-
-        .pill-warn { background: rgba(245, 158, 11, 0.2); border-color: var(--warn-color); }
-        .pill-warn.active { background: var(--warn-color); color: #000; }
-
-        .pill-error { background: rgba(239, 68, 68, 0.2); border-color: var(--error-color); }
-        .pill-error.active { background: var(--error-color); color: #fff; }
-
-        .pill-debug { background: rgba(167, 139, 250, 0.2); border-color: var(--debug-color); }
-        .pill-debug.active { background: var(--debug-color); color: #000; }
+        .pill:hover { background: rgba(255,255,255,0.1); }
+        .pill.active { font-weight: 700; }
+        .pill[data-t="all"].active { background: var(--primary); color: #000; }
+        .pill[data-t="info"].active { background: var(--info-color); color: #000; }
+        .pill[data-t="warn"].active { background: var(--warn-color); color: #000; }
+        .pill[data-t="error"].active { background: var(--error-color); color: #fff; }
+        .pill[data-t="debug"].active { background: var(--debug-color); color: #000; }
 
         /* Stats */
         .stats {
-            display: flex;
-            gap: 15px;
-            font-size: 0.85rem;
-            color: rgba(255,255,255,0.7);
-            margin-left: auto;
+            margin-left: auto; display: flex; gap: 14px;
+            font-size: 0.82rem; color: var(--text-muted);
         }
-
-        .stats span { display: flex; align-items: center; gap: 5px; }
+        .stats span { display: flex; align-items: center; gap: 4px; }
+        .stats .num { color: var(--text-main); font-weight: 600; }
 
         /* ===== LOG VIEWER ===== */
-        #logViewer {
+        .log-panel {
             flex: 1;
-            background: var(--log-bg);
-            border-radius: 12px;
-            padding: 0;
-            overflow-y: auto;
-            font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 0.85rem;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: var(--bg-panel);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
         }
 
+        .log-scroll {
+            flex: 1;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,255,255,0.15) transparent;
+        }
+        .log-scroll::-webkit-scrollbar { width: 6px; }
+        .log-scroll::-webkit-scrollbar-track { background: transparent; }
+        .log-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+
+        /* Log Lines */
         .log-line {
-            padding: 6px 15px;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-            line-height: 1.4;
-            display: flex;
+            display: grid;
+            grid-template-columns: 70px 60px 1fr;
+            gap: 8px;
+            padding: 7px 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.82rem;
+            line-height: 1.5;
+            align-items: baseline;
+        }
+        .log-line:hover { background: rgba(255,255,255,0.03); }
+
+        .l-time { color: rgba(255,255,255,0.35); font-size: 0.78rem; white-space: nowrap; }
+        .l-tag {
+            font-weight: 700; font-size: 0.72rem; text-align: center;
+            padding: 1px 6px; border-radius: 4px; white-space: nowrap;
+        }
+        .l-msg { color: #cbd5e1; word-break: break-word; }
+
+        /* Tag Colors */
+        .tag-info  { color: var(--info-color);  background: rgba(16,185,129,0.12); }
+        .tag-warn  { color: var(--warn-color);  background: rgba(245,158,11,0.12); }
+        .tag-error { color: var(--error-color); background: rgba(239,68,68,0.15); }
+        .tag-debug { color: var(--debug-color); background: rgba(167,139,250,0.12); }
+        .tag-other { color: var(--text-muted);  background: rgba(255,255,255,0.06); }
+
+        /* Error line highlight */
+        .log-line.line-error { background: rgba(239,68,68,0.06); }
+        .log-line.line-warn  { background: rgba(245,158,11,0.04); }
+
+        /* States */
+        .state-box {
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; padding: 60px 20px; color: var(--text-muted);
             gap: 10px;
         }
+        .state-box i { font-size: 2.5rem; opacity: 0.4; }
+        .state-box p { font-size: 0.95rem; }
 
-        .log-line:hover {
-            background: rgba(255,255,255,0.03);
-        }
-
-        .log-time {
-            color: rgba(255,255,255,0.4);
-            white-space: nowrap;
+        /* Load More */
+        .load-more {
+            text-align: center; padding: 12px;
+            border-top: 1px solid rgba(255,255,255,0.06);
             flex-shrink: 0;
         }
-
-        .log-type {
-            font-weight: 600;
-            width: 55px;
-            text-align: center;
-            flex-shrink: 0;
+        .load-more button {
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+            color: var(--primary); padding: 8px 24px; border-radius: 8px;
+            cursor: pointer; font-family: inherit; font-size: 0.85rem;
+            transition: all 0.2s;
         }
+        .load-more button:hover { background: rgba(0,242,170,0.1); }
 
-        .log-msg {
-            color: #cbd5e1;
-            word-break: break-word;
+        /* Auto-refresh indicator */
+        .refresh-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--primary); display: inline-block;
+            animation: blink 2s infinite;
         }
+        @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-        .type-info { color: var(--success-color); }
-        .type-warn { color: var(--warn-color); }
-        .type-error { color: var(--error-color); }
-        .type-debug { color: var(--debug-color); }
-        .type-other { color: rgba(255,255,255,0.5); }
-
-        .loading, .empty-state {
-            text-align: center;
-            padding: 50px;
-            color: rgba(255,255,255,0.5);
+        /* Responsive */
+        @media (max-width: 768px) {
+            body { padding: 12px; }
+            .header { padding: 12px 16px; flex-direction: column; gap: 10px; }
+            .toolbar { flex-direction: column; align-items: stretch; }
+            .toolbar input[type="text"] { width: 100%; }
+            .stats { margin-left: 0; justify-content: center; }
+            .log-line { grid-template-columns: 55px 50px 1fr; gap: 6px; padding: 6px 10px; font-size: 0.75rem; }
         }
-
-        .empty-state i { font-size: 2rem; margin-bottom: 10px; display: block; }
     </style>
 </head>
 <body>
-    <header>
-        <h1><i class="fas fa-file-alt"></i> Full System Logs</h1>
-        <div style="display: flex; gap: 10px;">
-            <button onclick="fetchLogs()" class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
-            <button onclick="clearLogsFile()" class="btn" style="border-color: var(--error-color); color: var(--error-color);"><i class="fas fa-trash"></i> DELETE</button>
-            <a href="/" class="btn btn-primary"><i class="fas fa-arrow-left"></i> Back</a>
-        </div>
-    </header>
-
-    <!-- Filter Toolbar -->
-    <div class="filter-bar">
-        <div class="filter-group">
-            <label>Date</label>
-            <input type="date" id="filterDate">
-        </div>
-
-        <div class="filter-group">
-            <label>Log Type</label>
-            <div class="type-filters">
-                <span class="type-pill pill-all active" data-type="all" onclick="setTypeFilter(this)">ALL</span>
-                <span class="type-pill pill-info" data-type="info" onclick="setTypeFilter(this)"><i class="fas fa-info-circle"></i> INFO</span>
-                <span class="type-pill pill-warn" data-type="warn" onclick="setTypeFilter(this)"><i class="fas fa-exclamation-triangle"></i> WARN</span>
-                <span class="type-pill pill-error" data-type="error" onclick="setTypeFilter(this)"><i class="fas fa-times-circle"></i> ERROR</span>
-                <span class="type-pill pill-debug" data-type="debug" onclick="setTypeFilter(this)"><i class="fas fa-bug"></i> DEBUG</span>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <h1><i class="fas fa-scroll"></i> System Logs</h1>
+            </div>
+            <div class="header-right">
+                <button onclick="fetchLogs()" class="btn" id="btnRefresh"><i class="fas fa-sync-alt"></i> Refresh</button>
+                <button onclick="toggleAutoRefresh()" class="btn" id="btnAuto"><span class="refresh-dot"></span> Auto: ON</button>
+                <button onclick="clearLogsFile()" class="btn btn-danger" id="btnDelete"><i class="fas fa-trash"></i> Delete All</button>
+                <a href="/" class="btn btn-primary"><i class="fas fa-arrow-left"></i> Dashboard</a>
             </div>
         </div>
 
-        <div class="filter-group">
-            <label>Search</label>
-            <input type="text" id="filterSearch" placeholder="Search logs..." oninput="applyFilters()">
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <div class="toolbar-group">
+                <label>Date</label>
+                <input type="date" id="filterDate">
+            </div>
+
+            <div class="toolbar-group">
+                <label>Type</label>
+                <div class="pills">
+                    <span class="pill active" data-t="all" onclick="setType(this)">ALL</span>
+                    <span class="pill" data-t="info" onclick="setType(this)">INFO</span>
+                    <span class="pill" data-t="warn" onclick="setType(this)">WARN</span>
+                    <span class="pill" data-t="error" onclick="setType(this)">ERROR</span>
+                    <span class="pill" data-t="debug" onclick="setType(this)">DEBUG</span>
+                </div>
+            </div>
+
+            <div class="toolbar-group">
+                <label>Search</label>
+                <input type="text" id="filterSearch" placeholder="Search logs..." oninput="applyFilters()">
+            </div>
+
+            <div class="stats">
+                <span><i class="fas fa-database"></i> <span class="num" id="statTotal">0</span> total</span>
+                <span><i class="fas fa-eye"></i> <span class="num" id="statShown">0</span> shown</span>
+            </div>
         </div>
 
-        <div class="stats">
-            <span><i class="fas fa-list"></i> <span id="statTotal">0</span> total</span>
-            <span><i class="fas fa-filter"></i> <span id="statFiltered">0</span> shown</span>
+        <!-- Log Panel -->
+        <div class="log-panel">
+            <div class="log-scroll" id="logScroll">
+                <div class="state-box" id="stateBox">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Loading logs...</p>
+                </div>
+            </div>
+            <div class="load-more" id="loadMore" style="display:none;">
+                <button onclick="showMore()">
+                    <i class="fas fa-chevron-down"></i> Load More (<span id="remainCount">0</span> remaining)
+                </button>
+            </div>
         </div>
-    </div>
-
-    <div id="logViewer">
-        <div class="loading"><i class="fas fa-spinner fa-spin"></i> Loading logs...</div>
     </div>
 
     <script>
-        let allLogs = []; // Raw logs array
-        let currentTypeFilter = 'all';
+    // =============================================
+    // STATE
+    // =============================================
+    var allLogs = [];          // All parsed log entries
+    var filtered = [];         // After filters applied
+    var typeFilter = 'all';
+    var PAGE_SIZE = 300;       // Show 300 logs at a time
+    var showCount = PAGE_SIZE; // How many to display
+    var autoRefresh = true;
+    var refreshTimer = null;
+    var REFRESH_INTERVAL = 5000;
 
-        async function fetchLogs() {
-            const viewer = document.getElementById('logViewer');
-            // Only show loading if first load
-            if (viewer.innerHTML.includes('Loading logs') && allLogs.length === 0) {
-                 viewer.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Loading logs...</div>';
-            }
-            
-            try {
-                const response = await fetch('/api/full_logs_file');
-                if (!response.ok) throw new Error('Failed to load logs');
-                
-                const text = await response.text();
-                
-                if (text.trim() === "") {
-                    viewer.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i>Log file is empty.</div>';
-                    allLogs = [];
-                    updateStats();
-                    return;
-                }
+    // =============================================
+    // FETCH & PARSE
+    // =============================================
+    async function fetchLogs() {
+        var btn = document.getElementById('btnRefresh');
+        btn.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Loading...';
+        btn.disabled = true;
 
-                // Parse logs into structured data
-                allLogs = text.trim().split('\n').map(line => parseLine(line)).filter(l => l);
-                applyFilters();
-                
-            } catch (error) {
-                viewer.innerHTML = `<div class="empty-state" style="color: var(--error-color);">
-                    <i class="fas fa-exclamation-triangle"></i> Error loading logs: ${error.message}
-                </div>`;
-            }
-        }
+        try {
+            var resp = await fetch('/api/full_logs_file');
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
 
-        function parseLine(line) {
-            // Expected format: [2023-10-27 10:30:45] [INFO] Message here
-            // or: [2023-10-27 10:30:45] ✅ ESP32 Reconnected!
-            const match = line.match(/^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]\s*(.*)$/);
-            if (!match) return null;
-
-            const timestamp = match[1];
-            let rest = match[2];
-
-            // Detect type
-            let type = 'other';
-            if (rest.includes('[ERROR]') || rest.includes('❌')) type = 'error';
-            else if (rest.includes('[WARN]') || rest.includes('⚠️')) type = 'warn';
-            else if (rest.includes('[INFO]') || rest.includes('✅') || rest.includes('📝')) type = 'info';
-            else if (rest.includes('[DEBUG]')) type = 'debug';
-
-            return { timestamp, type, message: rest, date: timestamp.split(' ')[0] };
-        }
-
-        function setTypeFilter(el) {
-            document.querySelectorAll('.type-pill').forEach(p => p.classList.remove('active'));
-            el.classList.add('active');
-            currentTypeFilter = el.dataset.type;
-            applyFilters();
-        }
-
-        function applyFilters() {
-            const dateFilter = document.getElementById('filterDate').value;
-            const searchFilter = document.getElementById('filterSearch').value.toLowerCase();
-
-            let filtered = allLogs;
-
-            // Filter by date
-            if (dateFilter) {
-                filtered = filtered.filter(log => log.date === dateFilter);
-            }
-
-            // Filter by type
-            if (currentTypeFilter !== 'all') {
-                filtered = filtered.filter(log => log.type === currentTypeFilter);
-            }
-
-            // Filter by search
-            if (searchFilter) {
-                filtered = filtered.filter(log => log.message.toLowerCase().includes(searchFilter));
-            }
-
-            renderLogs(filtered);
-            updateStats(filtered.length);
-        }
-
-        function renderLogs(logs) {
-            const viewer = document.getElementById('logViewer');
-
-            if (logs.length === 0) {
-                viewer.innerHTML = '<div class="empty-state"><i class="fas fa-filter"></i>No logs match your filters.</div>';
+            var text = await resp.text();
+            if (!text || text.trim() === '') {
+                allLogs = [];
+                filtered = [];
+                renderState('empty');
+                updateStats();
                 return;
             }
 
-            // Render as structured lines (newest first for readability)
-            const html = [...logs].reverse().map(log => {
-                const typeClass = 'type-' + log.type;
-                const typeLabel = log.type.toUpperCase();
-                const safeMsg = escapeHtml(log.message);
-
-                return `<div class="log-line">
-                    <span class="log-time">${log.timestamp.split(' ')[1]}</span>
-                    <span class="log-type ${typeClass}">${typeLabel}</span>
-                    <span class="log-msg">${safeMsg}</span>
-                </div>`;
-            }).join('');
-
-            viewer.innerHTML = html;
-        }
-
-        function escapeHtml(text) {
-            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        }
-
-        function updateStats(filteredCount = 0) {
-            document.getElementById('statTotal').textContent = allLogs.length;
-            document.getElementById('statFiltered').textContent = filteredCount;
-        }
-
-        async function clearLogsFile() {
-            if(!confirm("Are you sure you want to DELETE all logs? This cannot be undone.")) return;
-             
-            try {
-                const res = await fetch('/api/clear_logs', { method: 'POST' });
-                if(res.ok) {
-                    fetchLogs(); // Reload
-                } else {
-                    alert("Failed to clear logs");
-                }
-            } catch(e) {
-                alert("Error: " + e.message);
+            allLogs = [];
+            var lines = text.trim().split('\n');
+            for (var i = 0; i < lines.length; i++) {
+                var entry = parseLine(lines[i]);
+                if (entry) allLogs.push(entry);
             }
+
+            applyFilters();
+
+        } catch (err) {
+            renderState('error', err.message);
+        } finally {
+            btn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
+            btn.disabled = false;
+        }
+    }
+
+    function parseLine(line) {
+        // Format: [2023-10-27 10:30:45] [INFO] Message...
+        // or: [2023-10-27 10:30:45] ✅ ESP32 Reconnected!
+        var m = line.match(/^\[(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})\]\s*(.*)$/);
+        if (!m) return null;
+
+        var msg = m[3];
+        var type = 'other';
+        if (msg.indexOf('[ERROR]') >= 0 || msg.indexOf('❌') >= 0) type = 'error';
+        else if (msg.indexOf('[WARN]') >= 0 || msg.indexOf('⚠') >= 0) type = 'warn';
+        else if (msg.indexOf('[INFO]') >= 0 || msg.indexOf('✅') >= 0 || msg.indexOf('📝') >= 0) type = 'info';
+        else if (msg.indexOf('[DEBUG]') >= 0) type = 'debug';
+
+        return { date: m[1], time: m[2], type: type, msg: msg };
+    }
+
+    // =============================================
+    // FILTERS
+    // =============================================
+    function setType(el) {
+        document.querySelectorAll('.pill').forEach(function(p) { p.classList.remove('active'); });
+        el.classList.add('active');
+        typeFilter = el.getAttribute('data-t');
+        showCount = PAGE_SIZE;
+        applyFilters();
+    }
+
+    function applyFilters() {
+        var dateVal = document.getElementById('filterDate').value;
+        var searchVal = document.getElementById('filterSearch').value.toLowerCase();
+
+        filtered = allLogs;
+
+        if (dateVal) {
+            filtered = filtered.filter(function(l) { return l.date === dateVal; });
+        }
+        if (typeFilter !== 'all') {
+            filtered = filtered.filter(function(l) { return l.type === typeFilter; });
+        }
+        if (searchVal) {
+            filtered = filtered.filter(function(l) { return l.msg.toLowerCase().indexOf(searchVal) >= 0; });
         }
 
-        // Event listeners
-        document.getElementById('filterDate').addEventListener('change', applyFilters);
+        renderLogs();
+        updateStats();
+    }
 
-        // Load on start
-        window.onload = fetchLogs;
+    // =============================================
+    // RENDER
+    // =============================================
+    function renderLogs() {
+        var scroll = document.getElementById('logScroll');
+        var loadMore = document.getElementById('loadMore');
 
-        // Auto-refresh every 5 seconds
-        setInterval(fetchLogs, 5000);
+        if (filtered.length === 0) {
+            renderState(allLogs.length === 0 ? 'empty' : 'no-match');
+            loadMore.style.display = 'none';
+            return;
+        }
+
+        // Save scroll position
+        var wasAtTop = scroll.scrollTop < 50;
+        var prevScroll = scroll.scrollTop;
+
+        // Show newest first, limited by showCount
+        var reversed = [];
+        for (var i = filtered.length - 1; i >= 0; i--) {
+            reversed.push(filtered[i]);
+        }
+
+        var toShow = reversed.slice(0, showCount);
+        var remaining = reversed.length - toShow.length;
+
+        var html = '';
+        for (var j = 0; j < toShow.length; j++) {
+            var log = toShow[j];
+            var lineClass = '';
+            if (log.type === 'error') lineClass = ' line-error';
+            else if (log.type === 'warn') lineClass = ' line-warn';
+
+            html += '<div class="log-line' + lineClass + '">' +
+                '<span class="l-time">' + log.time + '</span>' +
+                '<span class="l-tag tag-' + log.type + '">' + log.type.toUpperCase() + '</span>' +
+                '<span class="l-msg">' + escapeHtml(log.msg) + '</span>' +
+                '</div>';
+        }
+
+        scroll.innerHTML = html;
+
+        // Restore scroll position
+        if (!wasAtTop) {
+            scroll.scrollTop = prevScroll;
+        }
+
+        // Load more button
+        if (remaining > 0) {
+            loadMore.style.display = 'block';
+            document.getElementById('remainCount').textContent = remaining;
+        } else {
+            loadMore.style.display = 'none';
+        }
+    }
+
+    function renderState(type, details) {
+        var scroll = document.getElementById('logScroll');
+        var icon, text;
+
+        if (type === 'empty') {
+            icon = 'fas fa-inbox'; text = 'Log file is empty';
+        } else if (type === 'no-match') {
+            icon = 'fas fa-filter'; text = 'No logs match your filters';
+        } else if (type === 'error') {
+            icon = 'fas fa-exclamation-triangle'; text = 'Error: ' + (details || 'Unknown');
+        }
+
+        scroll.innerHTML = '<div class="state-box"><i class="' + icon + '"></i><p>' + text + '</p></div>';
+    }
+
+    function escapeHtml(s) {
+        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function updateStats() {
+        document.getElementById('statTotal').textContent = allLogs.length;
+        document.getElementById('statShown').textContent =
+            Math.min(showCount, filtered.length) + '/' + filtered.length;
+    }
+
+    function showMore() {
+        showCount += PAGE_SIZE;
+        renderLogs();
+        updateStats();
+    }
+
+    // =============================================
+    // AUTO REFRESH
+    // =============================================
+    function toggleAutoRefresh() {
+        autoRefresh = !autoRefresh;
+        var btn = document.getElementById('btnAuto');
+        if (autoRefresh) {
+            btn.innerHTML = '<span class="refresh-dot"></span> Auto: ON';
+            startAutoRefresh();
+        } else {
+            btn.innerHTML = '<i class="fas fa-pause"></i> Auto: OFF';
+            stopAutoRefresh();
+        }
+    }
+
+    function startAutoRefresh() {
+        stopAutoRefresh();
+        refreshTimer = setInterval(fetchLogs, REFRESH_INTERVAL);
+    }
+
+    function stopAutoRefresh() {
+        if (refreshTimer) {
+            clearInterval(refreshTimer);
+            refreshTimer = null;
+        }
+    }
+
+    // =============================================
+    // DELETE LOGS
+    // =============================================
+    async function clearLogsFile() {
+        if (!confirm('⚠️ Delete ALL logs? This cannot be undone.')) return;
+
+        var btn = document.getElementById('btnDelete');
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+        btn.disabled = true;
+
+        try {
+            var res = await fetch('/api/clear_logs', { method: 'POST' });
+            if (res.ok) {
+                allLogs = [];
+                filtered = [];
+                renderState('empty');
+                updateStats();
+            } else {
+                alert('Failed to clear logs (HTTP ' + res.status + ')');
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        } finally {
+            btn.innerHTML = '<i class="fas fa-trash"></i> Delete All';
+            btn.disabled = false;
+        }
+    }
+
+    // =============================================
+    // INIT
+    // =============================================
+    // Set default date to today
+    (function() {
+        var now = new Date();
+        var y = now.getFullYear();
+        var m = String(now.getMonth() + 1).padStart(2, '0');
+        var d = String(now.getDate()).padStart(2, '0');
+        document.getElementById('filterDate').value = y + '-' + m + '-' + d;
+    })();
+
+    document.getElementById('filterDate').addEventListener('change', function() {
+        showCount = PAGE_SIZE;
+        applyFilters();
+    });
+
+    fetchLogs();
+    startAutoRefresh();
     </script>
 </body>
 </html>
