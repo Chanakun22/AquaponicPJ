@@ -29,6 +29,8 @@ static IPAddress _brokerIp;
 static bool _isIpResolved = false;
 static uint8_t _connectionFailCount = 0;
 static const uint8_t MAX_FAIL_BEFORE_RERESOLUTION = 3; // Re-resolve mDNS หลังล้มเหลว 3 ครั้ง
+static unsigned long _reconnectInterval = 5000;          // Backoff interval (เริ่ม 5s, เพิ่มถึง 60s)
+static const unsigned long MAX_RECONNECT_INTERVAL = 60000; // สูงสุด 60 วินาที
 static void _onMqttMessage(char* topic, byte* payload, unsigned int length);
 static bool _reconnect(void);
 static void _publishSensorConfig(void);
@@ -51,9 +53,9 @@ static bool _resolveBrokerIp() {
         // Continue anyway, maybe it was started in wifiConn?
     }
 
-    // Query mDNS with SHORT timeout (1000ms) to avoid blocking sensors
-    // Default timeout is ~5 seconds which would block sensor readings
-    IPAddress ip = MDNS.queryHost(LOCAL_MQTT_HOSTNAME, 1000);
+    // Query mDNS with SHORT timeout (200ms) to minimize blocking of Networking task
+    // ลดจาก 1000ms เหลือ 200ms เพื่อลด blocking time เมื่อ Pi offline
+    IPAddress ip = MDNS.queryHost(LOCAL_MQTT_HOSTNAME, 200);
     
     if (ip != IPAddress(0, 0, 0, 0)) {
         _brokerIp = ip;
@@ -203,10 +205,15 @@ void localMqttLoop(void) {
 
     if (!_localMqtt.connected()) {
         unsigned long now = millis();
-        if (now - _lastReconnectAttempt > 5000) {
+        if (now - _lastReconnectAttempt > _reconnectInterval) {
             _lastReconnectAttempt = now;
             if (_reconnect()) {
                 _lastReconnectAttempt = 0;
+                _reconnectInterval = 5000; // รีเซ็ต backoff เมื่อเชื่อมต่อสำเร็จ
+            } else {
+                // Exponential backoff: 5s -> 10s -> 20s -> 40s -> 60s (max)
+                _reconnectInterval = min(_reconnectInterval * 2, MAX_RECONNECT_INTERVAL);
+                LOG_DEBUG("Next reconnect in %lu ms", _reconnectInterval);
             }
         }
     } else {

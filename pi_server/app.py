@@ -186,55 +186,58 @@ def get_pi_temp():
 import sqlite3
 
 DB_FILE = "aquaponics.db"
+db_lock = threading.Lock()  # ป้องกัน concurrent write จาก MQTT Thread + Web Thread
 
 def init_db():
-    try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        
-        # Sensor Data Table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS sensors (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                water_temp REAL,
-                air_temp REAL,
-                humidity REAL,
-                tds REAL,
-                ph REAL,
-                light REAL
-            )
-        ''')
-        
-        # Settings History Table (New)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS settings_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                settings_json TEXT
-            )
-        ''')
-        
-        conn.commit()
-        conn.close()
-        print("✅ Database initialized")
-    except Exception as e:
-        print(f"❌ Database Error: {e}")
+    with db_lock:
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            
+            # Sensor Data Table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS sensors (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    water_temp REAL,
+                    air_temp REAL,
+                    humidity REAL,
+                    tds REAL,
+                    ph REAL,
+                    light REAL
+                )
+            ''')
+            
+            # Settings History Table (New)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS settings_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    settings_json TEXT
+                )
+            ''')
+            
+            conn.commit()
+            conn.close()
+            print("✅ Database initialized")
+        except Exception as e:
+            print(f"❌ Database Error: {e}")
 
 # Initialize DB on start
 init_db()
 
 def save_settings_to_db(settings):
     """Save settings snapshot to database"""
-    try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        cursor.execute('INSERT INTO settings_history (settings_json) VALUES (?)', (json.dumps(settings),))
-        conn.commit()
-        conn.close()
-        # print("💾 Settings saved to DB history")
-    except Exception as e:
-        print(f"❌ Failed to save settings to DB: {e}")
+    with db_lock:
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute('INSERT INTO settings_history (settings_json) VALUES (?)', (json.dumps(settings),))
+            conn.commit()
+            conn.close()
+            # print("💾 Settings saved to DB history")
+        except Exception as e:
+            print(f"❌ Failed to save settings to DB: {e}")
 
 def save_settings(settings):
     """Save settings to JSON file and Database"""
@@ -353,26 +356,27 @@ def save_data_to_db(data):
     if now - last_db_save < 60: # 60 seconds interval
         return
 
-    try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO sensors (water_temp, air_temp, humidity, tds, ph, light)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (
-            data.get("water_temp", 0),
-            data.get("air_temp", 0),
-            data.get("humidity", 0),
-            data.get("tds", 0),
-            data.get("ph", 0),
-            data.get("light", 0)
-        ))
-        conn.commit()
-        conn.close()
-        last_db_save = now
-        # print("💾 Data saved to DB") 
-    except Exception as e:
-        print(f"DB Insert Error: {e}")
+    with db_lock:
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO sensors (water_temp, air_temp, humidity, tds, ph, light)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (
+                data.get("water_temp", 0),
+                data.get("air_temp", 0),
+                data.get("humidity", 0),
+                data.get("tds", 0),
+                data.get("ph", 0),
+                data.get("light", 0)
+            ))
+            conn.commit()
+            conn.close()
+            last_db_save = now
+            # print("💾 Data saved to DB") 
+        except Exception as e:
+            print(f"DB Insert Error: {e}")
 
 # === Start MQTT in Background Thread ===
 mqtt_client = None  # Global reference for publishing
@@ -630,21 +634,22 @@ def clear_logs_file():
 def get_history():
     global app_settings
     try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        
-        # Read graph_days from settings (default 3)
-        days = app_settings.get("display", {}).get("graph_days", 3)
-        limit = days * 24 * 60  # 1 record per minute
-        
-        cursor.execute('''
-            SELECT timestamp, water_temp, air_temp, humidity, tds, ph, light
-            FROM sensors 
-            ORDER BY id DESC 
-            LIMIT ?
-        ''', (limit,))
-        rows = cursor.fetchall()
-        conn.close()
+        with db_lock:
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            
+            # Read graph_days from settings (default 3)
+            days = app_settings.get("display", {}).get("graph_days", 3)
+            limit = days * 24 * 60  # 1 record per minute
+            
+            cursor.execute('''
+                SELECT timestamp, water_temp, air_temp, humidity, tds, ph, light
+                FROM sensors 
+                ORDER BY id DESC 
+                LIMIT ?
+            ''', (limit,))
+            rows = cursor.fetchall()
+            conn.close()
         
         # Reverse to chronological order (oldest first)
         rows.reverse()

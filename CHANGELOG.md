@@ -6,6 +6,16 @@ All notable changes to the **Smart Aquaponics AI** project will be documented in
 
 - Deployment automation scripts (`setup.sh`, `aquaponics.service`).
 
+## [2026-02-11] - Bug Fixes (mDNS Blocking & SQLite Threading)
+
+### Fixed
+
+- **fix: mDNS Blocking (`localMqtt.cpp`):**
+  - ลด mDNS query timeout จาก 1000ms → 200ms เพื่อลด blocking time เมื่อ Pi offline
+  - เพิ่ม Exponential Backoff (5s → 10s → 20s → 40s → 60s) สำหรับ reconnect interval เมื่อ Pi หาไม่เจอ ช่วยลดภาระของ Networking Task
+- **fix: SQLite Threading (`pi_server/app.py`):**
+  - เพิ่ม `threading.Lock()` (`db_lock`) ครอบทุกจุดที่เข้าถึง SQLite (`init_db`, `save_data_to_db`, `save_settings_to_db`, `get_history`) เพื่อป้องกัน `database is locked` error จากการเขียนพร้อมกันของ MQTT Thread กับ Web Thread
+
 ## [2026-02-09-3] - Sensor Toggle & Dashboard Enhancements
 
 ### Added

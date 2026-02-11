@@ -19,10 +19,10 @@ static Adafruit_NeoPixel _neopixel(NEOPIXEL_COUNT, NEOPIXEL_PIN, NEO_GRB + NEO_K
 // ============================================================================
 
 static bool _lightEnabled = false;
-static int _onDay = 0;       // 0=Sun, 1=Mon, ..., 6=Sat
+static int _onDay = 0;       // 0=Sun, 1=Mon, ..., 6=Sat, 7=Everyday
 static int _onHour = 0;
 static int _onMinute = 0;
-static int _offDay = 0;
+static int _offDay = 0;      // 0=Sun, 1=Mon, ..., 6=Sat, 7=Everyday
 static int _offHour = 0;
 static int _offMinute = 0;
 static bool _currentState = false;
@@ -55,18 +55,68 @@ static int _toWeekMinutes(int day, int hour, int minute) {
 }
 
 /**
- * @brief ตรวจสอบว่าเวลาปัจจุบันอยู่ในช่วง schedule หรือไม่ (รองรับข้ามหลายวัน)
+ * @brief แปลง hour+minute เป็น "day minutes" (0-1439)
+ */
+static int _toDayMinutes(int hour, int minute) {
+    return hour * 60 + minute;
+}
+
+/**
+ * @brief ตรวจสอบว่าเวลาปัจจุบันอยู่ในช่วง schedule หรือไม่
+ * รองรับ day=7 (Everyday) และข้ามหลายวัน
  */
 static bool _isInSchedule(int currentDay, int currentHour, int currentMinute) {
+    // Case 1: Both Everyday (day=7) - daily schedule, compare time only
+    if (_onDay == 7 && _offDay == 7) {
+        int currentMin = _toDayMinutes(currentHour, currentMinute);
+        int onMin = _toDayMinutes(_onHour, _onMinute);
+        int offMin = _toDayMinutes(_offHour, _offMinute);
+        
+        if (onMin <= offMin) {
+            // Normal: e.g. 06:00 - 18:00
+            return (currentMin >= onMin && currentMin < offMin);
+        } else {
+            // Overnight: e.g. 22:00 - 06:00
+            return (currentMin >= onMin || currentMin < offMin);
+        }
+    }
+    
+    // Case 2: ON=Everyday, OFF=specific day
+    if (_onDay == 7) {
+        int currentMin = _toDayMinutes(currentHour, currentMinute);
+        int onMin = _toDayMinutes(_onHour, _onMinute);
+        
+        // ON every day at onTime, OFF only on specific day
+        if (currentDay == _offDay && currentMin >= _toDayMinutes(_offHour, _offMinute)) {
+            return false;  // Past OFF time on OFF day
+        }
+        return (currentMin >= onMin);
+    }
+    
+    // Case 3: ON=specific day, OFF=Everyday
+    if (_offDay == 7) {
+        int currentMin = _toDayMinutes(currentHour, currentMinute);
+        int offMin = _toDayMinutes(_offHour, _offMinute);
+        int currentWeek = _toWeekMinutes(currentDay, currentHour, currentMinute);
+        int onWeek = _toWeekMinutes(_onDay, _onHour, _onMinute);
+        
+        // OFF every day at offTime, ON only on specific day
+        if (currentMin >= offMin) {
+            return false;  // Past OFF time today
+        }
+        return (currentWeek >= onWeek);
+    }
+    
+    // Case 4: Both specific days - original week-based logic
     int current = _toWeekMinutes(currentDay, currentHour, currentMinute);
     int on = _toWeekMinutes(_onDay, _onHour, _onMinute);
     int off = _toWeekMinutes(_offDay, _offHour, _offMinute);
     
     if (on <= off) {
-        // ช่วงปกติ (เช่น จ.16:00 - พ.16:00)
+        // Normal range (e.g. Mon 16:00 - Wed 16:00)
         return (current >= on && current < off);
     } else {
-        // ช่วงข้ามสัปดาห์ (เช่น ศ.16:00 - จ.16:00)
+        // Wrap around week (e.g. Fri 16:00 - Mon 16:00)
         return (current >= on || current < off);
     }
 }
@@ -129,12 +179,12 @@ void lightCtrlLoop(void) {
     }
     
     // DEBUG: แสดงเวลาปัจจุบัน
-    static const char* dayNames[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+    static const char* dayNames[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Every"};
     if (showDebug) {
         LOG_DEBUG("Now: %s %02d:%02d | ON: %s %02d:%02d | OFF: %s %02d:%02d",
                   dayNames[timeinfo.tm_wday], timeinfo.tm_hour, timeinfo.tm_min,
-                  dayNames[_onDay], _onHour, _onMinute,
-                  dayNames[_offDay], _offHour, _offMinute);
+                  (_onDay <= 7) ? dayNames[_onDay] : "?", _onHour, _onMinute,
+                  (_offDay <= 7) ? dayNames[_offDay] : "?", _offHour, _offMinute);
     }
     
     // ตรวจสอบว่าเวลาปัจจุบันอยู่ใน schedule หรือไม่
@@ -206,9 +256,9 @@ void lightCtrlSetEnabled(int enabled) {
 }
 
 void lightCtrlSetOnDay(int day) {
-    if (day >= 0 && day <= 6) {
+    if (day >= 0 && day <= 7) {
         _onDay = day;
-        static const char* dayNames[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+        static const char* dayNames[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Everyday"};
         LOG_INFO("Light ON Day: %s (%d)", dayNames[_onDay], _onDay);
     }
 }
@@ -221,9 +271,9 @@ void lightCtrlSetOnTime(const char* onTime) {
 }
 
 void lightCtrlSetOffDay(int day) {
-    if (day >= 0 && day <= 6) {
+    if (day >= 0 && day <= 7) {
         _offDay = day;
-        static const char* dayNames[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+        static const char* dayNames[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Everyday"};
         LOG_INFO("Light OFF Day: %s (%d)", dayNames[_offDay], _offDay);
     }
 }
@@ -236,11 +286,11 @@ void lightCtrlSetOffTime(const char* offTime) {
 }
 
 void lightCtrlPrintSchedule(void) {
-    static const char* dayNames[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+    static const char* dayNames[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Everyday"};
     LOG_INFO("=== Current Light Schedule ===");
     LOG_INFO("  Enabled: %s", _lightEnabled ? "YES" : "NO");
-    LOG_INFO("  ON:  %s %02d:%02d", dayNames[_onDay], _onHour, _onMinute);
-    LOG_INFO("  OFF: %s %02d:%02d", dayNames[_offDay], _offHour, _offMinute);
+    LOG_INFO("  ON:  %s %02d:%02d", (_onDay <= 7) ? dayNames[_onDay] : "?", _onHour, _onMinute);
+    LOG_INFO("  OFF: %s %02d:%02d", (_offDay <= 7) ? dayNames[_offDay] : "?", _offHour, _offMinute);
     LOG_INFO("==============================");
 }
 
