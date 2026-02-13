@@ -23,7 +23,7 @@ SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "settin
 
 def load_camera_settings():
     """Load camera settings from settings.json, with defaults."""
-    defaults = {"width": 1280, "height": 720, "framerate": 15}
+    defaults = {"width": 1280, "height": 720, "framerate": 15, "quality": 80}
     try:
         if os.path.exists(SETTINGS_FILE):
             with open(SETTINGS_FILE, "r") as f:
@@ -33,6 +33,7 @@ def load_camera_settings():
                     "width": cam.get("width", defaults["width"]),
                     "height": cam.get("height", defaults["height"]),
                     "framerate": cam.get("framerate", defaults["framerate"]),
+                    "quality": cam.get("quality", defaults["quality"]),
                 }
     except Exception as e:
         print(f"⚠️ Could not load settings: {e}, using defaults")
@@ -43,6 +44,7 @@ PORT = 8081
 WIDTH = cam_settings["width"]
 HEIGHT = cam_settings["height"]
 FRAMERATE = cam_settings["framerate"]
+QUALITY = max(1, min(100, cam_settings["quality"]))  # Clamp 1-100
 
 class StreamingOutput(io.BufferedIOBase):
     """Thread-safe output buffer for MJPEG frames."""
@@ -109,14 +111,19 @@ def main():
     print("=========================================")
     print("  📸 Aquaponics Camera Stream (HTTP)")
     print(f"  Resolution: {WIDTH}x{HEIGHT} @ {FRAMERATE}fps")
+    print(f"  JPEG Quality: {QUALITY}%")
     print(f"  Port: {PORT}")
     print("=========================================")
 
     # Initialize camera
     picam2 = Picamera2()
     config = picam2.create_video_configuration(
-        main={"size": (WIDTH, HEIGHT), "format": "RGB888"},
-        controls={"FrameRate": FRAMERATE}
+        main={"size": (WIDTH, HEIGHT)},
+        controls={
+            "FrameRate": FRAMERATE,
+            "AwbEnable": True,
+            "AeEnable": True,
+        }
     )
     picam2.configure(config)
 
@@ -124,10 +131,11 @@ def main():
     output = StreamingOutput()
     StreamingHandler.output = output
 
-    # Start camera with MJPEG encoder
+    # Start camera with MJPEG encoder (quality: higher = better image)
     encoder = MJPEGEncoder()
+    encoder.quality = QUALITY
     picam2.start_recording(encoder, FileOutput(output))
-    print(f"[Camera] Started - imx219 @ {WIDTH}x{HEIGHT}")
+    print(f"[Camera] Started - {WIDTH}x{HEIGHT} q={QUALITY}")
 
     # Start HTTP server
     server = StreamingServer(('0.0.0.0', PORT), StreamingHandler)

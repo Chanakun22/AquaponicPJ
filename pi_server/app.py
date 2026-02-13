@@ -62,7 +62,8 @@ def load_settings():
         "camera": {
             "width": 1280,
             "height": 720,
-            "framerate": 15
+            "framerate": 15,
+            "quality": 80
         }
     }
     try:
@@ -628,6 +629,7 @@ def restart_camera():
         width = int(data.get('width', 1280))
         height = int(data.get('height', 720))
         framerate = int(data.get('framerate', 15))
+        quality = int(data.get('quality', 80))
         
         # Validate
         valid_resolutions = [(640, 480), (1280, 720), (1920, 1080)]
@@ -635,15 +637,18 @@ def restart_camera():
             return jsonify({'status': 'error', 'message': 'Invalid resolution'}), 400
         if framerate < 1 or framerate > 30:
             return jsonify({'status': 'error', 'message': 'FPS must be 1-30'}), 400
+        if quality < 1 or quality > 100:
+            return jsonify({'status': 'error', 'message': 'Quality must be 1-100'}), 400
         
         # Save to settings
         app_settings['camera'] = {
             'width': width,
             'height': height,
-            'framerate': framerate
+            'framerate': framerate,
+            'quality': quality
         }
         save_settings(app_settings)
-        save_log(f"📷 Camera settings updated: {width}x{height} @ {framerate}fps")
+        save_log(f"📷 Camera settings updated: {width}x{height} @ {framerate}fps q={quality}")
         
         # Restart camera server
         import subprocess
@@ -653,11 +658,11 @@ def restart_camera():
             _time.sleep(1)
             cam_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'start_cam.sh')
             subprocess.Popen(['bash', cam_script])
-            print(f"📷 Camera restarted: {width}x{height} @ {framerate}fps")
+            print(f"📷 Camera restarted: {width}x{height} @ {framerate}fps q={quality}")
         except Exception as ex:
             print(f"⚠️ Camera restart error: {ex}")
         
-        return jsonify({'status': 'ok', 'message': f'Camera restarting with {width}x{height} @ {framerate}fps'})
+        return jsonify({'status': 'ok', 'message': f'Camera restarting with {width}x{height} @ {framerate}fps q={quality}'})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
