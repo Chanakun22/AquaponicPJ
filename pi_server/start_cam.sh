@@ -1,17 +1,11 @@
 #!/bin/bash
 
 # Stop any existing camera process
-pkill libcamera-vid
+sudo pkill -f cam_server.py 2>/dev/null
+sudo pkill rpicam-vid 2>/dev/null
+sudo pkill libcamera-vid 2>/dev/null
+sleep 1
 
-# Start libcamera-vid in background
-# --inline: Embeds headers for stream
-# --listen: Waits for connection
-# -t 0: No timeout (run forever)
-# --width 1280 --height 720: 720p Resolution
-# --framerate 15: Save CPU/Bandwidth
-# --codec mjpeg: MJPEG format for browser compatibility
-
-echo "Starting 720p Live Stream..."
-libcamera-vid -t 0 --inline --listen -o tcp://0.0.0.0:8081 --width 1280 --height 720 --framerate 15 --codec mjpeg &
-
-echo "Stream started on port 8081"
+# Start Python MJPEG HTTP server (replaces rpicam-vid TCP which crashes on Trixie)
+echo "Starting Camera Server..."
+python3 "$(dirname "$0")/cam_server.py"

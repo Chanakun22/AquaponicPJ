@@ -100,6 +100,7 @@
         letter-spacing: -0.5px;
         background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
         -webkit-background-clip: text;
+        background-clip: text;
         -webkit-text-fill-color: transparent;
       }
 
@@ -182,7 +183,7 @@
       /* === Main Grid === */
       .dashboard-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         gap: 24px;
       }
 
@@ -260,7 +261,7 @@
       /* === Health/System Section === */
       .system-section {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         gap: 24px;
       }
 
@@ -379,10 +380,21 @@
 
       /* Responsive */
       @media (max-width: 768px) {
-        .header { flex-direction: column; text-align: center; }
-        .status-bar { flex-wrap: wrap; justify-content: center; }
+        body { padding: 12px; }
+        .header { flex-direction: column; text-align: center; padding: 16px; gap: 12px; }
+        .status-bar { flex-wrap: wrap; justify-content: center; gap: 8px; }
+        .status-pill { padding: 6px 10px; font-size: 0.78rem; }
         .connect-bar { flex-direction: column; }
-        .val-main { font-size: 2.8rem; }
+        .val-main { font-size: 2.5rem; }
+        .val-unit { font-size: 1rem; }
+        .card { padding: 16px; border-radius: 16px; }
+        .dashboard-grid { gap: 14px; }
+        .system-section { gap: 14px; }
+        .device-card { padding: 16px; }
+        .brand h1 { font-size: 1.2rem; }
+        .brand i { font-size: 1.5rem; }
+        .info-grid { grid-template-columns: repeat(2, 1fr); }
+        .log-panel { padding: 14px; }
       }
 
       /* Disabled Sensor Badge */
@@ -406,6 +418,8 @@
         letter-spacing: 1px;
       }
     </style>
+    <!-- Socket.IO Client -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   </head>
   <body>
     <div class="container">
@@ -712,27 +726,19 @@
         return "Contaminated!";
       }
 
+      let socket = null;
+      let usingWebSocket = false;
+
       async function connect() {
-        // Auto-use window location if input is empty or just initialized
+        // Auto-use window location if input is empty
         let ip = document.getElementById("ipInput").value.trim();
         
         if (!ip) {
-            // Default to current host if empty
-            ip = window.location.hostname || "localhost";
-            // If running on port 8080 or other, might need to preserve it? 
-            // Usually the API is on same host/port.
-            // Let's assume API is relative to where we are served from.
-            
-            // Actually, if we are serving app.py, the API is at /api
-            // So we can just use relative paths if on same origin.
-            // But to keep existing logic working:
             const port = window.location.port ? `:${window.location.port}` : "";
             ip = `${window.location.protocol}//${window.location.hostname}${port}`;
-            
-            document.getElementById("ipInput").value = window.location.hostname; // Show just hostname in box
+            document.getElementById("ipInput").value = window.location.hostname;
         }
 
-        // Logic to handle full URL or just IP
         if(ip.startsWith("http")) {
              deviceIp = ip;
         } else {
@@ -742,24 +748,80 @@
         document.getElementById("deviceIp").textContent = ip.replace(/https?:\/\//, "");
         addLog("info", `Connecting to ${deviceIp}...`);
 
-        if (updateInterval) clearInterval(updateInterval);
-        fetchData();
-        
-        // Fetch settings and use refresh_sec (default 2 sec)
+        if (updateInterval) { clearInterval(updateInterval); updateInterval = null; }
+
+        // Fetch settings once (device name, etc)
         try {
             const settingsRes = await fetch(`${deviceIp}/api/settings`);
             const settings = await settingsRes.json();
-            const refreshMs = (settings.display?.refresh_sec || 2) * 1000;
-            updateInterval = setInterval(fetchData, refreshMs);
-            addLog("info", `Refresh rate: ${refreshMs/1000}s`);
-            
-            // Apply device_name to header
             const deviceName = settings.display?.device_name || "Aquaponics AI";
             document.getElementById("deviceName").textContent = deviceName;
             document.title = `🌿 ${deviceName}`;
+            
+            // Update sensor disabled state
+            if (settings.sensor_config) {
+                updateSensorDisabledState(settings.sensor_config);
+            }
         } catch(e) {
-            updateInterval = setInterval(fetchData, 2000); // Fallback
+            console.log("Settings fetch failed, using defaults");
         }
+
+        // Try WebSocket first
+        try {
+            if (socket) { socket.disconnect(); }
+            
+            socket = io(deviceIp, {
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionDelay: 2000,
+                reconnectionAttempts: Infinity
+            });
+
+            socket.on('connect', function() {
+                usingWebSocket = true;
+                if (updateInterval) { clearInterval(updateInterval); updateInterval = null; }
+                addLog("info", "⚡ WebSocket connected — real-time mode");
+                setOnline(true);
+                wasOnline = true;
+            });
+
+            socket.on('dashboard_update', function(data) {
+                try {
+                    if (data.sensors) updateSensors(data.sensors);
+                    if (data.health) updateHealth(data.health);
+                    if (data.info) updateInfo(data.info);
+                    if (data.logs) updateLogs(data.logs);
+                    setOnline(true);
+                    wasOnline = true;
+                } catch(e) {
+                    console.error("WS update error:", e);
+                }
+            });
+
+            socket.on('disconnect', function() {
+                addLog("warn", "WebSocket disconnected, reconnecting...");
+                setOnline(false);
+            });
+
+            socket.on('connect_error', function(err) {
+                console.log("WebSocket error, falling back to polling", err.message);
+                if (!usingWebSocket && !updateInterval) {
+                    // WebSocket never connected — fallback to polling
+                    addLog("info", "Using HTTP polling mode");
+                    fallbackToPolling();
+                }
+            });
+
+        } catch(e) {
+            console.log("WebSocket init failed, using polling", e);
+            fallbackToPolling();
+        }
+      }
+
+      function fallbackToPolling() {
+          usingWebSocket = false;
+          fetchData();
+          updateInterval = setInterval(fetchData, 3000);
       }
 
       // Auto-connect on load
@@ -767,25 +829,21 @@
           const currentHost = window.location.hostname;
           if(currentHost) {
               document.getElementById("ipInput").value = currentHost;
-              connect(); // Auto connect
+              connect();
           }
       };
 
       async function fetchData() {
         try {
-          // Fetch sensors
           const sensorsRes = await fetch(`${deviceIp}/api/sensors`, { timeout: 5000 });
           const sensors = await sensorsRes.json();
 
-          // Fetch health
           const healthRes = await fetch(`${deviceIp}/api/health`, { timeout: 5000 });
           const health = await healthRes.json();
 
-          // Fetch info
           const infoRes = await fetch(`${deviceIp}/api/info`, { timeout: 5000 });
           const info = await infoRes.json();
 
-          // Fetch Logs (New!)
           try {
              const logsRes = await fetch(`${deviceIp}/api/logs`, { timeout: 3000 });
              if(logsRes.ok) {
@@ -798,7 +856,7 @@
           updateHealth(health);
           updateInfo(info);
           
-          // Update sensor disabled state from settings
+          // Update sensor disabled state
           try {
             const settingsRes = await fetch(`${deviceIp}/api/settings`, { timeout: 3000 });
             if(settingsRes.ok) {
@@ -807,9 +865,6 @@
             }
           } catch(e) { console.log("Settings fetch for sensor state failed", e); }
           
-          if (!wasOnline) {
-            // addLog("info", "Connected successfully."); // Don't spam local logs if we have remote
-          }
           setOnline(true);
           wasOnline = true;
           

@@ -181,6 +181,16 @@
             color: #666;
         }
 
+        /* === Responsive === */
+        @media (max-width: 768px) {
+            body { padding: 12px; }
+            .header { padding: 10px 14px; border-radius: 10px; }
+            .header h2 { font-size: 1rem; }
+            .btn-back { padding: 6px 10px; font-size: 0.8rem; }
+            .controls { gap: 8px; flex-wrap: wrap; }
+            .btn-control { padding: 10px 14px; font-size: 0.85rem; }
+            .server-info { font-size: 0.7rem; word-break: break-all; }
+        }
     </style>
 </head>
 <body>
@@ -225,31 +235,32 @@
     <script>
         // Get current host IP
         const host = window.location.hostname;
-        const port = "8081"; // Libcamera-vid standard port for http
+        const port = "8081"; // Python MJPEG HTTP server port
         
-        // Full stream URL
-        // Using HTTP allows MJPEG stream
-        const streamUrl = `http://${host}:${port}/stream.mjpg`;
-        // const streamUrl = `http://192.168.1.43:8081`; // Debug
+        // cam_server.py serves proper HTTP MJPEG stream
+        const streamUrl = `http://${host}:${port}/stream`;
 
         document.getElementById("streamUrl").innerText = streamUrl;
         
         const img = document.getElementById("camStream");
         const dot = document.getElementById("statusDot");
         const text = document.getElementById("statusText");
+        let retryTimer = null;
 
         function startStream() {
-            img.src = streamUrl;
+            if (retryTimer) clearTimeout(retryTimer);
+            // Add timestamp to prevent browser caching
+            img.src = streamUrl + "?t=" + Date.now();
             img.style.display = "block";
-            
-            // Assume online if src set, specific error handling below
             setOnline(true);
         }
 
         function handleError() {
-            console.log("Stream Error/Offline");
+            console.log("Stream Error/Offline - retrying in 5s...");
             img.style.display = "none";
             setOnline(false);
+            // Auto-retry (rpicam-vid restarts via loop in start_cam.sh)
+            retryTimer = setTimeout(startStream, 5000);
         }
 
         function setOnline(isOnline) {
@@ -267,9 +278,7 @@
         }
 
         function reloadStream() {
-            // Force reload by adding timestamp
-            img.src = streamUrl + "?t=" + new Date().getTime();
-            img.style.display = "block";
+            startStream();
         }
 
         let isMirrored = false;
@@ -280,9 +289,6 @@
 
         // Auto start
         window.onload = startStream;
-        
-        // Periodically check if image is loading (simple ping)
-        // Note: For MJPEG, onerror usually fires if connection drops
     </script>
 
 </body>

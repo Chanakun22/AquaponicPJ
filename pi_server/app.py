@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, send_file, request
+from flask_socketio import SocketIO, emit
 import paho.mqtt.client as mqtt
 import json
 import threading
@@ -8,6 +9,7 @@ from datetime import datetime, timedelta
 import os
 
 app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 # === Settings File ===
 SETTINGS_FILE = "settings.json"
@@ -56,6 +58,11 @@ def load_settings():
             "cal4_done": False,
             "last_voltage": 0.0,
             "last_ph": 0.0
+        },
+        "camera": {
+            "width": 1280,
+            "height": 720,
+            "framerate": 15
         }
     }
     try:
@@ -611,6 +618,49 @@ def logs_view():
 def graphs_view():
     return send_file('graphs.html')
 
+# === Camera Settings API ===
+@app.route('/api/camera_restart', methods=['POST'])
+def restart_camera():
+    """Save camera settings and restart cam_server.py"""
+    global app_settings
+    try:
+        data = request.get_json()
+        width = int(data.get('width', 1280))
+        height = int(data.get('height', 720))
+        framerate = int(data.get('framerate', 15))
+        
+        # Validate
+        valid_resolutions = [(640, 480), (1280, 720), (1920, 1080)]
+        if (width, height) not in valid_resolutions:
+            return jsonify({'status': 'error', 'message': 'Invalid resolution'}), 400
+        if framerate < 1 or framerate > 30:
+            return jsonify({'status': 'error', 'message': 'FPS must be 1-30'}), 400
+        
+        # Save to settings
+        app_settings['camera'] = {
+            'width': width,
+            'height': height,
+            'framerate': framerate
+        }
+        save_settings(app_settings)
+        save_log(f"📷 Camera settings updated: {width}x{height} @ {framerate}fps")
+        
+        # Restart camera server
+        import subprocess
+        try:
+            subprocess.run(['sudo', 'pkill', '-f', 'cam_server.py'], timeout=5)
+            import time as _time
+            _time.sleep(1)
+            cam_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'start_cam.sh')
+            subprocess.Popen(['bash', cam_script])
+            print(f"📷 Camera restarted: {width}x{height} @ {framerate}fps")
+        except Exception as ex:
+            print(f"⚠️ Camera restart error: {ex}")
+        
+        return jsonify({'status': 'ok', 'message': f'Camera restarting with {width}x{height} @ {framerate}fps'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 @app.route('/api/full_logs_file')
 def get_full_logs_file():
     try:
@@ -695,6 +745,51 @@ def get_history():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+# === WebSocket Support ===
+def build_dashboard_data():
+    """Build combined data payload for WebSocket broadcast"""
+    # Update Pi stats
+    last_data["pi_cpu_percent"] = psutil.cpu_percent()
+    mem = psutil.virtual_memory()
+    last_data["pi_ram_total"] = mem.total
+    last_data["pi_ram_used"] = mem.used
+    last_data["pi_ram_percent"] = mem.percent
+    last_data["pi_temp"] = get_pi_temp()
+    last_data["esp_status"] = "ONLINE" if esp_online else "OFFLINE"
+    last_data["last_seen_sec"] = int(time.time() - last_esp_update) if last_esp_update > 0 else -1
+    
+    return {
+        "sensors": dict(last_data),
+        "health": dict(last_data),
+        "info": {"firmware": "Pi-Server-v2 (Monitoring)", "status": "online"},
+        "logs": list(log_buffer)
+    }
+
+def ws_broadcast():
+    """Background thread: broadcast dashboard data to all WebSocket clients"""
+    print("📡 WebSocket broadcast thread started")
+    while True:
+        socketio.sleep(2)
+        try:
+            data = build_dashboard_data()
+            socketio.emit('dashboard_update', data)
+        except Exception as e:
+            print(f"WS Broadcast Error: {e}")
+
+@socketio.on('connect')
+def handle_ws_connect():
+    """Send initial data when a client connects via WebSocket"""
+    print("🔌 WebSocket client connected")
+    try:
+        data = build_dashboard_data()
+        emit('dashboard_update', data)
+    except Exception as e:
+        print(f"WS Initial send error: {e}")
+
+@socketio.on('disconnect')
+def handle_ws_disconnect():
+    print("🔌 WebSocket client disconnected")
+
 if __name__ == '__main__':
     # Start MQTT Thread
     mqtt_thread = threading.Thread(target=start_mqtt)
@@ -706,6 +801,9 @@ if __name__ == '__main__':
     monitor_thread.daemon = True
     monitor_thread.start()
 
+    # Start WebSocket Broadcast Thread
+    socketio.start_background_task(ws_broadcast)
+
     # Auto-start Camera
     try:
         import subprocess
@@ -714,5 +812,5 @@ if __name__ == '__main__':
     except Exception as e:
         print(f"❌ Camera Start Error: {e}")
     
-    print("🚀 Starting Web Server on port 80...")
-    app.run(host='0.0.0.0', port=80, debug=False)
+    print("🚀 Starting Web Server on port 80 (WebSocket enabled)...")
+    socketio.run(app, host='0.0.0.0', port=80, debug=False, allow_unsafe_werkzeug=True)

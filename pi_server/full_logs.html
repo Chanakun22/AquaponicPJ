@@ -110,6 +110,20 @@
         .toolbar input:focus, .toolbar select:focus { outline: none; border-color: var(--primary); }
         .toolbar input[type="text"] { width: 180px; }
 
+        /* Date picker - bigger touch target + visible calendar icon */
+        .toolbar input[type="date"] {
+            min-width: 150px; padding: 8px 12px; cursor: pointer;
+        }
+        .toolbar input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1); cursor: pointer; font-size: 1.1rem;
+        }
+        .btn-clear {
+            padding: 6px 10px; font-size: 0.8rem; border-radius: 6px;
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+            color: var(--text-muted); cursor: pointer; transition: all 0.2s;
+        }
+        .btn-clear:hover { background: rgba(255,42,109,0.15); color: var(--danger); }
+
         /* Type Pills */
         .pills { display: flex; gap: 4px; }
         .pill {
@@ -159,7 +173,7 @@
         /* Log Lines */
         .log-line {
             display: grid;
-            grid-template-columns: 70px 60px 1fr;
+            grid-template-columns: auto 60px 1fr;
             gap: 8px;
             padding: 7px 16px;
             border-bottom: 1px solid rgba(255,255,255,0.04);
@@ -248,8 +262,11 @@
         <!-- Toolbar -->
         <div class="toolbar">
             <div class="toolbar-group">
-                <label>Date</label>
-                <input type="date" id="filterDate">
+                <label><i class="fas fa-calendar-alt" style="margin-right:4px;"></i> Date</label>
+                <div style="display:flex;gap:4px;align-items:center;">
+                    <input type="date" id="filterDate" title="Click to pick a date">
+                    <button onclick="document.getElementById('filterDate').value='';applyFilters();" class="btn-clear" title="Show all dates">✕ All</button>
+                </div>
             </div>
 
             <div class="toolbar-group">
@@ -414,6 +431,9 @@
         var toShow = reversed.slice(0, showCount);
         var remaining = reversed.length - toShow.length;
 
+        // Show date+time when viewing all dates, time only when filtered
+        var showDate = !document.getElementById('filterDate').value;
+
         var html = '';
         for (var j = 0; j < toShow.length; j++) {
             var log = toShow[j];
@@ -421,8 +441,10 @@
             if (log.type === 'error') lineClass = ' line-error';
             else if (log.type === 'warn') lineClass = ' line-warn';
 
+            var timeDisplay = showDate ? (log.date.substring(5) + ' ' + log.time.substring(0,5)) : log.time;
+
             html += '<div class="log-line' + lineClass + '">' +
-                '<span class="l-time">' + log.time + '</span>' +
+                '<span class="l-time">' + timeDisplay + '</span>' +
                 '<span class="l-tag tag-' + log.type + '">' + log.type.toUpperCase() + '</span>' +
                 '<span class="l-msg">' + escapeHtml(log.msg) + '</span>' +
                 '</div>';
@@ -533,14 +555,8 @@
     // =============================================
     // INIT
     // =============================================
-    // Set default date to today
-    (function() {
-        var now = new Date();
-        var y = now.getFullYear();
-        var m = String(now.getMonth() + 1).padStart(2, '0');
-        var d = String(now.getDate()).padStart(2, '0');
-        document.getElementById('filterDate').value = y + '-' + m + '-' + d;
-    })();
+    // No default date — show all logs on load
+    // User can pick a date to filter, and press ✕ to clear
 
     document.getElementById('filterDate').addEventListener('change', function() {
         showCount = PAGE_SIZE;
