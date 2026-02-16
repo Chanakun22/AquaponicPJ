@@ -1,21 +1,37 @@
-# 🐟 Smart Aquaponics Sensor System
+# 🐟 Smart Aquaponics System Project
 
 **ระบบตรวจสอบคุณภาพน้ำอัจฉริยะสำหรับฟาร์มอควาโปนิกส์**
 
-> Firmware v2.3.0 | ESP32-S3-DevKitC-1 | PlatformIO + Arduino Framework
+> Firmware v2.3.0 · ESP32-S3-DevKitC-1 · Raspberry Pi Zero 2 W · PlatformIO + Arduino Framework
 
 ---
 
 ## 📋 สารบัญ
 
+- [ภาพรวมระบบ](#-ภาพรวมระบบ)
 - [ฟีเจอร์หลัก](#-ฟีเจอร์หลัก)
-- [สถาปัตยกรรมระบบ](#-สถาปัตยกรรมระบบ)
+- [สถาปัตยกรรม](#-สถาปัตยกรรม)
 - [ฮาร์ดแวร์](#-ฮาร์ดแวร์)
 - [การติดตั้ง](#-การติดตั้ง)
 - [การใช้งาน](#-การใช้งาน)
+- [Web Dashboard (Pi)](#-web-dashboard-pi)
 - [คำสั่ง CLI](#-คำสั่ง-cli)
+- [MQTT Topics](#-mqtt-topics)
 - [โครงสร้างโปรเจค](#-โครงสร้างโปรเจค)
 - [Tech Stack](#-tech-stack)
+
+---
+
+## 🌐 ภาพรวมระบบ
+
+ระบบ Smart Aquaponics ประกอบด้วย **2 ส่วนหลัก**:
+
+| ส่วน         | อุปกรณ์               | หน้าที่                                             |
+| ------------ | --------------------- | --------------------------------------------------- |
+| **Firmware** | ESP32-S3              | อ่านค่าเซ็นเซอร์, ควบคุมอุปกรณ์, ส่งข้อมูลผ่าน MQTT |
+| **Server**   | Raspberry Pi Zero 2 W | Web Dashboard, MQTT Broker, กล้อง Live, OTA Update  |
+
+Pi ทำหน้าที่เป็น **Access Point (AP)** ชื่อ `Aquaponics-LAN` ให้ ESP32 เชื่อมต่อโดยตรง พร้อมสามารถ Bridge อินเทอร์เน็ตจาก WiFi บ้านได้
 
 ---
 
@@ -23,20 +39,20 @@
 
 ### 📊 เซ็นเซอร์ 5 ชนิด
 
-| เซ็นเซอร์      | ค่าที่วัด                | ช่วงค่า         | ฟีเจอร์พิเศษ                                   |
-| -------------- | ------------------------ | --------------- | ---------------------------------------------- |
-| **DS18B20**    | อุณหภูมิน้ำ              | 0-50°C          | Async Non-Blocking                             |
-| **DHT22**      | อุณหภูมิอากาศ + ความชื้น | 0-50°C / 0-100% | -                                              |
-| **TDS Sensor** | ค่า TDS (ppm)            | 0-2000 ppm      | 2-Point Calibration + Temperature Compensation |
-| **pH Sensor**  | ค่า pH                   | 0-14            | NVS Calibration (pH 4.0 & 7.0)                 |
-| **BH1750**     | ความเข้มแสง              | 0-65535 lux     | I2C Digital                                    |
+| เซ็นเซอร์      | ค่าที่วัด                | ช่วงค่า         | ฟีเจอร์พิเศษ                            |
+| -------------- | ------------------------ | --------------- | --------------------------------------- |
+| **DS18B20**    | อุณหภูมิน้ำ              | 0-50°C          | Async Non-Blocking                      |
+| **DHT22**      | อุณหภูมิอากาศ + ความชื้น | 0-50°C / 0-100% | —                                       |
+| **TDS Sensor** | ค่า TDS (ppm)            | 0-2000 ppm      | 2-Point Calibration + Temp Compensation |
+| **pH Sensor**  | ค่า pH                   | 0-14            | NVS Calibration (pH 4.0 & 7.0)          |
+| **BH1750**     | ความเข้มแสง              | 0-65535 lux     | I2C Digital                             |
 
 ### 📡 การเชื่อมต่อ
 
 - **WiFi Manager** — Captive Portal ตั้งค่า WiFi ครั้งแรก ไม่ต้อง hardcode
 - **NETPIE (Cloud MQTT)** — ส่งข้อมูลขึ้น Cloud ทุก 10 วินาที
-- **Local MQTT (Raspberry Pi)** — ส่งข้อมูลภายใน LAN ทุก 2 วินาที + ค้นหา Pi ผ่าน mDNS
-- **OTA Update** — อัพเดต Firmware ผ่าน WiFi
+- **Local MQTT (Pi)** — ส่งข้อมูลภายใน LAN ทุก 2 วินาที + ค้นหา Pi ผ่าน mDNS
+- **OTA Update** — อัพเดต Firmware ผ่าน WiFi (ทั้ง PlatformIO CLI และ Web UI)
 - **Telnet Console** — Debug ระยะไกล Port 23 (มี Password)
 
 ### 💡 ควบคุมแสง
@@ -49,7 +65,7 @@
 ### 🛡️ ความเสถียร
 
 - **Non-Blocking Design** — ไม่มี `delay()` ใน loop → ระบบไม่ค้าง
-- **FreeRTOS Multi-Core** — Sensor (Core 1) / Network (Core 0) ทำงานคู่ขนาน
+- **FreeRTOS Dual-Core** — Sensor (Core 1) / Network (Core 0) ทำงานคู่ขนาน
 - **Watchdog Timer** — รีเซ็ตอัตโนมัติหากระบบค้างเกิน 60 วินาที
 - **Auto Reconnect** — WiFi/MQTT หลุดแล้วเชื่อมใหม่อัตโนมัติ
 - **Offline Mode** — เซ็นเซอร์ทำงานได้ 100% แม้ไม่มี WiFi
@@ -57,11 +73,11 @@
 
 ---
 
-## 🏗️ สถาปัตยกรรมระบบ
+## 🏗️ สถาปัตยกรรม
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                  ESP32-S3 (Dual Core)            │
+│                 ESP32-S3 (Dual Core)             │
 │                                                  │
 │   ┌──────────────┐     ┌──────────────────────┐  │
 │   │   Core 1     │     │      Core 0          │  │
@@ -82,16 +98,22 @@
 └─────────────────────────────────────────────────┘
           │                          │
           ▼                          ▼
-   ┌─────────────┐         ┌──────────────────┐
-   │  NVS Flash  │         │  Raspberry Pi    │
-   │ Calibration │         │  Dashboard +     │
-   │ Statistics  │         │  MQTT Broker     │
-   └─────────────┘         └──────────────────┘
-                                     │
-                             ┌───────┴───────┐
-                             │  NETPIE Cloud │
-                             │  (MQTT)       │
-                             └───────────────┘
+   ┌─────────────┐    ┌──────────────────────────┐
+   │  NVS Flash  │    │   Raspberry Pi Zero 2 W  │
+   │ Calibration │    │  ┌────────────────────┐  │
+   │ Statistics  │    │  │ Flask Web Dashboard│  │
+   └─────────────┘    │  │ MQTT Broker        │  │
+                      │  │ Camera Server      │  │
+                      │  │ SQLite Database    │  │
+                      │  └────────────────────┘  │
+                      │        │                 │
+                      │   WiFi Bridge ──→ Internet
+                      └──────────────────────────┘
+                               │
+                       ┌───────┴───────┐
+                       │  NETPIE Cloud │
+                       │  (MQTT)       │
+                       └───────────────┘
 ```
 
 ---
@@ -100,7 +122,8 @@
 
 ### บอร์ด
 
-- **ESP32-S3-DevKitC-1** (8MB Flash, No PSRAM)
+- **ESP32-S3-DevKitC-1** (16MB Flash, PSRAM)
+- **Raspberry Pi Zero 2 W** (Server + AP + Camera)
 
 ### การต่อสาย (Pin Configuration)
 
@@ -123,8 +146,9 @@
 
 - [PlatformIO](https://platformio.org/) (แนะนำ VS Code Extension)
 - ESP32-S3-DevKitC-1
+- Raspberry Pi Zero 2 W (สำหรับ Dashboard)
 
-### ขั้นตอน
+### ESP32 Firmware
 
 1. **Clone โปรเจค**
 
@@ -146,27 +170,58 @@
    TELNET_PASSWORD = your_telnet_pass
    ```
 
-3. **Build & Upload**
+3. **Build & Upload (USB)**
 
    ```bash
    pio run --target upload
    ```
 
-4. **เปิด Serial Monitor**
+4. **Build & Upload (OTA)**
+
+   ```bash
+   pio run -e ota_upload --target upload
+   ```
+
+5. **เปิด Serial Monitor**
    ```bash
    pio device monitor --baud 115200
    ```
 
+### Raspberry Pi Server
+
+1. **Copy ไฟล์ไปยัง Pi**
+
+   ```bash
+   scp pi_server/app.py pi_server/*.html admin@<pi-ip>:~/myserver/
+   ```
+
+2. **ติดตั้ง Dependencies**
+
+   ```bash
+   pip install flask flask-socketio requests psutil paho-mqtt
+   ```
+
+3. **รัน Server**
+
+   ```bash
+   python3 app.py
+   ```
+
+4. **ตั้งค่า AP (ถ้าต้องการให้ Pi เป็น Access Point)**
+   ```bash
+   sudo bash setup_ap.sh
+   ```
+
 ---
 
-## � การใช้งาน
+## 📱 การใช้งาน
 
-### การเริ่มใช้งานครั้งแรก
+### การเริ่มใช้งานครั้งแรก (ESP32)
 
 1. จ่ายไฟเข้าบอร์ด
 2. เชื่อมต่อ WiFi ชื่อ **`Aquaponics-Setup`** (หรือชื่อที่ตั้งไว้)
 3. เปิด Browser ไปที่ `http://192.168.4.1`
-4. เลือก WiFi บ้านและใส่รหัสผ่าน
+4. เลือก WiFi แล้วใส่รหัสผ่าน
 5. บอร์ดจะรีบูทและเชื่อมต่ออัตโนมัติ
 
 ### การ Calibrate เซ็นเซอร์
@@ -178,14 +233,30 @@ cal7    → จุ่มในน้ำยาบัฟเฟอร์ pH 7.0 แ
 cal4    → จุ่มในน้ำยาบัฟเฟอร์ pH 4.0 แล้วพิมพ์คำสั่ง
 ```
 
-**TDS Sensor** (ผ่าน MQTT จาก Pi Dashboard):
+**TDS Sensor** (ผ่าน Web Dashboard):
 
-- ใช้หน้า Settings บน Web Dashboard ส่งค่า low/high voltage + ppm
+- ใช้หน้า Settings → TDS Calibration ส่งค่า low/high voltage + ppm
 
 ### Factory Reset
 
 - **กดปุ่ม BOOT ค้าง 5 วินาที** หรือพิมพ์ `reset` ใน CLI
 - ล้างค่า WiFi, Calibration, และสถิติทั้งหมด
+
+---
+
+## 🖥️ Web Dashboard (Pi)
+
+Dashboard รองรับทั้ง Desktop และ Mobile ผ่าน WebSocket (Real-time) หรือ HTTP Polling (Fallback)
+
+| หน้า              | Route        | คำอธิบาย                                                      |
+| ----------------- | ------------ | ------------------------------------------------------------- |
+| **Dashboard**     | `/`          | แสดงค่าเซ็นเซอร์ทั้งหมด, สถานะ ESP32/Pi, System Logs          |
+| **Live Camera**   | `/live`      | กล้อง Live Stream จาก Pi (รองรับหมุนภาพ)                      |
+| **Graphs**        | `/graphs`    | กราฟข้อมูลเซ็นเซอร์ย้อนหลัง                                   |
+| **Full Logs**     | `/full_logs` | บันทึก Log ทั้งหมดจากระบบ                                     |
+| **Settings**      | `/settings`  | ตั้งค่า Threshold, Calibration, เปิด/ปิดเซ็นเซอร์, ตั้งเวลาไฟ |
+| **OTA Update**    | `/ota`       | อัพเดต Firmware ESP32 ผ่าน Web UI (ลาก & วาง .bin)            |
+| **WiFi Settings** | `/wifi`      | ตั้งค่า WiFi ของ Pi (สแกน, เชื่อมต่อเครือข่ายบ้าน)            |
 
 ---
 
@@ -214,83 +285,6 @@ cal4    → จุ่มในน้ำยาบัฟเฟอร์ pH 4.0 แ
 
 ---
 
-## 📁 โครงสร้างโปรเจค
-
-```
-├── include/                  # Header Files
-│   ├── config.h              # Central Configuration (Pins, Timing, Secrets)
-│   ├── logger.h              # Logging System (LOG_ERROR/WARN/INFO/DEBUG)
-│   ├── system.h              # System Health, Version, Sensor Management
-│   ├── TdsSensor.h           # TDS Sensor Interface
-│   ├── phSensor.h            # pH Sensor Interface
-│   ├── dhtSensor.h           # DHT22 Interface
-│   ├── tempSensor.h          # DS18B20 Interface
-│   ├── lightSensor.h         # BH1750 Interface
-│   ├── lightController.h     # Light Schedule Controller
-│   ├── wifiConn.h            # WiFi Connection Manager
-│   ├── netpie.h              # NETPIE Cloud MQTT
-│   ├── localMqtt.h           # Local MQTT (Raspberry Pi)
-│   ├── ota.h                 # OTA Update
-│   ├── telnetServer.h        # Telnet Debug Server
-│   └── commandHandler.h      # CLI Command Handler
-│
-├── src/                      # Implementation Files
-│   ├── main.cpp              # Entry Point + FreeRTOS Tasks
-│   ├── system.cpp            # System Management + NVS Persistence
-│   ├── TdsSensor.cpp         # TDS with 2-Point Calibration
-│   ├── phSensor.cpp          # pH with NVS Calibration
-│   ├── dhtSensor.cpp         # DHT22 Sensor
-│   ├── tempSensor.cpp        # DS18B20 Async Reading
-│   ├── lightSensor.cpp       # BH1750 I2C Light Sensor
-│   ├── lightController.cpp   # NeoPixel RGB + Schedule Logic
-│   ├── wifiConn.cpp          # WiFi Manager (Non-Blocking)
-│   ├── netpie.cpp            # NETPIE MQTT Client
-│   ├── localMqtt.cpp         # Local MQTT + mDNS Discovery
-│   ├── ota.cpp               # OTA Update Handler
-│   ├── telnetServer.cpp      # Telnet with Authentication
-│   └── commandHandler.cpp    # CLI Command Parser
-│
-├── lib/WiFiManager/          # WiFiManager Library (Custom Fork)
-├── pi_server/                # Raspberry Pi Web Dashboard
-│   ├── settings.html         # Threshold & Calibration Settings
-│   ├── graphs.html           # Sensor Data Graphs
-│   ├── live.html             # Live Camera Feed
-│   └── setup.sh              # Pi Auto-Install Script
-│
-├── platformio.ini            # PlatformIO Configuration
-├── secrets.ini               # Credentials (ไม่อยู่ใน Git)
-└── README.md                 # ← คุณอยู่ที่นี่
-```
-
----
-
-## 📦 Tech Stack
-
-| Component        | Technology                  | Version                      |
-| ---------------- | --------------------------- | ---------------------------- |
-| **MCU**          | ESP32-S3-DevKitC-1-N8       | 240MHz, 320KB RAM, 8MB Flash |
-| **Platform**     | Espressif 32                | 6.4.0                        |
-| **Framework**    | Arduino Core for ESP32      | 2.0.11                       |
-| **RTOS**         | FreeRTOS                    | (built-in)                   |
-| **MQTT**         | PubSubClient                | 2.8.0                        |
-| **JSON**         | ArduinoJson                 | 6.21.5                       |
-| **WiFi Config**  | WiFiManager                 | 2.0.17                       |
-| **LED**          | Adafruit NeoPixel           | 1.15.2                       |
-| **Temp (Water)** | DallasTemperature + OneWire | 3.11.0 / 2.3.8               |
-| **Temp (Air)**   | DHT sensor library          | 1.4.6                        |
-| **Light**        | BH1750                      | 1.3.0                        |
-
----
-
-## 📊 Resource Usage
-
-```
-RAM:   [==        ]  16.0% (52,592 / 327,680 bytes)
-Flash: [=         ]  14.9% (975,765 / 6,553,600 bytes)
-```
-
----
-
 ## 📝 MQTT Topics
 
 ### NETPIE (Cloud)
@@ -310,7 +304,111 @@ Flash: [=         ]  14.9% (975,765 / 6,553,600 bytes)
 | `aquaponics/logs`           | ESP → Pi | System Logs                  |
 | `aquaponics/config/sensors` | Pi → ESP | เปิด/ปิดเซ็นเซอร์            |
 | `aquaponics/config/tds_cal` | Pi → ESP | TDS Calibration Data         |
+| `aquaponics/config/ph_cal`  | Pi → ESP | pH Calibration Data          |
 | `aquaponics/status/sensors` | ESP → Pi | Feedback หลังเปลี่ยน Config  |
+
+---
+
+## 📁 โครงสร้างโปรเจค
+
+```
+├── include/                      # Header Files
+│   ├── config.h                  # Pin Configuration & Constants
+│   ├── logger.h                  # Logging System (LOG_ERROR/WARN/INFO/DEBUG)
+│   ├── system.h                  # System Health & Sensor Management
+│   ├── TdsSensor.h               # TDS Sensor Interface
+│   ├── phSensor.h                # pH Sensor Interface
+│   ├── dhtSensor.h               # DHT22 Interface
+│   ├── tempSensor.h              # DS18B20 Interface
+│   ├── lightSensor.h             # BH1750 Interface
+│   ├── lightController.h         # Light Schedule Controller
+│   ├── wifiConn.h                # WiFi Connection Manager
+│   ├── netpie.h                  # NETPIE Cloud MQTT
+│   ├── localMqtt.h               # Local MQTT (Raspberry Pi)
+│   ├── ota.h                     # OTA Update
+│   ├── telnetServer.h            # Telnet Debug Server
+│   └── commandHandler.h          # CLI Command Handler
+│
+├── src/                          # Implementation Files
+│   ├── main.cpp                  # Entry Point + FreeRTOS Tasks
+│   ├── system.cpp                # System Management + NVS Persistence
+│   ├── TdsSensor.cpp             # TDS with 2-Point Calibration
+│   ├── phSensor.cpp              # pH with NVS Calibration
+│   ├── dhtSensor.cpp             # DHT22 Sensor
+│   ├── tempSensor.cpp            # DS18B20 Async Reading
+│   ├── lightSensor.cpp           # BH1750 I2C Light Sensor
+│   ├── lightController.cpp       # NeoPixel RGB + Schedule Logic
+│   ├── wifiConn.cpp              # WiFi Manager (Non-Blocking)
+│   ├── netpie.cpp                # NETPIE MQTT Client
+│   ├── localMqtt.cpp             # Local MQTT + mDNS Discovery
+│   ├── ota.cpp                   # OTA Update Handler
+│   ├── telnetServer.cpp          # Telnet with Authentication
+│   └── commandHandler.cpp        # CLI Command Parser
+│
+├── pi_server/                    # Raspberry Pi Server
+│   ├── app.py                    # Flask Backend (API + WebSocket)
+│   ├── cam_server.py             # Camera Live Stream Server
+│   ├── espota.py                 # ESP32 OTA Flash Script
+│   ├── index.html                # Main Dashboard
+│   ├── live.html                 # Live Camera Page
+│   ├── graphs.html               # Sensor Graphs Page
+│   ├── full_logs.html            # Full Logs Page
+│   ├── settings.html             # Settings & Calibration Page
+│   ├── ota.html                  # OTA Firmware Upload Page
+│   ├── wifi.html                 # Pi WiFi Settings Page
+│   ├── settings.json             # Default Settings
+│   ├── setup.sh                  # Pi Install Script
+│   ├── setup_ap.sh               # AP + Bridge Setup Script
+│   ├── hostapd.conf              # AP Configuration
+│   ├── dnsmasq_ap.conf           # DHCP Configuration
+│   └── pwa/                      # PWA Manifest & Icons
+│
+├── lib/WiFiManager/              # WiFiManager Library (Custom Fork)
+├── platformio.ini                # PlatformIO Configuration
+├── secrets.ini                   # Credentials (ไม่อยู่ใน Git)
+├── CHANGELOG.md                  # บันทึกการเปลี่ยนแปลง
+└── README.md                     # ← คุณอยู่ที่นี่
+```
+
+---
+
+## 📦 Tech Stack
+
+### ESP32 Firmware
+
+| Component        | Technology                  | Version                       |
+| ---------------- | --------------------------- | ----------------------------- |
+| **MCU**          | ESP32-S3-DevKitC-1          | 240MHz, 320KB RAM, 16MB Flash |
+| **Platform**     | Espressif 32                | 6.4.0                         |
+| **Framework**    | Arduino Core for ESP32      | 2.0.11                        |
+| **RTOS**         | FreeRTOS                    | (built-in)                    |
+| **MQTT**         | PubSubClient                | 2.8.0                         |
+| **JSON**         | ArduinoJson                 | 6.21.5                        |
+| **WiFi Config**  | WiFiManager                 | 2.0.17                        |
+| **LED**          | Adafruit NeoPixel           | 1.12.0                        |
+| **Temp (Water)** | DallasTemperature + OneWire | 3.11.0 / 2.3.8                |
+| **Temp (Air)**   | DHT sensor library          | 1.4.6                         |
+| **Light**        | BH1750                      | 1.3.0                         |
+
+### Raspberry Pi Server
+
+| Component         | Technology                  |
+| ----------------- | --------------------------- |
+| **OS**            | Raspberry Pi OS (Lite)      |
+| **Web Framework** | Flask + Flask-SocketIO      |
+| **MQTT Broker**   | Mosquitto                   |
+| **Database**      | SQLite                      |
+| **Camera**        | picamera2 + Flask Streaming |
+| **AP Mode**       | hostapd + dnsmasq           |
+
+---
+
+## 📊 Resource Usage
+
+```
+RAM:   [==        ]  16.0% (52,592 / 327,680 bytes)
+Flash: [=         ]  14.9% (975,765 / 6,553,600 bytes)
+```
 
 ---
 
