@@ -194,6 +194,7 @@
  * @brief เชื่อมต่อกับ Raspberry Pi ภายในวง LAN
  */
 #define LOCAL_MQTT_HOSTNAME "Chanakun"          // ชื่อ Hostname ของ Pi (ตามที่เห็นใน Router/Terminal)
+#define LOCAL_MQTT_STATIC_IP "192.168.10.1"     // Pi IP บน AP network (Fallback เมื่อ mDNS หาไม่เจอ)
 #define LOCAL_MQTT_PORT     1883
 #define LOCAL_PUBLISH_INTERVAL 2000          // ส่งข้อมูลทุก 2 วินาที (เร็วกว่า NETPIE)
 #define LOCAL_MQTT_TOPIC_SENSORS "aquaponics/sensors"  // MQTT Topic สำหรับข้อมูล Sensor

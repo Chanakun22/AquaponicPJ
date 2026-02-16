@@ -12,3 +12,6 @@ secrets.ini
 repomix-output.xml
 netpie_widgets/light_timer.html
 pi_server/aquaponics-cam.service
+AGENTS.md
+pi_server/*.sh
+pi_server/*.conf

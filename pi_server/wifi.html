@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📶 WiFi Settings - Smart Aquaponics</title>
+    <link rel="manifest" href="/pwa/manifest.json">
+    <meta name="theme-color" content="#00f2aa">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0f1115;
+            --bg-panel: #181b21;
+            --primary: #00f2aa;
+            --secondary: #00c8ff;
+            --accent: #38bdf8;
+            --warning: #ffbf00;
+            --danger: #ff2a6d;
+            --success: #10b981;
+            --text-main: #ffffff;
+            --text-muted: #8b9bb4;
+            --glass-bg: rgba(24, 27, 33, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-blur: 20px;
+            --radius: 20px;
+            --radius-sm: 12px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-dark);
+            background-image:
+                radial-gradient(circle at 10% 20%, rgba(0, 242, 170, 0.04) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(0, 200, 255, 0.04) 0%, transparent 40%);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container { width: 100%; max-width: 700px; display: flex; flex-direction: column; gap: 28px; }
+
+        /* Header */
+        .header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 20px 28px; background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border); border-radius: var(--radius);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2); flex-wrap: wrap; gap: 16px;
+        }
+        .brand { display: flex; align-items: center; gap: 14px; }
+        .brand i { font-size: 1.6rem; color: var(--secondary); filter: drop-shadow(0 0 8px rgba(0,200,255,0.4)); }
+        .brand h1 {
+            font-size: 1.4rem; font-weight: 700; letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #fff 0%, var(--secondary) 100%);
+            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .brand .subtitle { font-size: 0.75rem; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; }
+        .nav-pills { display: flex; gap: 10px; flex-wrap: wrap; }
+        .nav-pill {
+            display: flex; align-items: center; gap: 8px; padding: 8px 16px;
+            background: rgba(255,255,255,0.03); border-radius: 20px;
+            border: 1px solid var(--glass-border); font-size: 0.85rem;
+            color: var(--text-muted); text-decoration: none; cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .nav-pill:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); color: var(--text-main); }
+        .nav-pill.active { background: rgba(0,200,255,0.12); border-color: rgba(0,200,255,0.3); color: var(--secondary); }
+
+        /* Card */
+        .card {
+            background: var(--bg-panel); border: 1px solid var(--glass-border);
+            border-radius: var(--radius); padding: 32px; position: relative; overflow: hidden;
+        }
+        .card::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+            background: linear-gradient(90deg, var(--secondary), var(--accent)); opacity: 0.8;
+        }
+        .card h2 {
+            font-size: 1.1rem; font-weight: 600; margin-bottom: 24px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .card h2 i {
+            font-size: 1rem; width: 36px; height: 36px; display: flex; align-items: center;
+            justify-content: center; border-radius: 10px;
+            background: rgba(0,200,255,0.1); color: var(--secondary);
+        }
+
+        /* Current Info */
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+        .info-item {
+            padding: 14px 16px; background: rgba(0,0,0,0.2); border-radius: var(--radius-sm);
+            border: 1px solid rgba(255,255,255,0.04);
+        }
+        .info-label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .info-value { font-size: 0.95rem; font-weight: 600; }
+        .info-value.connected { color: var(--success); }
+        .info-value.disconnected { color: var(--danger); }
+
+        /* Network List */
+        .network-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 20px; }
+        .network-item {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 18px; background: rgba(0,0,0,0.2); border-radius: var(--radius-sm);
+            border: 1px solid rgba(255,255,255,0.04); cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .network-item:hover { background: rgba(0,200,255,0.06); border-color: rgba(0,200,255,0.2); transform: translateX(4px); }
+        .network-item.active { background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.25); }
+        .network-left { display: flex; align-items: center; gap: 14px; }
+        .network-icon { font-size: 1.1rem; color: var(--text-muted); width: 24px; text-align: center; }
+        .network-name { font-weight: 600; font-size: 0.95rem; }
+        .network-active { font-size: 0.72rem; color: var(--success); margin-top: 2px; }
+        .network-right { display: flex; align-items: center; gap: 12px; }
+        .signal-text { font-size: 0.78rem; color: var(--text-muted); }
+        .lock-icon { font-size: 0.75rem; color: var(--text-muted); }
+
+        /* Connect Form */
+        .connect-form { display: none; margin-top: 20px; }
+        .connect-form.show { display: block; }
+        .form-title { font-size: 1rem; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+        .form-group { margin-bottom: 16px; }
+        .form-label { display: block; font-size: 0.78rem; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .form-input {
+            width: 100%; padding: 12px 16px; background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius-sm);
+            color: var(--text-main); font-family: inherit; font-size: 0.95rem;
+            transition: all 0.2s ease; outline: none;
+        }
+        .form-input:focus { border-color: var(--secondary); box-shadow: 0 0 12px rgba(0,200,255,0.15); }
+        .form-input:read-only { opacity: 0.7; cursor: default; }
+        .form-row { display: flex; gap: 12px; }
+        .password-wrapper { position: relative; }
+        .password-wrapper .form-input { padding-right: 48px; }
+        .toggle-password {
+            position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+            background: none; border: none; color: var(--text-muted); cursor: pointer;
+            font-size: 1rem; padding: 4px; transition: color 0.2s;
+        }
+        .toggle-password:hover { color: var(--text-main); }
+
+        /* Buttons */
+        .btn {
+            padding: 12px 24px; border: none; border-radius: var(--radius-sm);
+            font-family: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+            transition: all 0.3s ease; display: inline-flex; align-items: center; gap: 8px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--secondary), var(--accent));
+            color: #000;
+        }
+        .btn-primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,200,255,0.3); }
+        .btn-secondary { background: rgba(255,255,255,0.06); color: var(--text-muted); border: 1px solid var(--glass-border); }
+        .btn-secondary:hover { background: rgba(255,255,255,0.1); color: var(--text-main); }
+        .btn-danger { background: rgba(255,42,109,0.15); color: var(--danger); border: 1px solid rgba(255,42,109,0.2); }
+        .btn-danger:hover { background: rgba(255,42,109,0.25); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+        .btn-full { width: 100%; justify-content: center; }
+        .btn-row { display: flex; gap: 12px; margin-top: 20px; }
+
+        /* Scan button */
+        .scan-btn {
+            margin-bottom: 16px; padding: 8px 18px; background: rgba(255,255,255,0.04);
+            border: 1px solid var(--glass-border); border-radius: 20px;
+            color: var(--text-muted); font-family: inherit; font-size: 0.82rem;
+            cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px;
+        }
+        .scan-btn:hover { background: rgba(255,255,255,0.08); color: var(--text-main); }
+        .scan-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Loading */
+        .loading { text-align: center; padding: 32px; color: var(--text-muted); }
+        .loading i { font-size: 1.5rem; margin-bottom: 10px; display: block; }
+
+        /* Toast */
+        .toast {
+            position: fixed; bottom: 30px; left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            padding: 14px 28px; border-radius: var(--radius-sm);
+            font-weight: 600; font-size: 0.9rem; z-index: 1000;
+            opacity: 0; pointer-events: none;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        .toast.success { background: linear-gradient(135deg, var(--success), #059669); color: white; }
+        .toast.error { background: linear-gradient(135deg, var(--danger), #dc2626); color: white; }
+        .toast.warn { background: linear-gradient(135deg, var(--warning), #d97706); color: #000; }
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            body { padding: 12px; }
+            .header { flex-direction: column; text-align: center; padding: 16px; gap: 12px; }
+            .brand { justify-content: center; }
+            .nav-pills { justify-content: center; }
+            .card { padding: 20px; }
+            .info-grid { grid-template-columns: 1fr; }
+            .btn-row { flex-direction: column; }
+        }
+        @media (max-width: 480px) { .nav-pill span { display: none; } }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .fa-spin { animation: spin 1s linear infinite; }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+    <!-- Header -->
+    <header class="header">
+        <div class="brand">
+            <i class="fas fa-wifi"></i>
+            <div>
+                <h1>WiFi Settings</h1>
+                <div class="subtitle">Pi Network Configuration</div>
+            </div>
+        </div>
+        <div class="nav-pills">
+            <a href="/" class="nav-pill"><i class="fas fa-leaf"></i> <span>Dashboard</span></a>
+            <a href="/settings" class="nav-pill"><i class="fas fa-cog"></i> <span>Settings</span></a>
+            <a href="/ota" class="nav-pill"><i class="fas fa-upload"></i> <span>OTA</span></a>
+            <a href="/wifi" class="nav-pill active"><i class="fas fa-wifi"></i> <span>WiFi</span></a>
+        </div>
+    </header>
+
+    <!-- Current Connection -->
+    <div class="card">
+        <h2><i class="fas fa-link"></i> การเชื่อมต่อปัจจุบัน</h2>
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="info-label">สถานะ</div>
+                <div class="info-value" id="wifiStatus">กำลังโหลด...</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">SSID</div>
+                <div class="info-value" id="wifiSsid">—</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">IP Address</div>
+                <div class="info-value" id="wifiIp">—</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Signal</div>
+                <div class="info-value" id="wifiSignal">—</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Available Networks -->
+    <div class="card">
+        <h2><i class="fas fa-tower-broadcast"></i> เครือข่าย WiFi ที่พบ</h2>
+        <button class="scan-btn" id="scanBtn" onclick="scanNetworks()">
+            <i class="fas fa-rotate"></i> สแกนใหม่
+        </button>
+        <div id="networkList">
+            <div class="loading">
+                <i class="fas fa-spinner fa-spin"></i>
+                กำลังสแกน...
+            </div>
+        </div>
+
+        <!-- Connect Form -->
+        <div class="connect-form" id="connectForm">
+            <div class="form-title">
+                <i class="fas fa-plug"></i>
+                เชื่อมต่อ: <span id="selectedSsid" style="color:var(--secondary)"></span>
+            </div>
+            <div class="form-group">
+                <label class="form-label">SSID</label>
+                <input type="text" class="form-input" id="inputSsid" readonly>
+            </div>
+            <div class="form-group">
+                <label class="form-label">รหัสผ่าน</label>
+                <div class="password-wrapper">
+                    <input type="password" class="form-input" id="inputPassword" placeholder="ใส่รหัส WiFi...">
+                    <button type="button" class="toggle-password" onclick="togglePassword('inputPassword', this)"><i class="fas fa-eye"></i></button>
+                </div>
+            </div>
+            <div class="btn-row">
+                <button class="btn btn-primary btn-full" id="connectBtn" onclick="connectWifi()">
+                    <i class="fas fa-plug"></i> เชื่อมต่อ
+                </button>
+                <button class="btn btn-secondary" onclick="hideForm()">
+                    <i class="fas fa-times"></i> ยกเลิก
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manual Connect -->
+    <div class="card">
+        <h2><i class="fas fa-keyboard"></i> เชื่อมต่อ WiFi ด้วยตนเอง</h2>
+        <div class="form-group">
+            <label class="form-label">SSID (ชื่อ WiFi)</label>
+            <input type="text" class="form-input" id="manualSsid" placeholder="ใส่ชื่อ WiFi...">
+        </div>
+        <div class="form-group">
+            <label class="form-label">รหัสผ่าน</label>
+            <div class="password-wrapper">
+                <input type="password" class="form-input" id="manualPassword" placeholder="ใส่รหัสผ่าน...">
+                <button type="button" class="toggle-password" onclick="togglePassword('manualPassword', this)"><i class="fas fa-eye"></i></button>
+            </div>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="connectManual()">
+            <i class="fas fa-plug"></i> เชื่อมต่อ
+        </button>
+    </div>
+
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // === Toggle password visibility ===
+        function togglePassword(inputId, btn) {
+            const input = document.getElementById(inputId);
+            const icon = btn.querySelector('i');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.replace('fa-eye', 'fa-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.replace('fa-eye-slash', 'fa-eye');
+            }
+        }
+
+        // === Load current WiFi info ===
+        async function loadCurrentWifi() {
+            try {
+                const res = await fetch('/api/wifi/status');
+                const data = await res.json();
+
+                const statusEl = document.getElementById('wifiStatus');
+                if (data.connected) {
+                    statusEl.textContent = '🟢 เชื่อมต่อแล้ว';
+                    statusEl.className = 'info-value connected';
+                } else {
+                    statusEl.textContent = '🔴 ไม่ได้เชื่อมต่อ';
+                    statusEl.className = 'info-value disconnected';
+                }
+
+                document.getElementById('wifiSsid').textContent = data.ssid || '—';
+                document.getElementById('wifiIp').textContent = data.ip || '—';
+                document.getElementById('wifiSignal').textContent = data.signal ? `${data.signal} dBm` : '—';
+            } catch (err) {
+                document.getElementById('wifiStatus').textContent = '⚠️ โหลดไม่ได้';
+            }
+        }
+
+        // === Scan networks ===
+        async function scanNetworks() {
+            const btn = document.getElementById('scanBtn');
+            const list = document.getElementById('networkList');
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังสแกน...';
+            list.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i>กำลังสแกน...</div>';
+
+            try {
+                const res = await fetch('/api/wifi/scan');
+                const data = await res.json();
+
+                if (data.networks && data.networks.length > 0) {
+                    list.innerHTML = '';
+                    data.networks.forEach(net => {
+                        const signalIcon = getSignalIcon(net.signal);
+                        const isActive = net.active;
+                        const div = document.createElement('div');
+                        div.className = 'network-item' + (isActive ? ' active' : '');
+                        div.innerHTML = `
+                            <div class="network-left">
+                                <div class="network-icon"><i class="fas ${signalIcon}"></i></div>
+                                <div>
+                                    <div class="network-name">${escHtml(net.ssid)}</div>
+                                    ${isActive ? '<div class="network-active">✓ เชื่อมต่ออยู่</div>' : ''}
+                                </div>
+                            </div>
+                            <div class="network-right">
+                                <span class="signal-text">${net.signal} dBm</span>
+                                ${net.encrypted ? '<i class="fas fa-lock lock-icon"></i>' : '<i class="fas fa-lock-open lock-icon"></i>'}
+                            </div>
+                        `;
+                        div.onclick = () => selectNetwork(net.ssid, net.encrypted);
+                        list.appendChild(div);
+                    });
+                } else {
+                    list.innerHTML = '<div class="loading">ไม่พบเครือข่าย WiFi</div>';
+                }
+            } catch (err) {
+                list.innerHTML = '<div class="loading">❌ สแกนไม่ได้</div>';
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-rotate"></i> สแกนใหม่';
+        }
+
+        function getSignalIcon(signal) {
+            if (signal > -50) return 'fa-wifi';
+            if (signal > -65) return 'fa-wifi';
+            if (signal > -80) return 'fa-wifi';
+            return 'fa-wifi';
+        }
+
+        // === Select network from list ===
+        function selectNetwork(ssid, encrypted) {
+            document.getElementById('inputSsid').value = ssid;
+            document.getElementById('selectedSsid').textContent = ssid;
+            document.getElementById('inputPassword').value = '';
+            document.getElementById('connectForm').classList.add('show');
+
+            if (!encrypted) {
+                document.getElementById('inputPassword').placeholder = 'ไม่ต้องใส่ (Open Network)';
+            } else {
+                document.getElementById('inputPassword').placeholder = 'ใส่รหัส WiFi...';
+            }
+
+            document.getElementById('connectForm').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function hideForm() {
+            document.getElementById('connectForm').classList.remove('show');
+        }
+
+        // === Connect to WiFi ===
+        async function connectWifi() {
+            const ssid = document.getElementById('inputSsid').value.trim();
+            const password = document.getElementById('inputPassword').value;
+
+            if (!ssid) {
+                showToast('❌ กรุณาเลือก WiFi', 'error');
+                return;
+            }
+
+            await doConnect(ssid, password);
+        }
+
+        async function connectManual() {
+            const ssid = document.getElementById('manualSsid').value.trim();
+            const password = document.getElementById('manualPassword').value;
+
+            if (!ssid) {
+                showToast('❌ กรุณาใส่ชื่อ WiFi', 'error');
+                return;
+            }
+
+            await doConnect(ssid, password);
+        }
+
+        async function doConnect(ssid, password) {
+            const btn = document.getElementById('connectBtn');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังเชื่อมต่อ...'; }
+
+            showToast('⏳ กำลังเชื่อมต่อ WiFi... อาจใช้เวลา 10-30 วินาที', 'warn');
+
+            try {
+                const res = await fetch('/api/wifi/connect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ssid, password })
+                });
+
+                const data = await res.json();
+
+                if (data.status === 'ok') {
+                    showToast('✅ เชื่อมต่อ WiFi สำเร็จ!', 'success');
+                    hideForm();
+                    // Reload page after delay (IP might change)
+                    setTimeout(() => {
+                        loadCurrentWifi();
+                        scanNetworks();
+                    }, 3000);
+                } else {
+                    showToast('❌ ' + (data.message || 'เชื่อมต่อไม่ได้'), 'error');
+                }
+            } catch (err) {
+                showToast('⚠️ ส่งคำสั่งแล้ว แต่อาจเปลี่ยน IP — ลอง refresh หน้าเว็บ', 'warn');
+            }
+
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-plug"></i> เชื่อมต่อ'; }
+        }
+
+        // === Helpers ===
+        function escHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.className = 'toast ' + type + ' show';
+            setTimeout(() => toast.classList.remove('show'), 5000);
+        }
+
+        // === Init ===
+        loadCurrentWifi();
+        scanNetworks();
+    </script>
+</body>
+</html>

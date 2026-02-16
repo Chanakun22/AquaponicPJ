@@ -63,7 +63,13 @@ static bool _resolveBrokerIp() {
         LOG_INFO("✅ Found Pi at IP: %s", _brokerIp.toString().c_str());
         return true;
     } else {
-        LOG_WARN("❌ Pi not found via mDNS. Retrying...");
+        // Fallback: ใช้ Static IP ของ Pi AP network
+        if (_brokerIp.fromString(LOCAL_MQTT_STATIC_IP)) {
+            _isIpResolved = true;
+            LOG_INFO("⚡ mDNS failed, using Pi AP fallback IP: %s", LOCAL_MQTT_STATIC_IP);
+            return true;
+        }
+        LOG_WARN("❌ Pi not found via mDNS or fallback. Retrying...");
         return false;
     }
 }

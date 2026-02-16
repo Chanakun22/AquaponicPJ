@@ -6,6 +6,20 @@ All notable changes to the **Smart Aquaponics AI** project will be documented in
 
 - Deployment automation scripts (`setup.sh`, `aquaponics.service`).
 
+## [2026-02-16] - Pi AP+Client Bridge Mode
+
+### Added
+
+- **Pi AP Bridge (`pi_server/setup_ap.sh`):**
+  - Pi Zero 2 W ทำงาน AP+Client พร้อมกัน: `wlan0` (Home WiFi) + `ap0` (Aquaponics-LAN)
+  - ESP32 เชื่อม Pi ได้ตลอดแม้ Router พังหรือเปลี่ยน WiFi
+  - `hostapd.conf`: AP config (SSID: Aquaponics-LAN, WPA2)
+  - `dnsmasq_ap.conf`: DHCP server (192.168.10.x)
+  - `setup_ap.sh`: Script อัตโนมัติ (ติดตั้ง + config + systemd + NAT)
+- **ESP32 MQTT Fallback IP (`localMqtt.cpp`):**
+  - เพิ่ม Static IP fallback (`192.168.10.1`) เมื่อ mDNS หาไม่เจอ
+  - เพิ่ม `LOCAL_MQTT_STATIC_IP` ใน `config.h`
+
 ## [2026-02-11] - Bug Fixes (mDNS Blocking & SQLite Threading)
 
 ### Fixed

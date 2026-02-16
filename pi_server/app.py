@@ -795,6 +795,270 @@ def handle_ws_connect():
 def handle_ws_disconnect():
     print("🔌 WebSocket client disconnected")
 
+# === OTA Upload via Web ===
+import uuid
+import tempfile
+
+ota_tasks = {}
+
+@app.route('/ota')
+def ota_page():
+    return send_file('ota.html')
+
+@app.route('/api/ota/upload', methods=['POST'])
+def ota_upload():
+    """Receive firmware.bin from browser, then flash to ESP32 via espota.py"""
+    try:
+        if 'firmware' not in request.files:
+            return jsonify({"status": "error", "message": "ไม่มีไฟล์ firmware"}), 400
+
+        firmware = request.files['firmware']
+        if not firmware.filename.endswith('.bin'):
+            return jsonify({"status": "error", "message": "กรุณาใช้ไฟล์ .bin เท่านั้น"}), 400
+
+        firmware_path = os.path.join(tempfile.gettempdir(), 'firmware_ota.bin')
+        firmware.save(firmware_path)
+        file_size = os.path.getsize(firmware_path)
+
+        print(f"📦 OTA: Received firmware {firmware.filename} ({file_size} bytes)")
+        save_log(f"📦 OTA Upload: {firmware.filename} ({file_size} bytes)")
+
+        task_id = str(uuid.uuid4())[:8]
+        ota_tasks[task_id] = {
+            "status": "flashing",
+            "message": "",
+            "logs": [f"📦 Firmware received: {file_size} bytes",
+                     "🔄 Starting espota flash to ESP32..."]
+        }
+
+        esp_ip = "192.168.10.100"
+        ota_password = "admin123"
+        espota_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'espota.py')
+
+        def run_ota():
+            try:
+                cmd = [
+                    'python3', espota_script,
+                    '-i', esp_ip, '-p', '3232',
+                    '--auth=' + ota_password,
+                    '-f', firmware_path, '-d', '-r'
+                ]
+                ota_tasks[task_id]["logs"].append(f"🚀 Flashing to {esp_ip}:3232...")
+                print(f"🚀 OTA Command: {' '.join(cmd)}")
+
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+
+                if result.returncode == 0:
+                    ota_tasks[task_id]["status"] = "success"
+                    ota_tasks[task_id]["message"] = "Flash สำเร็จ!"
+                    ota_tasks[task_id]["logs"].append("✅ Flash สำเร็จ! ESP32 กำลัง reboot...")
+                    print("✅ OTA Flash successful!")
+                    save_log("✅ OTA Flash successful!")
+                else:
+                    error_msg = result.stderr.strip() or result.stdout.strip() or "Unknown error"
+                    ota_tasks[task_id]["status"] = "error"
+                    ota_tasks[task_id]["message"] = error_msg
+                    ota_tasks[task_id]["logs"].append(f"❌ Flash failed: {error_msg}")
+                    print(f"❌ OTA Flash failed: {error_msg}")
+                    save_log(f"❌ OTA Flash failed: {error_msg}")
+
+            except subprocess.TimeoutExpired:
+                ota_tasks[task_id]["status"] = "error"
+                ota_tasks[task_id]["message"] = "Timeout"
+                ota_tasks[task_id]["logs"].append("❌ Timeout: Flash ใช้เวลานานเกินไป")
+            except Exception as e:
+                ota_tasks[task_id]["status"] = "error"
+                ota_tasks[task_id]["message"] = str(e)
+                ota_tasks[task_id]["logs"].append(f"❌ Error: {e}")
+
+            try:
+                os.remove(firmware_path)
+            except:
+                pass
+
+        thread = threading.Thread(target=run_ota)
+        thread.daemon = True
+        thread.start()
+
+        return jsonify({"status": "uploading", "task_id": task_id})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/ota/status/<task_id>')
+def ota_status(task_id):
+    """Check OTA flash status"""
+    task = ota_tasks.get(task_id)
+    if not task:
+        return jsonify({"status": "error", "message": "Task not found"}), 404
+    return jsonify(task)
+
+# === WiFi Management ===
+import re
+
+@app.route('/wifi')
+def wifi_page():
+    return send_file('wifi.html')
+
+@app.route('/api/wifi/status')
+def wifi_status():
+    """Get current WiFi connection info"""
+    try:
+        result = {}
+
+        # Get current SSID
+        ssid_out = subprocess.run(['iwgetid', '-r'], capture_output=True, text=True, timeout=5)
+        result['ssid'] = ssid_out.stdout.strip() if ssid_out.returncode == 0 else ''
+        result['connected'] = bool(result['ssid'])
+
+        # Get IP
+        ip_out = subprocess.run(['hostname', '-I'], capture_output=True, text=True, timeout=5)
+        ips = ip_out.stdout.strip().split()
+        # Filter to wlan0 IP (not ap0)
+        result['ip'] = ips[0] if ips else ''
+
+        # Get signal strength
+        sig_out = subprocess.run(['iwconfig', 'wlan0'], capture_output=True, text=True, timeout=5)
+        sig_match = re.search(r'Signal level=(-?\d+)', sig_out.stdout)
+        result['signal'] = int(sig_match.group(1)) if sig_match else 0
+
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"connected": False, "ssid": "", "ip": "", "signal": 0, "error": str(e)})
+
+@app.route('/api/wifi/scan')
+def wifi_scan():
+    """Scan for available WiFi networks"""
+    try:
+        result = subprocess.run(
+            ['sudo', 'iwlist', 'wlan0', 'scan'],
+            capture_output=True, text=True, timeout=30
+        )
+
+        networks = []
+        current_ssid = ''
+
+        # Get current SSID
+        ssid_out = subprocess.run(['iwgetid', '-r'], capture_output=True, text=True, timeout=5)
+        if ssid_out.returncode == 0:
+            current_ssid = ssid_out.stdout.strip()
+
+        # Parse iwlist output
+        cells = result.stdout.split('Cell ')
+        for cell in cells[1:]:
+            ssid_match = re.search(r'ESSID:"(.+?)"', cell)
+            signal_match = re.search(r'Signal level=(-?\d+)', cell)
+            enc_match = re.search(r'Encryption key:(on|off)', cell)
+
+            if ssid_match and ssid_match.group(1):
+                ssid = ssid_match.group(1)
+                signal = int(signal_match.group(1)) if signal_match else -100
+                encrypted = enc_match.group(1) == 'on' if enc_match else True
+
+                # Skip duplicates (keep strongest signal)
+                existing = next((n for n in networks if n['ssid'] == ssid), None)
+                if existing:
+                    if signal > existing['signal']:
+                        existing['signal'] = signal
+                    continue
+
+                networks.append({
+                    'ssid': ssid,
+                    'signal': signal,
+                    'encrypted': encrypted,
+                    'active': ssid == current_ssid
+                })
+
+        # Sort: active first, then by signal strength
+        networks.sort(key=lambda x: (-x['active'], -x['signal']))
+
+        return jsonify({"networks": networks})
+    except Exception as e:
+        return jsonify({"networks": [], "error": str(e)}), 500
+
+@app.route('/api/wifi/connect', methods=['POST'])
+def wifi_connect():
+    """Connect to a WiFi network using wpa_cli"""
+    try:
+        data = request.get_json()
+        ssid = data.get('ssid', '').strip()
+        password = data.get('password', '')
+
+        if not ssid:
+            return jsonify({"status": "error", "message": "SSID is required"}), 400
+
+        print(f"📶 WiFi: Connecting to {ssid}...")
+        save_log(f"📶 WiFi config changed to: {ssid}")
+
+        # Step 1: Remove all existing networks (force switch)
+        list_out = subprocess.run(
+            ['sudo', 'wpa_cli', '-i', 'wlan0', 'list_networks'],
+            capture_output=True, text=True, timeout=5
+        )
+        for line in list_out.stdout.strip().split('\n')[1:]:
+            parts = line.split('\t')
+            if parts:
+                net_id = parts[0].strip()
+                subprocess.run(
+                    ['sudo', 'wpa_cli', '-i', 'wlan0', 'remove_network', net_id],
+                    capture_output=True, timeout=5
+                )
+
+        # Step 2: Add new network
+        add_out = subprocess.run(
+            ['sudo', 'wpa_cli', '-i', 'wlan0', 'add_network'],
+            capture_output=True, text=True, timeout=5
+        )
+        net_id = add_out.stdout.strip()
+
+        # Step 3: Set SSID
+        subprocess.run(
+            ['sudo', 'wpa_cli', '-i', 'wlan0', 'set_network', net_id, 'ssid', f'"{ssid}"'],
+            capture_output=True, timeout=5
+        )
+
+        # Step 4: Set password or open
+        if password:
+            subprocess.run(
+                ['sudo', 'wpa_cli', '-i', 'wlan0', 'set_network', net_id, 'psk', f'"{password}"'],
+                capture_output=True, timeout=5
+            )
+        else:
+            subprocess.run(
+                ['sudo', 'wpa_cli', '-i', 'wlan0', 'set_network', net_id, 'key_mgmt', 'NONE'],
+                capture_output=True, timeout=5
+            )
+
+        # Step 5: Select (enables only this network, disables all others)
+        subprocess.run(
+            ['sudo', 'wpa_cli', '-i', 'wlan0', 'select_network', net_id],
+            capture_output=True, timeout=5
+        )
+
+        # Step 6: Save config to disk
+        subprocess.run(
+            ['sudo', 'wpa_cli', '-i', 'wlan0', 'save_config'],
+            capture_output=True, timeout=5
+        )
+
+        # Wait for connection
+        import time as _time
+        _time.sleep(8)
+
+        # Check if connected
+        check = subprocess.run(['iwgetid', '-r'], capture_output=True, text=True, timeout=5)
+        new_ssid = check.stdout.strip()
+
+        if new_ssid == ssid:
+            print(f"✅ WiFi connected to {ssid}")
+            save_log(f"✅ WiFi connected to {ssid}")
+            return jsonify({"status": "ok", "message": f"เชื่อมต่อ {ssid} สำเร็จ!"})
+        else:
+            print(f"⚠️ WiFi connection pending for {ssid}")
+            return jsonify({"status": "ok", "message": f"ส่งคำสั่งเชื่อมต่อ {ssid} แล้ว — อาจใช้เวลาสักครู่"})
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 if __name__ == '__main__':
     # Start MQTT Thread
     mqtt_thread = threading.Thread(target=start_mqtt)
