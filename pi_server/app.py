@@ -406,6 +406,14 @@ def start_mqtt():
         save_log(f"MQTT Error: {e}")
 
 # === Web Server Routes ===
+@app.route('/base.css')
+def serve_base_css():
+    return send_file('base.css')
+
+@app.route('/header.js')
+def serve_header_js():
+    return send_file('header.js')
+
 @app.route('/')
 def index():
     return send_file('index.html')
@@ -925,6 +933,29 @@ def wifi_status():
     except Exception as e:
         return jsonify({"connected": False, "ssid": "", "ip": "", "signal": 0, "error": str(e)})
 
+@app.route('/api/wifi/netstats')
+def wifi_netstats():
+    """Get network throughput bytes and ping latency"""
+    stats = {"rx_bytes": 0, "tx_bytes": 0, "ping_ms": None}
+    try:
+        # Read interface bytes
+        with open('/sys/class/net/wlan0/statistics/rx_bytes') as f:
+            stats['rx_bytes'] = int(f.read().strip())
+        with open('/sys/class/net/wlan0/statistics/tx_bytes') as f:
+            stats['tx_bytes'] = int(f.read().strip())
+    except Exception:
+        pass
+    try:
+        # Ping 1.1.1.1
+        p = subprocess.run(['ping', '-c', '1', '-W', '2', '1.1.1.1'],
+                           capture_output=True, text=True, timeout=5)
+        m = re.search(r'time=([0-9.]+)', p.stdout)
+        if m:
+            stats['ping_ms'] = round(float(m.group(1)), 1)
+    except Exception:
+        pass
+    return jsonify(stats)
+
 @app.route('/api/wifi/scan')
 def wifi_scan():
     """Scan for available WiFi networks"""
@@ -1058,6 +1089,116 @@ def wifi_connect():
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+# =============================================================================
+# Web Terminal — WebSocket-to-Telnet Relay for ESP32 CLI
+# =============================================================================
+import socket as _socket
+
+# Store active telnet connections per WebSocket session
+_telnet_sessions = {}
+
+@app.route('/terminal')
+def terminal_page():
+    return send_file('terminal.html')
+
+@socketio.on('terminal_connect')
+def handle_terminal_connect(data):
+    """Open TCP connection to ESP32 Telnet and start reader thread"""
+    sid = request.sid
+    ip = data.get('ip', '192.168.10.2')
+    port = int(data.get('port', 23))
+
+    # Close existing session if any
+    if sid in _telnet_sessions:
+        try:
+            _telnet_sessions[sid].close()
+        except:
+            pass
+        del _telnet_sessions[sid]
+
+    try:
+        sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+        sock.settimeout(5)
+        sock.connect((ip, port))
+        sock.settimeout(0.5)  # Non-blocking reads with short timeout
+        _telnet_sessions[sid] = sock
+
+        emit('terminal_connected', {'ip': ip, 'port': port})
+        print(f"🖥️ Terminal connected to ESP32 at {ip}:{port} (sid={sid[:8]})")
+
+        # Start background reader thread
+        def reader():
+            while sid in _telnet_sessions:
+                try:
+                    data = _telnet_sessions[sid].recv(4096)
+                    if not data:
+                        # Connection closed by ESP32
+                        break
+                    text = data.decode('utf-8', errors='replace')
+                    socketio.emit('terminal_data', {'text': text}, to=sid)
+                except _socket.timeout:
+                    continue
+                except Exception as e:
+                    break
+
+            # Cleanup
+            if sid in _telnet_sessions:
+                try:
+                    _telnet_sessions[sid].close()
+                except:
+                    pass
+                del _telnet_sessions[sid]
+            socketio.emit('terminal_disconnected', {'reason': 'ESP32 connection closed'}, to=sid)
+            print(f"🖥️ Terminal reader ended (sid={sid[:8]})")
+
+        t = threading.Thread(target=reader, daemon=True)
+        t.start()
+
+    except _socket.timeout:
+        emit('terminal_error', {'message': f'Connection timeout — ESP32 at {ip}:{port} not reachable'})
+    except ConnectionRefusedError:
+        emit('terminal_error', {'message': f'Connection refused — ESP32 at {ip}:{port} (Telnet not running?)'})
+    except Exception as e:
+        emit('terminal_error', {'message': f'Connection failed: {str(e)}'})
+
+@socketio.on('terminal_input')
+def handle_terminal_input(data):
+    """Send user input to ESP32 via TCP"""
+    sid = request.sid
+    if sid not in _telnet_sessions:
+        emit('terminal_error', {'message': 'Not connected'})
+        return
+    try:
+        text = data.get('text', '')
+        _telnet_sessions[sid].sendall(text.encode('utf-8'))
+    except Exception as e:
+        emit('terminal_error', {'message': f'Send failed: {str(e)}'})
+
+@socketio.on('terminal_disconnect')
+def handle_terminal_disconnect():
+    """Close TCP connection to ESP32"""
+    sid = request.sid
+    if sid in _telnet_sessions:
+        try:
+            _telnet_sessions[sid].close()
+        except:
+            pass
+        del _telnet_sessions[sid]
+        emit('terminal_disconnected', {'reason': 'User disconnected'})
+        print(f"🖥️ Terminal disconnected by user (sid={sid[:8]})")
+
+@socketio.on('disconnect')
+def handle_ws_disconnect():
+    """Cleanup telnet session when WebSocket disconnects"""
+    sid = request.sid
+    if sid in _telnet_sessions:
+        try:
+            _telnet_sessions[sid].close()
+        except:
+            pass
+        del _telnet_sessions[sid]
+        print(f"🖥️ Terminal session cleaned up (sid={sid[:8]})")
 
 if __name__ == '__main__':
     # Start MQTT Thread

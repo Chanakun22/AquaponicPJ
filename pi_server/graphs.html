@@ -10,30 +10,29 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <link href="/base.css" rel="stylesheet">
+    <script src="/header.js"></script>
     <style>
+        /* === Page-specific overrides === */
         :root {
             --bg-color: #0f172a;
             --text-color: #f8fafc;
             --card-bg: rgba(30, 41, 59, 0.7);
             --accent-color: #38bdf8;
         }
-
-        body {
-            font-family: 'Outfit', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
+        .header {
+            background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px; margin-bottom: 20px;
+        }
+        .brand i { color: var(--accent-color); filter: drop-shadow(0 0 8px rgba(56,189,248,0.4)); }
+        .brand h1 {
             margin: 0;
-            padding: 20px;
+            background: linear-gradient(135deg, #fff 0%, var(--accent-color) 100%);
+            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
         }
-
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
+        .brand .subtitle { color: rgba(255,255,255,0.5); }
+        .nav-link.active { background: rgba(56,189,248,0.1); color: var(--accent-color); border-color: rgba(56,189,248,0.2); }
+        .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
         h1 { margin: 0; color: var(--accent-color); font-size: 1.4rem; }
 
@@ -56,68 +55,106 @@
 
         .charts-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 15px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
         }
 
         .chart-card {
             background: var(--card-bg);
             border-radius: 16px;
-            padding: 15px;
+            padding: 20px 24px;
             border: 1px solid rgba(255,255,255,0.1);
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .chart-card:hover {
+            border-color: rgba(56,189,248,0.25);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+        }
+        .chart-card.full-width {
+            grid-column: 1 / -1;
         }
 
-        h2 { font-size: 1rem; margin-top: 0; color: #cbd5e1; display: flex; align-items: center; gap: 8px; }
+        h2 {
+            font-size: 1.05rem; margin-top: 0; margin-bottom: 12px;
+            color: #e2e8f0; display: flex; align-items: center; gap: 10px;
+            font-weight: 600;
+        }
+        .chart-card h2 i {
+            font-size: 1.1rem; width: 36px; height: 36px;
+            display: inline-flex; align-items: center; justify-content: center;
+            border-radius: 10px; margin-right: 4px;
+        }
+        .icon-env { background: rgba(56,189,248,0.15); color: #38bdf8; }
+        .icon-water { background: rgba(52,211,153,0.15); color: #34d399; }
+        .icon-light { background: rgba(250,204,21,0.15); color: #facc15; }
         
         .chart-container {
             position: relative;
-            height: 250px;
+            height: 300px;
             width: 100%;
         }
         
         .zoom-hint {
-            font-size: 0.75rem;
-            color: rgba(255,255,255,0.5);
+            font-size: 0.72rem;
+            color: rgba(255,255,255,0.35);
             text-align: center;
-            margin-top: 8px;
+            margin-top: 10px;
         }
 
+        @media (max-width: 900px) {
+            .charts-grid { grid-template-columns: 1fr; }
+            .chart-container { height: 260px; }
+        }
         @media (max-width: 600px) {
             body { padding: 10px; }
-            h1 { font-size: 1.1rem; }
-            .btn { padding: 6px 12px; font-size: 0.8rem; }
-            .chart-container { height: 200px; }
+            .header-top { flex-direction: column; text-align: center; padding: 16px; gap: 12px; }
+            .brand { justify-content: center; }
+            .header-actions { justify-content: center; }
+            .nav-bar { padding: 6px 8px; gap: 2px; }
+            .nav-link { padding: 8px 14px; font-size: 0.8rem; }
+            .chart-container { height: 220px; }
+            .chart-card { padding: 16px; }
         }
     </style>
 </head>
 <body>
-    <header>
-        <h1><i class="fas fa-chart-line"></i> <span id="pageTitle">Historical Data</span></h1>
-        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <button onclick="resetZoom()" class="btn"><i class="fas fa-search-minus"></i> Reset Zoom</button>
-            <button onclick="loadCharts()" class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
-            <a href="/" class="btn btn-primary"><i class="fas fa-arrow-left"></i> Back</a>
+    <header class="header">
+        <div class="header-top">
+            <div class="brand">
+                <i class="fas fa-chart-line"></i>
+                <div>
+                    <h1>Historical Graphs</h1>
+                    <div class="subtitle">Sensor Data Over Time</div>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button onclick="resetZoom()" class="btn"><i class="fas fa-search-minus"></i> Reset Zoom</button>
+                <button onclick="loadCharts()" class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
+            </div>
         </div>
     </header>
 
     <div class="charts-grid">
         <!-- 1. Environment Chart -->
         <div class="chart-card">
-            <h2><i class="fas fa-temperature-high"></i> Environment (Air & Water)</h2>
+            <h2><i class="fas fa-temperature-half icon-env"></i> Environment (Air & Water)</h2>
             <div class="chart-container"><canvas id="envChart"></canvas></div>
             <div class="zoom-hint">🖱️ Scroll to Zoom | Drag to Pan</div>
         </div>
 
         <!-- 2. Water Quality Chart -->
         <div class="chart-card">
-            <h2><i class="fas fa-vial"></i> Water Quality (pH & TDS)</h2>
+            <h2><i class="fas fa-droplet icon-water"></i> Water Quality (pH & TDS)</h2>
             <div class="chart-container"><canvas id="waterChart"></canvas></div>
             <div class="zoom-hint">🖱️ Scroll to Zoom | Drag to Pan</div>
         </div>
 
         <!-- 3. Light Chart -->
-        <div class="chart-card">
-            <h2><i class="fas fa-sun"></i> Light Intensity</h2>
+        <div class="chart-card full-width">
+            <h2><i class="fas fa-sun icon-light"></i> Light Intensity</h2>
             <div class="chart-container"><canvas id="lightChart"></canvas></div>
             <div class="zoom-hint">🖱️ Scroll to Zoom | Drag to Pan</div>
         </div>
@@ -242,5 +279,6 @@
 
         window.onload = loadCharts;
     </script>
+
 </body>
 </html>

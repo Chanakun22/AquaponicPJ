@@ -8,66 +8,17 @@
     <meta name="theme-color" content="#00f2aa">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="/base.css" rel="stylesheet">
+    <script src="/header.js"></script>
     <style>
-        :root {
-            --bg-dark: #0f1115;
-            --bg-panel: #181b21;
-            --primary: #00f2aa;
-            --secondary: #00c8ff;
-            --accent: #38bdf8;
-            --warning: #ffbf00;
-            --danger: #ff2a6d;
-            --success: #10b981;
-            --text-main: #ffffff;
-            --text-muted: #8b9bb4;
-            --glass-bg: rgba(24, 27, 33, 0.7);
-            --glass-border: rgba(255, 255, 255, 0.08);
-            --glass-blur: 20px;
-            --radius: 20px;
-            --radius-sm: 12px;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Outfit', sans-serif;
-            background-color: var(--bg-dark);
-            background-image:
-                radial-gradient(circle at 10% 20%, rgba(0, 242, 170, 0.04) 0%, transparent 40%),
-                radial-gradient(circle at 90% 80%, rgba(0, 200, 255, 0.04) 0%, transparent 40%);
-            color: var(--text-main);
-            min-height: 100vh;
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .container { width: 100%; max-width: 700px; display: flex; flex-direction: column; gap: 28px; }
-
-        /* Header */
-        .header {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 20px 28px; background: var(--glass-bg);
-            backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
-            border: 1px solid var(--glass-border); border-radius: var(--radius);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.2); flex-wrap: wrap; gap: 16px;
-        }
-        .brand { display: flex; align-items: center; gap: 14px; }
-        .brand i { font-size: 1.6rem; color: var(--secondary); filter: drop-shadow(0 0 8px rgba(0,200,255,0.4)); }
+        /* === Page-specific brand colors === */
+        .brand i { color: var(--secondary); filter: drop-shadow(0 0 8px rgba(0,200,255,0.4)); }
         .brand h1 {
-            font-size: 1.4rem; font-weight: 700; letter-spacing: -0.5px;
             background: linear-gradient(135deg, #fff 0%, var(--secondary) 100%);
             -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
         }
-        .brand .subtitle { font-size: 0.75rem; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; }
-        .nav-pills { display: flex; gap: 10px; flex-wrap: wrap; }
-        .nav-pill {
-            display: flex; align-items: center; gap: 8px; padding: 8px 16px;
-            background: rgba(255,255,255,0.03); border-radius: 20px;
-            border: 1px solid var(--glass-border); font-size: 0.85rem;
-            color: var(--text-muted); text-decoration: none; cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        .nav-pill:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); color: var(--text-main); }
-        .nav-pill.active { background: rgba(0,200,255,0.12); border-color: rgba(0,200,255,0.3); color: var(--secondary); }
+        .nav-link.active { background: rgba(0,200,255,0.1); color: var(--secondary); border-color: rgba(0,200,255,0.2); }
+        .container { max-width: 700px; margin-top: 20px; }
 
         /* Card */
         .card {
@@ -99,6 +50,20 @@
         .info-value.connected { color: var(--success); }
         .info-value.disconnected { color: var(--danger); }
 
+        /* Signal Quality Badge */
+        .signal-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            margin-top: 8px; padding: 4px 12px; border-radius: 20px;
+            font-size: 0.72rem; font-weight: 600; letter-spacing: 0.3px;
+        }
+        .signal-badge.excellent { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.25); }
+        .signal-badge.good { background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.25); }
+        .signal-badge.fair { background: rgba(251,191,36,0.15); color: #fbbf24; border: 1px solid rgba(251,191,36,0.25); }
+        .signal-badge.weak { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.25); }
+        .signal-bars { display: flex; align-items: flex-end; gap: 2px; height: 12px; }
+        .signal-bars .bar { width: 3px; border-radius: 1px; background: currentColor; opacity: 0.25; }
+        .signal-bars .bar.active { opacity: 1; }
+
         /* Network List */
         .network-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 20px; }
         .network-item {
@@ -113,8 +78,14 @@
         .network-icon { font-size: 1.1rem; color: var(--text-muted); width: 24px; text-align: center; }
         .network-name { font-weight: 600; font-size: 0.95rem; }
         .network-active { font-size: 0.72rem; color: var(--success); margin-top: 2px; }
-        .network-right { display: flex; align-items: center; gap: 12px; }
+        .network-right { display: flex; align-items: center; gap: 10px; }
+        .signal-info { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
         .signal-text { font-size: 0.78rem; color: var(--text-muted); }
+        .signal-qual { font-size: 0.62rem; font-weight: 600; letter-spacing: 0.3px; }
+        .signal-qual.sq-excellent { color: #10b981; }
+        .signal-qual.sq-good { color: #38bdf8; }
+        .signal-qual.sq-fair { color: #fbbf24; }
+        .signal-qual.sq-weak { color: #ef4444; }
         .lock-icon { font-size: 0.75rem; color: var(--text-muted); }
 
         /* Connect Form */
@@ -206,25 +177,21 @@
     </style>
 </head>
 <body>
-    <div class="container">
 
     <!-- Header -->
     <header class="header">
-        <div class="brand">
-            <i class="fas fa-wifi"></i>
-            <div>
-                <h1>WiFi Settings</h1>
-                <div class="subtitle">Pi Network Configuration</div>
+        <div class="header-top">
+            <div class="brand">
+                <i class="fas fa-wifi"></i>
+                <div>
+                    <h1>WiFi Settings</h1>
+                    <div class="subtitle">Pi Network Configuration</div>
+                </div>
             </div>
-        </div>
-        <div class="nav-pills">
-            <a href="/" class="nav-pill"><i class="fas fa-leaf"></i> <span>Dashboard</span></a>
-            <a href="/settings" class="nav-pill"><i class="fas fa-cog"></i> <span>Settings</span></a>
-            <a href="/ota" class="nav-pill"><i class="fas fa-upload"></i> <span>OTA</span></a>
-            <a href="/wifi" class="nav-pill active"><i class="fas fa-wifi"></i> <span>WiFi</span></a>
         </div>
     </header>
 
+    <div class="container">
     <!-- Current Connection -->
     <div class="card">
         <h2><i class="fas fa-link"></i> การเชื่อมต่อปัจจุบัน</h2>
@@ -244,6 +211,7 @@
             <div class="info-item">
                 <div class="info-label">Signal</div>
                 <div class="info-value" id="wifiSignal">—</div>
+                <div id="signalBadge" class="signal-badge" style="display:none;"></div>
             </div>
         </div>
     </div>
@@ -327,6 +295,32 @@
             }
         }
 
+        // === Signal quality badge ===
+        function updateSignalBadge(signal) {
+            const badge = document.getElementById('signalBadge');
+            if (!signal) { badge.style.display = 'none'; return; }
+            const dbm = parseInt(signal);
+            let level, label, bars;
+            if (dbm >= -50)      { level = 'excellent'; label = 'ดีมาก';    bars = 4; }
+            else if (dbm >= -60) { level = 'good';      label = 'ดี';       bars = 3; }
+            else if (dbm >= -70) { level = 'fair';      label = 'ปานกลาง'; bars = 2; }
+            else                 { level = 'weak';      label = 'อ่อน';     bars = 1; }
+            const barsHtml = [4,7,10,13].map((h, i) =>
+                `<span class="bar${i < bars ? ' active' : ''}" style="height:${h}px"></span>`
+            ).join('');
+            badge.className = `signal-badge ${level}`;
+            badge.innerHTML = `<span class="signal-bars">${barsHtml}</span> ${label}`;
+            badge.style.display = 'inline-flex';
+        }
+
+        function getSignalQuality(signal) {
+            const dbm = parseInt(signal);
+            if (dbm >= -50) return { cls: 'sq-excellent', label: 'ดีมาก' };
+            if (dbm >= -60) return { cls: 'sq-good', label: 'ดี' };
+            if (dbm >= -70) return { cls: 'sq-fair', label: 'ปานกลาง' };
+            return { cls: 'sq-weak', label: 'อ่อน' };
+        }
+
         // === Load current WiFi info ===
         async function loadCurrentWifi() {
             try {
@@ -345,6 +339,7 @@
                 document.getElementById('wifiSsid').textContent = data.ssid || '—';
                 document.getElementById('wifiIp').textContent = data.ip || '—';
                 document.getElementById('wifiSignal').textContent = data.signal ? `${data.signal} dBm` : '—';
+                updateSignalBadge(data.signal);
             } catch (err) {
                 document.getElementById('wifiStatus').textContent = '⚠️ โหลดไม่ได้';
             }
@@ -379,7 +374,10 @@
                                 </div>
                             </div>
                             <div class="network-right">
-                                <span class="signal-text">${net.signal} dBm</span>
+                                <div class="signal-info">
+                                    <span class="signal-text">${net.signal} dBm</span>
+                                    <span class="signal-qual ${getSignalQuality(net.signal).cls}">${getSignalQuality(net.signal).label}</span>
+                                </div>
                                 ${net.encrypted ? '<i class="fas fa-lock lock-icon"></i>' : '<i class="fas fa-lock-open lock-icon"></i>'}
                             </div>
                         `;
@@ -495,6 +493,8 @@
             toast.className = 'toast ' + type + ' show';
             setTimeout(() => toast.classList.remove('show'), 5000);
         }
+
+
 
         // === Init ===
         loadCurrentWifi();

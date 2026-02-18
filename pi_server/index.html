@@ -129,6 +129,10 @@
       }
       
       .status-pill strong { color: var(--text-main); }
+      .ns-dl { color: #10b981; }
+      .ns-ul { color: #38bdf8; }
+      .ns-pg { color: #fbbf24; }
+      .ns-val { font-weight: 600; color: var(--text-main); font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; }
 
       .status-indicator {
         width: 8px;
@@ -496,6 +500,9 @@
               <i class="fa-solid fa-network-wired"></i>
               <span id="deviceIp">--</span>
             </div>
+            <div class="status-pill"><i class="fas fa-arrow-down ns-dl"></i> <span class="ns-val" id="nsDl">—</span></div>
+            <div class="status-pill"><i class="fas fa-arrow-up ns-ul"></i> <span class="ns-val" id="nsUl">—</span></div>
+            <div class="status-pill"><i class="fas fa-signal ns-pg"></i> <span class="ns-val" id="nsPing">—</span></div>
           </div>
         </div>
 
@@ -508,7 +515,9 @@
           <a href="/settings" class="nav-link"><i class="fa-solid fa-cog"></i> Settings</a>
           <a href="/ota" class="nav-link"><i class="fa-solid fa-upload"></i> OTA</a>
           <a href="/wifi" class="nav-link"><i class="fa-solid fa-wifi"></i> WiFi</a>
+          <a href="/terminal" class="nav-link"><i class="fa-solid fa-terminal"></i> Terminal</a>
         </nav>
+        <script>document.querySelector('.nav-link.active')?.scrollIntoView({inline:'nearest',block:'nearest'})</script>
       </header>
 
       <!-- Connection -->
@@ -1100,6 +1109,12 @@
             .catch(err => console.log('[PWA] SW registration failed:', err));
         });
       }
+    </script>
+    <script>
+      let _nsRx=null,_nsTx=null,_nsT=null;
+      function _nsFmt(b){if(b<1024)return b.toFixed(0)+' B/s';if(b<1048576)return(b/1024).toFixed(1)+' KB/s';return(b/1048576).toFixed(2)+' MB/s';}
+      async function _nsPoll(){try{const r=await fetch('/api/wifi/netstats'),d=await r.json(),n=Date.now();if(_nsRx!==null){const t=(n-_nsT)/1000;if(t>0){document.getElementById('nsDl').textContent=_nsFmt((d.rx_bytes-_nsRx)/t);document.getElementById('nsUl').textContent=_nsFmt((d.tx_bytes-_nsTx)/t);}}_nsRx=d.rx_bytes;_nsTx=d.tx_bytes;_nsT=n;document.getElementById('nsPing').textContent=d.ping_ms!==null?d.ping_ms+' ms':'\u2014';}catch(e){}}
+      _nsPoll();setInterval(_nsPoll,3000);
     </script>
   </body>
 </html>

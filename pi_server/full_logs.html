@@ -6,72 +6,31 @@
     <title>📋 System Logs - Aquaponics</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="/base.css" rel="stylesheet">
+    <script src="/header.js"></script>
     <style>
+        /* === Page-specific === */
         :root {
-            --bg-dark: #0f1115;
-            --bg-panel: #181b21;
-            --primary: #00f2aa;
-            --secondary: #00c8ff;
-            --warning: #ffbf00;
-            --danger: #ff2a6d;
-            --text-main: #ffffff;
-            --text-muted: #8b9bb4;
-            --glass-bg: rgba(24, 27, 33, 0.7);
-            --glass-border: rgba(255, 255, 255, 0.08);
-            --glass-blur: 20px;
-            --radius: 24px;
-            --radius-sm: 12px;
-
-            /* Log type colors */
             --info-color: #10b981;
             --warn-color: #f59e0b;
             --error-color: #ef4444;
             --debug-color: #a78bfa;
         }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
         body {
-            font-family: 'Outfit', sans-serif;
-            background-color: var(--bg-dark);
-            background-image:
-                radial-gradient(circle at 10% 20%, rgba(0, 242, 170, 0.03) 0%, transparent 40%),
-                radial-gradient(circle at 90% 80%, rgba(0, 200, 255, 0.03) 0%, transparent 40%);
-            color: var(--text-main);
-            height: 100vh;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
+            height: 100vh; overflow: hidden;
         }
-
         .container {
-            max-width: 1200px;
-            width: 100%;
-            margin: 0 auto;
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            gap: 16px;
+            max-width: 1200px; margin: 0 auto;
+            height: 100%; gap: 16px;
         }
-
-        /* ===== HEADER ===== */
         .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 16px 24px;
-            background: var(--glass-bg);
-            backdrop-filter: blur(var(--glass-blur));
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-sm);
-            flex-shrink: 0;
+            background: var(--glass-bg); backdrop-filter: blur(var(--glass-blur));
+            border-radius: var(--radius-sm); flex-shrink: 0;
         }
-
-        .header-left { display: flex; align-items: center; gap: 12px; }
-        .header-left h1 { font-size: 1.3rem; font-weight: 600; }
-        .header-left h1 i { color: var(--primary); margin-right: 6px; }
-
+        .header-top { padding: 16px 24px; gap: 12px; }
+        .header-brand { display: flex; align-items: center; gap: 12px; }
+        .header-brand h1 { font-size: 1.3rem; font-weight: 600; }
+        .header-brand h1 i { color: var(--primary); margin-right: 6px; }
         .header-right { display: flex; gap: 8px; flex-wrap: wrap; }
 
         .btn {
@@ -248,14 +207,15 @@
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <div class="header-left">
-                <h1><i class="fas fa-scroll"></i> System Logs</h1>
-            </div>
-            <div class="header-right">
-                <button onclick="fetchLogs()" class="btn" id="btnRefresh"><i class="fas fa-sync-alt"></i> Refresh</button>
-                <button onclick="toggleAutoRefresh()" class="btn" id="btnAuto"><span class="refresh-dot"></span> Auto: ON</button>
-                <button onclick="clearLogsFile()" class="btn btn-danger" id="btnDelete"><i class="fas fa-trash"></i> Delete All</button>
-                <a href="/" class="btn btn-primary"><i class="fas fa-arrow-left"></i> Dashboard</a>
+            <div class="header-top">
+                <div class="header-brand">
+                    <h1><i class="fas fa-scroll"></i> System Logs</h1>
+                </div>
+                <div class="header-right">
+                    <button onclick="fetchLogs()" class="btn" id="btnRefresh"><i class="fas fa-sync-alt"></i> Refresh</button>
+                    <button onclick="toggleAutoRefresh()" class="btn" id="btnAuto"><span class="refresh-dot"></span> Auto: ON</button>
+                    <button onclick="clearLogsFile()" class="btn btn-danger" id="btnDelete"><i class="fas fa-trash"></i> Delete All</button>
+                </div>
             </div>
         </div>
 
@@ -566,5 +526,6 @@
     fetchLogs();
     startAutoRefresh();
     </script>
+
 </body>
 </html>

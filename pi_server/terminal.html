@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🖥️ Terminal - Smart Aquaponics</title>
+    <link rel="manifest" href="/pwa/manifest.json">
+    <meta name="theme-color" content="#00f2aa">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <link href="/base.css" rel="stylesheet">
+    <script src="/header.js"></script>
+    <style>
+        /* === Page-specific === */
+        .container { max-width: 900px; }
+
+        /* Connection Bar */
+        .connect-bar {
+            background: var(--bg-panel); border: 1px solid var(--glass-border);
+            border-radius: var(--radius); padding: 20px 24px;
+        }
+        .connect-bar h3 { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 14px; text-transform: uppercase; letter-spacing: 1px; }
+        .connect-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .connect-input {
+            flex: 1; min-width: 140px; padding: 10px 16px;
+            background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: var(--radius-sm); color: var(--text-main);
+            font-family: 'JetBrains Mono', monospace; font-size: 0.9rem;
+            outline: none; transition: all 0.2s;
+        }
+        .connect-input:focus { border-color: var(--secondary); box-shadow: 0 0 12px rgba(0,200,255,0.15); }
+        .connect-input::placeholder { color: rgba(139,155,180,0.5); }
+        .connect-input.small { max-width: 80px; text-align: center; }
+        .btn {
+            padding: 10px 20px; border: none; border-radius: var(--radius-sm);
+            font-family: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+            transition: all 0.3s ease; display: inline-flex; align-items: center; gap: 8px;
+        }
+        .btn-connect { background: linear-gradient(135deg, var(--primary), var(--secondary)); color: #000; }
+        .btn-connect:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,242,170,0.25); }
+        .btn-disconnect { background: rgba(255,42,109,0.15); color: var(--danger); border: 1px solid rgba(255,42,109,0.2); }
+        .btn-disconnect:hover { background: rgba(255,42,109,0.25); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--text-muted); box-shadow: 0 0 8px currentColor;
+            transition: all 0.3s;
+        }
+        .status-dot.connected { background: var(--primary); color: var(--primary); }
+        .status-dot.error { background: var(--danger); color: var(--danger); }
+        .status-text { font-size: 0.82rem; color: var(--text-muted); }
+
+        /* Terminal */
+        .terminal-wrapper {
+            background: var(--bg-terminal); border: 1px solid var(--glass-border);
+            border-radius: var(--radius); overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+        .terminal-topbar {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 18px; background: rgba(255,255,255,0.03);
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .terminal-topbar-left { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--text-muted); }
+        .terminal-dots { display: flex; gap: 6px; }
+        .terminal-dots span { width: 10px; height: 10px; border-radius: 50%; }
+        .terminal-dots .red { background: #ff5f57; }
+        .terminal-dots .yellow { background: #febc2e; }
+        .terminal-dots .green { background: #28c840; }
+        .clear-btn {
+            background: none; border: 1px solid var(--glass-border); border-radius: 6px;
+            color: var(--text-muted); font-size: 0.75rem; padding: 4px 10px; cursor: pointer;
+            font-family: inherit; transition: all 0.2s;
+        }
+        .clear-btn:hover { color: var(--text-main); border-color: rgba(255,255,255,0.2); }
+        .terminal-output {
+            padding: 16px 20px; height: 420px; overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;
+            line-height: 1.7; white-space: pre-wrap; word-break: break-all;
+            color: #c9d1d9; scroll-behavior: smooth;
+        }
+        .terminal-output::-webkit-scrollbar { width: 6px; }
+        .terminal-output::-webkit-scrollbar-track { background: transparent; }
+        .terminal-output::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+        .terminal-input-row {
+            display: flex; align-items: center; padding: 0 20px 16px;
+            font-family: 'JetBrains Mono', monospace; gap: 8px;
+        }
+        .prompt { color: var(--primary); font-weight: 600; font-size: 0.85rem; white-space: nowrap; }
+        .terminal-input {
+            flex: 1; background: none; border: none; outline: none;
+            color: #e6edf3; font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem; caret-color: var(--primary);
+        }
+        .terminal-input::placeholder { color: rgba(139,155,180,0.3); }
+        .terminal-input:disabled { opacity: 0.4; }
+
+        /* Quick Commands */
+        .quick-cmds {
+            display: flex; gap: 6px; flex-wrap: wrap; padding: 12px 20px;
+            border-top: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.015);
+        }
+        .quick-btn {
+            padding: 6px 14px; background: rgba(255,255,255,0.04);
+            border: 1px solid var(--glass-border); border-radius: 8px;
+            color: var(--text-muted); font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem; cursor: pointer; transition: all 0.2s;
+        }
+        .quick-btn:hover { background: rgba(0,242,170,0.08); color: var(--primary); border-color: rgba(0,242,170,0.2); }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            body { padding: 12px; }
+            .header-top { flex-direction: column; text-align: center; padding: 16px; gap: 12px; }
+            .brand { justify-content: center; }
+            .nav-bar { padding: 6px 8px; gap: 2px; }
+            .nav-link { padding: 8px 14px; font-size: 0.8rem; }
+            .connect-bar { padding: 16px; }
+            .terminal-output { height: 350px; font-size: 0.78rem; }
+            .quick-cmds { padding: 10px 14px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-top">
+            <div class="brand">
+                <i class="fas fa-terminal"></i>
+                <div>
+                    <h1>Web Terminal</h1>
+                    <div class="subtitle">ESP32 Remote CLI</div>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="status-dot" id="statusDot"></div>
+                <span class="status-text" id="statusText">Disconnected</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Connection Bar -->
+    <div class="connect-bar">
+        <h3><i class="fas fa-plug" style="margin-right: 6px;"></i> ESP32 Connection</h3>
+        <div class="connect-row">
+            <input type="text" class="connect-input" id="espIp" placeholder="ESP32 IP" value="192.168.10.100">
+            <input type="text" class="connect-input small" id="espPort" placeholder="Port" value="23">
+            <button class="btn btn-connect" id="connectBtn" onclick="connectTerminal()">
+                <i class="fas fa-plug"></i> Connect
+            </button>
+            <button class="btn btn-disconnect" id="disconnectBtn" onclick="disconnectTerminal()" style="display:none;">
+                <i class="fas fa-times"></i> Disconnect
+            </button>
+        </div>
+    </div>
+
+    <!-- Terminal -->
+    <div class="terminal-wrapper">
+        <div class="terminal-topbar">
+            <div class="terminal-topbar-left">
+                <div class="terminal-dots">
+                    <span class="red"></span><span class="yellow"></span><span class="green"></span>
+                </div>
+                <span>ESP32 Telnet Console</span>
+            </div>
+            <button class="clear-btn" onclick="clearTerminal()"><i class="fas fa-eraser"></i> Clear</button>
+        </div>
+        <div class="terminal-output" id="termOutput">
+<span style="color: var(--text-muted);">Welcome to Aquaponics Web Terminal
+Enter ESP32 IP and click Connect to begin.
+</span></div>
+        <div class="terminal-input-row">
+            <span class="prompt" id="promptText">$</span>
+            <input type="text" class="terminal-input" id="termInput" placeholder="Type a command..." disabled
+                   onkeydown="handleInputKey(event)" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="quick-cmds">
+            <button class="quick-btn" onclick="sendQuick('help')">help</button>
+            <button class="quick-btn" onclick="sendQuick('status')">status</button>
+            <button class="quick-btn" onclick="sendQuick('health')">health</button>
+            <button class="quick-btn" onclick="sendQuick('wifi')">wifi</button>
+            <button class="quick-btn" onclick="sendQuick('mqtt')">mqtt</button>
+            <button class="quick-btn" onclick="sendQuick('ph')">ph</button>
+            <button class="quick-btn" onclick="sendQuick('test')">test</button>
+            <button class="quick-btn" onclick="sendQuick('version')">version</button>
+            <button class="quick-btn" onclick="sendQuick('reboot')">reboot</button>
+        </div>
+    </div>
+
+    </div>
+
+    <script>
+        let socket = null;
+        let isConnected = false;
+        let commandHistory = [];
+        let historyIndex = -1;
+
+        const output = document.getElementById('termOutput');
+        const input = document.getElementById('termInput');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+
+        function initSocket() {
+            if (socket) return;
+
+            const port = window.location.port ? `:${window.location.port}` : '';
+            const url = `${window.location.protocol}//${window.location.hostname}${port}`;
+
+            socket = io(url, {
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionDelay: 2000
+            });
+
+            socket.on('connect', () => {
+                appendOutput('\n[WebSocket connected to Pi server]\n', '#4ade80');
+            });
+
+            socket.on('terminal_data', (data) => {
+                appendOutput(data.text);
+                scrollToBottom();
+            });
+
+            socket.on('terminal_connected', (data) => {
+                isConnected = true;
+                setStatus('connected', `Connected to ${data.ip}:${data.port}`);
+                input.disabled = false;
+                input.focus();
+                connectBtn.style.display = 'none';
+                disconnectBtn.style.display = '';
+                appendOutput(`\n[Connected to ESP32 at ${data.ip}:${data.port}]\n`, '#4ade80');
+            });
+
+            socket.on('terminal_disconnected', (data) => {
+                isConnected = false;
+                setStatus('', 'Disconnected');
+                input.disabled = true;
+                connectBtn.style.display = '';
+                disconnectBtn.style.display = 'none';
+                appendOutput(`\n[Disconnected: ${data.reason || 'connection closed'}]\n`, '#fda4af');
+            });
+
+            socket.on('terminal_error', (data) => {
+                setStatus('error', 'Error');
+                appendOutput(`\n[Error: ${data.message}]\n`, '#ff6b6b');
+            });
+
+            socket.on('disconnect', () => {
+                if (isConnected) {
+                    isConnected = false;
+                    setStatus('', 'WebSocket lost');
+                    input.disabled = true;
+                    connectBtn.style.display = '';
+                    disconnectBtn.style.display = 'none';
+                }
+            });
+        }
+
+        function connectTerminal() {
+            const ip = document.getElementById('espIp').value.trim();
+            const port = parseInt(document.getElementById('espPort').value.trim()) || 23;
+
+            if (!ip) {
+                appendOutput('\n[Error: Please enter ESP32 IP address]\n', '#ff6b6b');
+                return;
+            }
+
+            initSocket();
+            setStatus('', 'Connecting...');
+            connectBtn.disabled = true;
+            socket.emit('terminal_connect', { ip: ip, port: port });
+
+            // Re-enable button after timeout
+            setTimeout(() => { connectBtn.disabled = false; }, 5000);
+        }
+
+        function disconnectTerminal() {
+            if (socket) {
+                socket.emit('terminal_disconnect');
+            }
+        }
+
+        function sendCommand(cmd) {
+            if (!isConnected || !socket || !cmd) return;
+            socket.emit('terminal_input', { text: cmd + '\r\n' });
+
+            // Add to history
+            if (cmd.trim() && (commandHistory.length === 0 || commandHistory[commandHistory.length - 1] !== cmd)) {
+                commandHistory.push(cmd);
+                if (commandHistory.length > 50) commandHistory.shift();
+            }
+            historyIndex = commandHistory.length;
+        }
+
+        function sendQuick(cmd) {
+            if (!isConnected) {
+                appendOutput('\n[Not connected — connect first]\n', '#fda4af');
+                return;
+            }
+            appendOutput(cmd + '\n', 'var(--primary)');
+            sendCommand(cmd);
+            input.focus();
+        }
+
+        function handleInputKey(e) {
+            if (e.key === 'Enter') {
+                const cmd = input.value;
+                if (cmd.trim()) {
+                    appendOutput(cmd + '\n', 'var(--primary)');
+                    sendCommand(cmd);
+                }
+                input.value = '';
+                e.preventDefault();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (commandHistory.length > 0 && historyIndex > 0) {
+                    historyIndex--;
+                    input.value = commandHistory[historyIndex];
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (historyIndex < commandHistory.length - 1) {
+                    historyIndex++;
+                    input.value = commandHistory[historyIndex];
+                } else {
+                    historyIndex = commandHistory.length;
+                    input.value = '';
+                }
+            }
+        }
+
+        function appendOutput(text, color) {
+            const span = document.createElement('span');
+            if (color) span.style.color = color;
+            span.textContent = text;
+            output.appendChild(span);
+            scrollToBottom();
+
+            // Limit output nodes
+            while (output.childNodes.length > 2000) {
+                output.removeChild(output.firstChild);
+            }
+        }
+
+        function scrollToBottom() {
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function clearTerminal() {
+            output.innerHTML = '';
+            appendOutput('Terminal cleared.\n', 'var(--text-muted)');
+        }
+
+        function setStatus(state, text) {
+            statusDot.className = 'status-dot ' + state;
+            statusText.textContent = text;
+        }
+
+        // Focus input on click anywhere in terminal
+        document.querySelector('.terminal-wrapper').addEventListener('click', (e) => {
+            if (e.target.tagName !== 'BUTTON' && !input.disabled) input.focus();
+        });
+    </script>
+</body>
+</html>

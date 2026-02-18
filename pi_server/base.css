@@ -1,0 +1,161 @@
+/* ============================================
+   Aquaponics System - Shared Base Styles
+   ============================================ */
+
+/* === CSS Variables === */
+:root {
+  --bg-dark: #0f1115;
+  --bg-panel: #181b21;
+  --primary: #00f2aa;
+  --secondary: #00c8ff;
+  --accent: #38bdf8;
+  --warning: #ffbf00;
+  --danger: #ff2a6d;
+  --success: #10b981;
+  --text-main: #ffffff;
+  --text-muted: #8b9bb4;
+  --glass-bg: rgba(24, 27, 33, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-blur: 20px;
+  --radius: 20px;
+  --radius-sm: 12px;
+}
+
+/* === Reset === */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* === Body === */
+body {
+  font-family: "Outfit", sans-serif;
+  background-color: var(--bg-dark);
+  background-image:
+    radial-gradient(
+      circle at 10% 20%,
+      rgba(0, 242, 170, 0.04) 0%,
+      transparent 40%
+    ),
+    radial-gradient(
+      circle at 90% 80%,
+      rgba(0, 200, 255, 0.04) 0%,
+      transparent 40%
+    );
+  color: var(--text-main);
+  min-height: 100vh;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* === Header === */
+.header {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  background: var(--bg-panel);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  width: 100%;
+}
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 28px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.brand i {
+  font-size: 1.6rem;
+  color: var(--primary);
+  filter: drop-shadow(0 0 8px rgba(0, 242, 170, 0.4));
+}
+.brand h1 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, #fff 0%, var(--primary) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.brand .subtitle {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* === Container === */
+.container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* === Card === */
+.card {
+  background: var(--bg-panel);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: 32px;
+  position: relative;
+  overflow: hidden;
+}
+.card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--secondary), var(--accent));
+  opacity: 0.8;
+}
+.card h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.card h2 i {
+  font-size: 1rem;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(0, 200, 255, 0.1);
+  color: var(--secondary);
+}
+
+/* === Responsive Base === */
+@media (max-width: 768px) {
+  body {
+    padding: 12px;
+  }
+  .header-top {
+    flex-direction: column;
+    text-align: center;
+    padding: 16px;
+    gap: 12px;
+  }
+  .brand {
+    justify-content: center;
+  }
+}
