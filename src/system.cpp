@@ -155,8 +155,8 @@ void systemGetHealth(SystemHealth_t* health) {
     health->watchdogResets = _watchdogResets;
     health->wifiReconnects = _wifiReconnects;
     health->mqttReconnects = _mqttReconnects;
-    String rst = systemGetResetReasonString();
-    strlcpy(health->resetReason, rst.c_str(), sizeof(health->resetReason));
+    const char* rst = systemGetResetReasonString();
+    strlcpy(health->resetReason, rst, sizeof(health->resetReason));
     
     // Check if sensors are OK (simplified - can be enhanced)
     health->sensorsOk = true;  // TODO: Implement sensor health check
@@ -236,7 +236,7 @@ void systemIncrementMqttReconnects(void) {
     _savePersistedStats();
 }
 
-String systemGetResetReasonString(void) {
+const char* systemGetResetReasonString(void) {
     #if defined(ESP32)
     esp_reset_reason_t reason = esp_reset_reason();
     switch (reason) {

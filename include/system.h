@@ -50,7 +50,7 @@ void systemInit(void);
  * @brief Get human readable reset reason
  * @return String description of reset reason
  */
-String systemGetResetReasonString(void);
+const char* systemGetResetReasonString(void);
 
 
 

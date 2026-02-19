@@ -88,7 +88,7 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
     }
     
     // Handle TDS Calibration
-    if (String(topic) == "aquaponics/config/tds_cal") {
+    if (strcmp(topic, "aquaponics/config/tds_cal") == 0) {
         float lowPpm = doc["low_ppm"] | 0.0f;
         float lowVoltage = doc["low_voltage"] | 0.0f;
         float highPpm = doc["high_ppm"] | 0.0f;
@@ -103,7 +103,7 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
     }
     
     // Handle pH Calibration
-    if (String(topic) == "aquaponics/config/ph_cal") {
+    if (strcmp(topic, "aquaponics/config/ph_cal") == 0) {
         const char* action = doc["action"] | "";
         
         if (strcmp(action, "cal7") == 0) {
@@ -130,7 +130,7 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
     }
     
     // Handle Sensor Toggle Configuration (batch update to prevent NVS race condition)
-    if (String(topic) == LOCAL_MQTT_TOPIC_CONFIG_SENSORS) {
+    if (strcmp(topic, LOCAL_MQTT_TOPIC_CONFIG_SENSORS) == 0) {
         bool states[SENSOR_COUNT];
         // Read current states as defaults
         for (int i = 0; i < SENSOR_COUNT; i++) {
@@ -177,9 +177,10 @@ static bool _reconnect() {
     LOG_INFO("Connecting to Local MQTT (%s)...", _brokerIp.toString().c_str());
 
     // Create a random client ID
-    String clientId = "ESP32-Aquaponics-" + String(random(0xffff), HEX);
+    char clientId[32];
+    snprintf(clientId, sizeof(clientId), "ESP32-Aquaponics-%04x", (unsigned int)random(0xffff));
 
-    if (_localMqtt.connect(clientId.c_str())) {
+    if (_localMqtt.connect(clientId)) {
         LOG_INFO("✅ Connected to Local MQTT!");
         _connectionFailCount = 0; // Reset counter on success
         
@@ -272,7 +273,7 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
     doc["wifi_reconnects"] = health.wifiReconnects;
     doc["mqtt_reconnects"] = health.mqttReconnects;
     doc["watchdog_resets"] = health.watchdogResets;
-    doc["reset_reason"] = String(health.resetReason);
+    doc["reset_reason"] = health.resetReason;
     doc["cpu_temp"] = health.cpuTemp; // ESP32 Temp
 
     char payload[512];

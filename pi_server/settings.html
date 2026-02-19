@@ -400,6 +400,67 @@
             margin: 16px 0;
         }
 
+        /* === Health Items === */
+        .health-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            border-radius: 10px;
+            background: rgba(0,0,0,0.25);
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .health-item .label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .health-item .label i {
+            width: 20px;
+            text-align: center;
+            font-size: 0.85rem;
+        }
+
+        .health-badge {
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .health-badge.ok {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .health-badge.fail {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .health-value {
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            margin-left: auto;
+            margin-right: 12px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .loading {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.88rem;
+            padding: 12px;
+        }
+
         /* === Responsive === */
         @media (max-width: 768px) {
             body { padding: 12px; }
@@ -585,15 +646,6 @@
                     <option value="7">7 Days</option>
                 </select>
             </div>
-
-            <div class="form-group">
-                <label>Dashboard Refresh (seconds)</label>
-                <select id="refresh_sec">
-                    <option value="2">2 sec</option>
-                    <option value="5">5 sec</option>
-                    <option value="10">10 sec</option>
-                </select>
-            </div>
         </div>
 
         <!-- Camera -->
@@ -761,6 +813,33 @@
             </div>
         </div>
     </div>
+    <!-- System Health Section -->
+    <div class="section-title">🩺 System Health</div>
+
+    <div class="settings-grid">
+        <!-- Pi Services -->
+        <div class="card">
+            <h2><i class="fas fa-server"></i> Pi Services</h2>
+            <div id="serviceList" style="display:flex; flex-direction:column; gap:10px;">
+                <div class="loading"><i class="fas fa-spinner fa-spin"></i> กำลังตรวจสอบ...</div>
+            </div>
+        </div>
+
+        <!-- ESP32 Sensors -->
+        <div class="card">
+            <h2><i class="fas fa-microchip"></i> ESP32 Sensors</h2>
+            <div id="espStatus" style="margin-bottom:14px; padding:10px 14px; border-radius:8px; font-size:0.88rem; font-weight:600;"></div>
+            <div id="sensorList" style="display:flex; flex-direction:column; gap:10px;">
+                <div class="loading"><i class="fas fa-spinner fa-spin"></i> กำลังตรวจสอบ...</div>
+            </div>
+        </div>
+    </div>
+
+    <div style="text-align:center; margin: 16px 0;">
+        <button class="btn" onclick="loadHealth()">
+            <i class="fas fa-sync-alt"></i> Refresh Health
+        </button>
+    </div>
 
     <div class="footer-actions">
         <button class="btn btn-success" onclick="saveSettings()">
@@ -819,7 +898,6 @@
             // Display
             document.getElementById('device_name').value = settings.display?.device_name ?? "Aquaponics System";
             document.getElementById('graph_days').value = settings.display?.graph_days ?? 3;
-            document.getElementById('refresh_sec').value = settings.display?.refresh_sec ?? 5;
 
             // Camera
             const camW = settings.camera?.width ?? 1280;
@@ -850,7 +928,6 @@
                     air: document.getElementById('sns_air').checked,
                     light: document.getElementById('sns_light').checked
                 },
-                light: settings.light || {},
                 notifications: {
                     enabled: document.getElementById('notify_enabled').checked,
                     line_token: document.getElementById('line_token').value,
@@ -858,8 +935,7 @@
                 },
                 display: {
                     device_name: document.getElementById('device_name').value,
-                    graph_days: parseInt(document.getElementById('graph_days').value),
-                    refresh_sec: parseInt(document.getElementById('refresh_sec').value)
+                    graph_days: parseInt(document.getElementById('graph_days').value)
                 },
                 tds_calibration: settings.tds_calibration || {},
                 camera: (() => {
@@ -1126,12 +1202,79 @@
             }
         }
 
+        // === System Health ===
+        async function loadHealth() {
+            const svcEl = document.getElementById('serviceList');
+            const snsEl = document.getElementById('sensorList');
+            const espEl = document.getElementById('espStatus');
+
+            svcEl.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> กำลังตรวจสอบ...</div>';
+            snsEl.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> กำลังตรวจสอบ...</div>';
+
+            try {
+                const res = await fetch('/api/health/details');
+                const data = await res.json();
+
+                // Pi Services
+                const svcIcons = {
+                    'Web Server': 'fa-globe', 'Hotspot (AP)': 'fa-wifi',
+                    'Camera': 'fa-camera', 'DHCP Server': 'fa-network-wired',
+                    'MQTT Broker': 'fa-tower-broadcast', 'Tailscale VPN': 'fa-shield-halved'
+                };
+                svcEl.innerHTML = data.services.map(s => `
+                    <div class="health-item">
+                        <div class="label">
+                            <i class="fas ${svcIcons[s.name] || 'fa-circle'}"></i>
+                            ${s.name}
+                        </div>
+                        <span class="health-badge ${s.ok ? 'ok' : 'fail'}">${s.ok ? 'OK' : 'FAIL'}</span>
+                    </div>
+                `).join('');
+
+                // ESP32 Status
+                if (data.esp_online) {
+                    espEl.style.background = 'rgba(16, 185, 129, 0.1)';
+                    espEl.style.color = '#10b981';
+                    espEl.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+                    espEl.innerHTML = '<i class="fas fa-circle" style="font-size:0.5rem;vertical-align:middle;margin-right:6px;"></i> ESP32 Online' +
+                        (data.esp_last_seen >= 0 ? ` (${data.esp_last_seen}s ago)` : '');
+                } else {
+                    espEl.style.background = 'rgba(239, 68, 68, 0.1)';
+                    espEl.style.color = '#ef4444';
+                    espEl.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+                    espEl.innerHTML = '<i class="fas fa-circle" style="font-size:0.5rem;vertical-align:middle;margin-right:6px;"></i> ESP32 Offline';
+                }
+
+                // Sensors
+                const snsIcons = {
+                    'Water Temp': 'fa-temperature-low', 'Air Temp': 'fa-temperature-high',
+                    'Humidity': 'fa-droplet', 'TDS': 'fa-flask',
+                    'pH': 'fa-vial', 'Light': 'fa-sun'
+                };
+                snsEl.innerHTML = data.sensors.map(s => `
+                    <div class="health-item">
+                        <div class="label">
+                            <i class="fas ${snsIcons[s.name] || 'fa-circle'}"></i>
+                            ${s.name}
+                        </div>
+                        <span class="health-value">${s.value} ${s.unit}</span>
+                        <span class="health-badge ${s.ok ? 'ok' : 'fail'}">${s.ok ? 'OK' : 'FAIL'}</span>
+                    </div>
+                `).join('');
+
+            } catch (e) {
+                svcEl.innerHTML = '<div class="loading" style="color:#ef4444;">โหลดไม่ได้: ' + e.message + '</div>';
+                snsEl.innerHTML = '';
+            }
+        }
+
         // Load on start
         window.onload = function() {
             loadSettings().then(() => {
                 populateTdsCalibration();
                 populatePhCalibration();
             });
+            loadHealth();
         };
     </script>
 

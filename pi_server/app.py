@@ -24,11 +24,6 @@ def load_settings():
             "humidity_min": 50, "humidity_max": 80,
             "tds_min": 300, "tds_max": 600
         },
-        "light": {
-            "enabled": False,
-            "on_day": 1, "on_time": "06:00",
-            "off_day": 5, "off_time": "18:00"
-        },
         "notifications": {
             "line_token": "",
             "alert_cooldown_min": 15,
@@ -36,7 +31,6 @@ def load_settings():
         },
         "display": {
             "graph_days": 3,
-            "refresh_sec": 5,
             "device_name": "Aquaponics System"
         },
         "sensor_config": {
@@ -343,6 +337,12 @@ def on_message(client, userdata, msg):
         data = json.loads(payload)
         for key in data:
             last_data[key] = data[key]
+        
+        # If a sensor key is MISSING from payload, ESP32 read NaN → mark as failed
+        SENSOR_KEYS = ["water_temp", "air_temp", "humidity", "tds", "ph", "light"]
+        for sk in SENSOR_KEYS:
+            if sk not in data:
+                last_data[sk] = None
             
         # === Save to DB (Filtered) ===
         # Save only every 60 seconds to save space
@@ -615,6 +615,87 @@ def get_health():
 def get_info():
     return jsonify({"firmware": "Pi-Server-v2 (Monitoring)", "status": "online"})
 
+@app.route('/api/health/details')
+def get_health_details():
+    """Check Pi services and ESP32 sensors status"""
+    import subprocess, time as _time
+
+    result = {"services": [], "sensors": []}
+
+    # === Pi Services ===
+    services = [
+        ("aquaponics", "Web Server"),
+        ("aquaponics-hotspot", "Hotspot (AP)"),
+        ("aquaponics-cam", "Camera"),
+        ("dnsmasq", "DHCP Server"),
+        ("mosquitto", "MQTT Broker"),
+        ("tailscaled", "Tailscale VPN"),
+    ]
+
+    for svc_name, display_name in services:
+        try:
+            out = subprocess.run(
+                ['systemctl', 'is-active', svc_name],
+                capture_output=True, text=True, timeout=3
+            )
+            status = out.stdout.strip()
+            ok = status == 'active'
+
+            # Camera special case: app.py starts cam_server directly,
+            # so systemd may show 'activating' while camera works fine
+            if not ok and svc_name == 'aquaponics-cam':
+                proc = subprocess.run(
+                    ['pgrep', '-f', 'cam_server'],
+                    capture_output=True, timeout=3
+                )
+                if proc.returncode == 0:
+                    ok = True
+                    status = 'running'
+        except Exception:
+            status = 'error'
+            ok = False
+
+        result["services"].append({
+            "name": display_name,
+            "service": svc_name,
+            "status": status,
+            "ok": ok
+        })
+
+    # === ESP32 Connection ===
+    esp_age = int(_time.time() - last_esp_update) if last_esp_update > 0 else -1
+    result["esp_online"] = esp_online
+    result["esp_last_seen"] = esp_age
+
+    # === ESP32 Sensors ===
+    # (key, name, unit, min_val, max_val, error_values)
+    sensor_checks = [
+        ("water_temp", "Water Temp", "°C", 5, 50, [85.0, -127, 0]),
+        ("air_temp", "Air Temp", "°C", 5, 60, [0]),
+        ("humidity", "Humidity", "%", 10, 100, [0]),
+        ("tds", "TDS", "ppm", 1, 5000, []),
+        ("ph", "pH", "", 1, 14, [0]),
+        ("light", "Light", "lux", 0, 100000, []),
+    ]
+
+    for key, name, unit, min_val, max_val, error_vals in sensor_checks:
+        value = last_data.get(key, None)
+        # Sensor OK if: ESP online, value in range, AND not a known error value
+        ok = (esp_online
+              and value is not None
+              and isinstance(value, (int, float))
+              and min_val <= value <= max_val
+              and value not in error_vals)
+        result["sensors"].append({
+            "name": name,
+            "key": key,
+            "value": value if value is not None else "N/A",
+            "unit": unit if value is not None else "",
+            "ok": ok
+        })
+
+    return jsonify(result)
+
 @app.route('/api/logs')
 def get_logs():
     return jsonify(list(log_buffer))
@@ -839,7 +920,7 @@ def ota_upload():
                      "🔄 Starting espota flash to ESP32..."]
         }
 
-        esp_ip = "192.168.10.100"
+        esp_ip = "192.168.10.10"
         ota_password = "admin123"
         espota_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'espota.py')
 
