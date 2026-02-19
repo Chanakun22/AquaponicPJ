@@ -8,8 +8,8 @@
     <meta name="theme-color" content="#00f2aa">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <link href="/static/fa/css/all.min.css" rel="stylesheet">
+    <script src="/static/js/socket.io.min.js"></script>
     <link href="/base.css" rel="stylesheet">
     <script src="/header.js"></script>
     <style>
@@ -148,7 +148,7 @@
     <div class="connect-bar">
         <h3><i class="fas fa-plug" style="margin-right: 6px;"></i> ESP32 Connection</h3>
         <div class="connect-row">
-            <input type="text" class="connect-input" id="espIp" placeholder="ESP32 IP" value="192.168.10.100">
+            <input type="text" class="connect-input" id="espIp" placeholder="ESP32 IP" value="192.168.10.10">
             <input type="text" class="connect-input small" id="espPort" placeholder="Port" value="23">
             <button class="btn btn-connect" id="connectBtn" onclick="connectTerminal()">
                 <i class="fas fa-plug"></i> Connect

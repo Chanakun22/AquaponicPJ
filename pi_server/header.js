@@ -35,6 +35,7 @@
             background: rgba(255,255,255,0.03); border-radius: 16px;
             border: 1px solid var(--glass-border, rgba(255,255,255,0.08));
             font-size: 0.75rem; color: var(--text-muted, #8b9bb4);
+            cursor: help; /* Hint that there is a tooltip */
         }
         .ns-dl { color: #10b981; }
         .ns-ul { color: #38bdf8; }
@@ -152,9 +153,20 @@
             _nsRx = d.rx_bytes;
             _nsTx = d.tx_bytes;
             _nsT = n;
+
             const pg = document.getElementById('nsPing');
-            if (pg) pg.textContent = d.ping_ms !== null ? d.ping_ms + ' ms' : '\u2014';
-        } catch (e) { /* ignore */ }
+            if (pg) {
+                pg.textContent = d.ping_ms !== null ? d.ping_ms + ' ms' : '\u2014';
+                if (d.ping_target) {
+                    const title = 'Ping to: ' + d.ping_target;
+                    pg.parentElement.title = title;
+                    pg.title = title; // Set on span too just in case
+                } else {
+                    // Debug: No ping target received?
+                    console.log('No ping_target in response:', d);
+                }
+            }
+        } catch (e) { console.error('Poll error:', e); }
     }
 
     function startNetStatsPoll() {

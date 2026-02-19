@@ -918,11 +918,25 @@ def wifi_status():
         result['ssid'] = ssid_out.stdout.strip() if ssid_out.returncode == 0 else ''
         result['connected'] = bool(result['ssid'])
 
-        # Get IP
-        ip_out = subprocess.run(['hostname', '-I'], capture_output=True, text=True, timeout=5)
-        ips = ip_out.stdout.strip().split()
-        # Filter to wlan0 IP (not ap0)
-        result['ip'] = ips[0] if ips else ''
+        # Get IP — ใช้ ip addr show เฉพาะ interface เพื่อหลีกเลี่ยง Tailscale/VPN IP
+        wlan0_ip = None
+        ap0_ip = None
+        try:
+            out = subprocess.run(['ip', '-4', 'addr', 'show', 'wlan0'], capture_output=True, text=True, timeout=2)
+            m = re.search(r'inet (\d+\.\d+\.\d+\.\d+)', out.stdout)
+            if m:
+                wlan0_ip = m.group(1)
+        except Exception:
+            pass
+        try:
+            out2 = subprocess.run(['ip', '-4', 'addr', 'show', 'ap0'], capture_output=True, text=True, timeout=2)
+            m2 = re.search(r'inet (\d+\.\d+\.\d+\.\d+)', out2.stdout)
+            if m2:
+                ap0_ip = m2.group(1)
+        except Exception:
+            pass
+        # Priority: wlan0 (home WiFi) > ap0 (hotspot fallback)
+        result['ip'] = wlan0_ip or ap0_ip or ''
 
         # Get signal strength
         sig_out = subprocess.run(['iwconfig', 'wlan0'], capture_output=True, text=True, timeout=5)
@@ -1008,7 +1022,7 @@ def wifi_scan():
 
 @app.route('/api/wifi/connect', methods=['POST'])
 def wifi_connect():
-    """Connect to a WiFi network using wpa_cli"""
+    """Connect to a WiFi network using nmcli (NetworkManager)"""
     try:
         data = request.get_json()
         ssid = data.get('ssid', '').strip()
@@ -1017,65 +1031,45 @@ def wifi_connect():
         if not ssid:
             return jsonify({"status": "error", "message": "SSID is required"}), 400
 
-        print(f"📶 WiFi: Connecting to {ssid}...")
+        print(f"📶 WiFi: Connecting to {ssid} via nmcli...")
         save_log(f"📶 WiFi config changed to: {ssid}")
 
-        # Step 1: Remove all existing networks (force switch)
+        # Step 1: Delete existing WiFi connections (to allow switch)
         list_out = subprocess.run(
-            ['sudo', 'wpa_cli', '-i', 'wlan0', 'list_networks'],
+            ['nmcli', '-t', '-f', 'NAME,TYPE', 'connection', 'show'],
             capture_output=True, text=True, timeout=5
         )
-        for line in list_out.stdout.strip().split('\n')[1:]:
-            parts = line.split('\t')
-            if parts:
-                net_id = parts[0].strip()
+        for line in list_out.stdout.strip().split('\n'):
+            parts = line.split(':')
+            if len(parts) >= 2 and parts[1] == '802-11-wireless':
+                conn_name = parts[0]
                 subprocess.run(
-                    ['sudo', 'wpa_cli', '-i', 'wlan0', 'remove_network', net_id],
+                    ['sudo', 'nmcli', 'connection', 'delete', conn_name],
                     capture_output=True, timeout=5
                 )
+                print(f"  🗑️ Deleted old connection: {conn_name}")
 
-        # Step 2: Add new network
-        add_out = subprocess.run(
-            ['sudo', 'wpa_cli', '-i', 'wlan0', 'add_network'],
-            capture_output=True, text=True, timeout=5
-        )
-        net_id = add_out.stdout.strip()
-
-        # Step 3: Set SSID
-        subprocess.run(
-            ['sudo', 'wpa_cli', '-i', 'wlan0', 'set_network', net_id, 'ssid', f'"{ssid}"'],
-            capture_output=True, timeout=5
-        )
-
-        # Step 4: Set password or open
+        # Step 2: Connect using nmcli device wifi connect
+        import time as _time
         if password:
-            subprocess.run(
-                ['sudo', 'wpa_cli', '-i', 'wlan0', 'set_network', net_id, 'psk', f'"{password}"'],
-                capture_output=True, timeout=5
+            connect_out = subprocess.run(
+                ['sudo', 'nmcli', 'device', 'wifi', 'connect', ssid,
+                 'password', password, 'ifname', 'wlan0'],
+                capture_output=True, text=True, timeout=30
             )
         else:
-            subprocess.run(
-                ['sudo', 'wpa_cli', '-i', 'wlan0', 'set_network', net_id, 'key_mgmt', 'NONE'],
-                capture_output=True, timeout=5
+            connect_out = subprocess.run(
+                ['sudo', 'nmcli', 'device', 'wifi', 'connect', ssid,
+                 'ifname', 'wlan0'],
+                capture_output=True, text=True, timeout=30
             )
 
-        # Step 5: Select (enables only this network, disables all others)
-        subprocess.run(
-            ['sudo', 'wpa_cli', '-i', 'wlan0', 'select_network', net_id],
-            capture_output=True, timeout=5
-        )
+        print(f"  nmcli output: {connect_out.stdout.strip()}")
+        if connect_out.stderr:
+            print(f"  nmcli stderr: {connect_out.stderr.strip()}")
 
-        # Step 6: Save config to disk
-        subprocess.run(
-            ['sudo', 'wpa_cli', '-i', 'wlan0', 'save_config'],
-            capture_output=True, timeout=5
-        )
-
-        # Wait for connection
-        import time as _time
-        _time.sleep(8)
-
-        # Check if connected
+        # Step 3: Wait and verify
+        _time.sleep(5)
         check = subprocess.run(['iwgetid', '-r'], capture_output=True, text=True, timeout=5)
         new_ssid = check.stdout.strip()
 
@@ -1084,7 +1078,7 @@ def wifi_connect():
             save_log(f"✅ WiFi connected to {ssid}")
             return jsonify({"status": "ok", "message": f"เชื่อมต่อ {ssid} สำเร็จ!"})
         else:
-            print(f"⚠️ WiFi connection pending for {ssid}")
+            print(f"⚠️ WiFi connection result: current={new_ssid}, target={ssid}")
             return jsonify({"status": "ok", "message": f"ส่งคำสั่งเชื่อมต่อ {ssid} แล้ว — อาจใช้เวลาสักครู่"})
 
     except Exception as e:

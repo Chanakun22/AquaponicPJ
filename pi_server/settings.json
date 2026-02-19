@@ -27,5 +27,10 @@
     "graph_days": 3,
     "refresh_sec": 5,
     "device_name": "Aquaponics System"
+  },
+  "secure": {
+    "ota_password": "admin123",
+    "esp_ip": "192.168.10.100",
+    "terminal_ip": "192.168.10.2"
   }
 }
