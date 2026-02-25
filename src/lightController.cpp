@@ -8,6 +8,7 @@
 #include "wifiConn.h"
 #include <time.h>
 #include <Adafruit_NeoPixel.h>
+#include <Preferences.h>
 
 // NeoPixel สำหรับ RGB LED บน ESP32-S3
 #define NEOPIXEL_PIN    48       // RGB LED on ESP32-S3-DevKitC
@@ -28,14 +29,12 @@ static int _offMinute = 0;
 static bool _currentState = false;
 static bool _ntpSynced = false;
 static unsigned long _lastCheckTime = 0;
+static Preferences _lightPrefs;
 
 // ============================================================================
 // PRIVATE FUNCTIONS
 // ============================================================================
 
-/**
- * @brief แปลงเวลา HH:MM เป็น hour และ minute
- */
 static void _parseTime(const char* timeStr, int* hour, int* minute) {
     if (timeStr && strlen(timeStr) >= 4) {
         *hour = atoi(timeStr);
@@ -44,6 +43,38 @@ static void _parseTime(const char* timeStr, int* hour, int* minute) {
             *minute = atoi(colonPos + 1);
         }
     }
+}
+
+/**
+ * @brief บันทึกค่าตารางเวลาลง NVS Memory
+ */
+static void _saveSchedule(void) {
+    _lightPrefs.begin("light_sched", false);
+    _lightPrefs.putBool("enabled", _lightEnabled);
+    _lightPrefs.putInt("onDay", _onDay);
+    _lightPrefs.putInt("onHour", _onHour);
+    _lightPrefs.putInt("onMin", _onMinute);
+    _lightPrefs.putInt("offDay", _offDay);
+    _lightPrefs.putInt("offHour", _offHour);
+    _lightPrefs.putInt("offMin", _offMinute);
+    _lightPrefs.end();
+    LOG_DEBUG("Light schedule saved to NVS");
+}
+
+/**
+ * @brief โหลดค่าตารางเวลาจาก NVS Memory (เรียกตอน Boot)
+ */
+static void _loadSchedule(void) {
+    _lightPrefs.begin("light_sched", true);
+    _lightEnabled = _lightPrefs.getBool("enabled", false);
+    _onDay = _lightPrefs.getInt("onDay", 0);
+    _onHour = _lightPrefs.getInt("onHour", 6);
+    _onMinute = _lightPrefs.getInt("onMin", 0);
+    _offDay = _lightPrefs.getInt("offDay", 0);
+    _offHour = _lightPrefs.getInt("offHour", 18);
+    _offMinute = _lightPrefs.getInt("offMin", 0);
+    _lightPrefs.end();
+    LOG_INFO("Loaded Light Schedule from NVS");
 }
 
 /**
@@ -136,6 +167,10 @@ void lightCtrlSetup(void) {
     _currentState = false;
     
     LOG_INFO("NeoPixel RGB LED initialized (GPIO 48)");
+    
+    // โหลดตารางเวลาจาก Memory (Offline mode support)
+    _loadSchedule();
+    lightCtrlPrintSchedule(); // แสดงค่าที่โหลดมา
     
     // ตั้งค่า NTP
     configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC, NTP_SERVER);
@@ -253,6 +288,7 @@ bool lightCtrlGetTime(char* buffer, size_t bufferSize) {
 void lightCtrlSetEnabled(int enabled) {
     _lightEnabled = (enabled == 1);
     LOG_INFO("Light controller enabled: %s", _lightEnabled ? "YES" : "NO");
+    _saveSchedule();
 }
 
 void lightCtrlSetOnDay(int day) {
@@ -260,6 +296,7 @@ void lightCtrlSetOnDay(int day) {
         _onDay = day;
         static const char* dayNames[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Everyday"};
         LOG_INFO("Light ON Day: %s (%d)", dayNames[_onDay], _onDay);
+        _saveSchedule();
     }
 }
 
@@ -267,6 +304,7 @@ void lightCtrlSetOnTime(const char* onTime) {
     if (onTime && strlen(onTime) >= 4) {
         _parseTime(onTime, &_onHour, &_onMinute);
         LOG_INFO("Light ON Time: %02d:%02d", _onHour, _onMinute);
+        _saveSchedule();
     }
 }
 
@@ -275,6 +313,7 @@ void lightCtrlSetOffDay(int day) {
         _offDay = day;
         static const char* dayNames[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Everyday"};
         LOG_INFO("Light OFF Day: %s (%d)", dayNames[_offDay], _offDay);
+        _saveSchedule();
     }
 }
 
@@ -282,6 +321,7 @@ void lightCtrlSetOffTime(const char* offTime) {
     if (offTime && strlen(offTime) >= 4) {
         _parseTime(offTime, &_offHour, &_offMinute);
         LOG_INFO("Light OFF Time: %02d:%02d", _offHour, _offMinute);
+        _saveSchedule();
     }
 }
 
