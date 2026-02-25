@@ -82,9 +82,15 @@ static float validateLight(float light) {
 void TaskNetworking(void *pvParameters) {
     (void) pvParameters;
     
-    // Setup (Already called in setup(), but good to ensure readiness)
+    #if defined(ESP32) && WATCHDOG_ENABLED
+    esp_task_wdt_add(NULL); // Subscribe this task to Watchdog Timer
+    #endif
     
     for (;;) {
+        #if defined(ESP32) && WATCHDOG_ENABLED
+        esp_task_wdt_reset();
+        #endif
+        
         // Handle WiFi connection / config portal
         wifiLoop();
         
@@ -94,10 +100,13 @@ void TaskNetworking(void *pvParameters) {
         // Handle OTA updates
         otaLoop();
         
-        // Handle Netpie MQTT
+        // Handle Netpie MQTT (Blocking connect can take 15-30s if internet is down)
         netpieLoop();
         
-        // Handle Local MQTT (Pi)
+        // Yield to IDLE task to prevent Task WDT accumulation timeout
+        vTaskDelay(pdMS_TO_TICKS(10));
+        
+        // Handle Local MQTT (Pi) (Blocking connect can take 15-30s if Pi is down)
         localMqttLoop();
         
         // Command Handling from Serial/Telnet is safe here or needs mutex?
@@ -125,7 +134,15 @@ void TaskNetworking(void *pvParameters) {
 void TaskSensors(void *pvParameters) {
     (void) pvParameters;
     
+    #if defined(ESP32) && WATCHDOG_ENABLED
+    esp_task_wdt_add(NULL); // Subscribe this task to Watchdog Timer
+    #endif
+    
     for (;;) {
+        #if defined(ESP32) && WATCHDOG_ENABLED
+        esp_task_wdt_reset();
+        #endif
+        
         // Water Temp (OneWire is slow, blocking)
         if (systemGetSensorEnabled(SENSOR_WATER_TEMP)) {
             float rawWaterTemp = tempRead();
@@ -151,8 +168,7 @@ void TaskSensors(void *pvParameters) {
         // tdsLoop() เก็บ sample ภายใน (เรียก tdsRead ให้แล้ว)
         // ดึงค่าจาก tdsRead เฉพาะตอนที่ buffer พร้อม
         if (systemGetSensorEnabled(SENSOR_TDS)) {
-            float tempForTds = !isnan(currentWaterTemp) ? currentWaterTemp : 25.0f;
-            tdsLoop(tempForTds);
+            tdsLoop(currentWaterTemp);
             if (tdsIsReady()) {
                 currentTds = validateTds(tdsGetLastValue());
             }
@@ -183,11 +199,6 @@ void TaskSensors(void *pvParameters) {
             currentPh = -1;
         }
         
-        // Health Check & Watchdog Reset (if this task is monitored)
-        #if defined(ESP32) && WATCHDOG_ENABLED
-        esp_task_wdt_reset();
-        #endif
-        
         vTaskDelay(pdMS_TO_TICKS(100)); // Run at 10Hz approx.
     }
 }
@@ -195,7 +206,15 @@ void TaskSensors(void *pvParameters) {
 void TaskControl(void *pvParameters) {
     (void) pvParameters;
     
+    #if defined(ESP32) && WATCHDOG_ENABLED
+    esp_task_wdt_add(NULL); // Subscribe this task to Watchdog Timer
+    #endif
+    
     for (;;) {
+        #if defined(ESP32) && WATCHDOG_ENABLED
+        esp_task_wdt_reset();
+        #endif
+
         // System Management (Button checks etc)
         systemLoop();
         

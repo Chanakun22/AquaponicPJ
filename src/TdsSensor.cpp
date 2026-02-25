@@ -200,8 +200,11 @@ float tdsRead(float temperature) {
     // --- Advanced Temperature Compensation ---
     // Standard linear factor is 1/(1+0.02(T-25))
     // Optimized for nutrient solution (approx 0.019 coeff)
+    if (isnan(temperature)) {
+        _tdsLastResult = NAN;
+        return NAN;
+    }
     float tempP = temperature;
-    if (tempP < 0) tempP = 25; // Safety fallback
     
     float compensationCoefficient = 1.0f + 0.019f * (tempP - 25.0f);
     float compensationVoltage = voltage / compensationCoefficient;

@@ -192,6 +192,7 @@ db_lock = threading.Lock()  # ป้องกัน concurrent write จาก M
 
 def init_db():
     with db_lock:
+        conn = None
         try:
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
@@ -220,10 +221,12 @@ def init_db():
             ''')
             
             conn.commit()
-            conn.close()
             print("✅ Database initialized")
         except Exception as e:
             print(f"❌ Database Error: {e}")
+        finally:
+            if conn:
+                conn.close()
 
 # Initialize DB on start
 init_db()
@@ -231,22 +234,31 @@ init_db()
 def save_settings_to_db(settings):
     """Save settings snapshot to database"""
     with db_lock:
+        conn = None
         try:
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
             cursor.execute('INSERT INTO settings_history (settings_json) VALUES (?)', (json.dumps(settings),))
             conn.commit()
-            conn.close()
             # print("💾 Settings saved to DB history")
         except Exception as e:
             print(f"❌ Failed to save settings to DB: {e}")
+        finally:
+            if conn:
+                conn.close()
 
 def save_settings(settings):
-    """Save settings to JSON file and Database"""
+    """Save settings to JSON file atomically and Database"""
     try:
-        # 1. Save to File (Actual Config)
-        with open(SETTINGS_FILE, "w") as f:
+        # 1. Save to File (Actual Config) - Atomic Write
+        tmp_file = f"{SETTINGS_FILE}.tmp"
+        with open(tmp_file, "w") as f:
             json.dump(settings, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno()) # Ensure data is written to disk
+        
+        # Atomically replace the old file with the new one
+        os.replace(tmp_file, SETTINGS_FILE)
             
         # 2. Save to DB (History/Backup)
         save_settings_to_db(settings)
@@ -254,6 +266,12 @@ def save_settings(settings):
         return True
     except Exception as e:
         print(f"Error saving settings: {e}")
+        # Clean up tmp file if error occurred
+        if os.path.exists(f"{SETTINGS_FILE}.tmp"):
+            try:
+                os.remove(f"{SETTINGS_FILE}.tmp")
+            except:
+                pass
         return False
 
 # === Log Storage (In-Memory + File) ===
@@ -365,6 +383,7 @@ def save_data_to_db(data):
         return
 
     with db_lock:
+        conn = None
         try:
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
@@ -380,11 +399,13 @@ def save_data_to_db(data):
                 data.get("light", 0)
             ))
             conn.commit()
-            conn.close()
             last_db_save = now
             # print("💾 Data saved to DB") 
         except Exception as e:
             print(f"DB Insert Error: {e}")
+        finally:
+            if conn:
+                conn.close()
 
 # === Start MQTT in Background Thread ===
 mqtt_client = None  # Global reference for publishing
@@ -779,21 +800,25 @@ def get_history():
     global app_settings
     try:
         with db_lock:
-            conn = sqlite3.connect(DB_FILE)
-            cursor = conn.cursor()
-            
-            # Read graph_days from settings (default 3)
-            days = app_settings.get("display", {}).get("graph_days", 3)
-            limit = days * 24 * 60  # 1 record per minute
-            
-            cursor.execute('''
-                SELECT timestamp, water_temp, air_temp, humidity, tds, ph, light
-                FROM sensors 
-                ORDER BY id DESC 
-                LIMIT ?
-            ''', (limit,))
-            rows = cursor.fetchall()
-            conn.close()
+            conn = None
+            try:
+                conn = sqlite3.connect(DB_FILE)
+                cursor = conn.cursor()
+                
+                # Read graph_days from settings (default 3)
+                days = app_settings.get("display", {}).get("graph_days", 3)
+                limit = days * 24 * 60  # 1 record per minute
+                
+                cursor.execute('''
+                    SELECT timestamp, water_temp, air_temp, humidity, tds, ph, light
+                    FROM sensors 
+                    ORDER BY id DESC 
+                    LIMIT ?
+                ''', (limit,))
+                rows = cursor.fetchall()
+            finally:
+                if conn:
+                    conn.close()
         
         # Reverse to chronological order (oldest first)
         rows.reverse()

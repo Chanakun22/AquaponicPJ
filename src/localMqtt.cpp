@@ -23,6 +23,7 @@
 
 static WiFiClient _localWifiClient;
 static PubSubClient _localMqtt(_localWifiClient);
+static QueueHandle_t _logQueue = NULL;
 static unsigned long _lastReconnectAttempt = 0;
 static unsigned long _lastPublishTime = 0;
 static IPAddress _brokerIp;
@@ -205,6 +206,9 @@ static bool _reconnect() {
 void localMqttSetup(void) {
     LOG_INFO("Initializing Local MQTT...");
     _localMqtt.setBufferSize(512);
+    
+    // Create a queue for passing logs across tasks safely (20 items of 128 bytes)
+    _logQueue = xQueueCreate(20, 128);
 }
 
 void localMqttLoop(void) {
@@ -225,6 +229,17 @@ void localMqttLoop(void) {
         }
     } else {
         _localMqtt.loop();
+        
+        // Process cross-core log queue safely in the Networking Task
+        if (_logQueue != NULL) {
+            char logBuff[128];
+            int count = 0;
+            // Process max 5 logs per loop to prevent starving other network tasks
+            while (count < 5 && xQueueReceive(_logQueue, logBuff, 0) == pdTRUE) {
+                _localMqtt.publish(LOCAL_MQTT_TOPIC_LOGS, logBuff);
+                count++;
+            }
+        }
     }
 }
 
@@ -287,10 +302,13 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
 }
 
 void localMqttPublishLog(const char* logMsg) {
-    if (!localMqttIsConnected()) return;
+    // If not connected to wifi, drop the log early
+    if (!wifiIsConnected()) return;
     
-    // Simple text payload
-    _localMqtt.publish(LOCAL_MQTT_TOPIC_LOGS, logMsg);
+    // Safety check: if queue is ready, push to queue (0 ticks = non-blocking)
+    if (_logQueue != NULL) {
+        xQueueSend(_logQueue, logMsg, 0);
+    }
 }
 
 static void _publishSensorConfig(void) {
