@@ -5,7 +5,9 @@
 
 #include "TdsSensor.h"
 #include "logger.h"
+#include "config.h"
 #include <Preferences.h>
+#include <math.h>
 
 // ============================================================================
 // PRIVATE VARIABLES
@@ -197,6 +199,12 @@ float tdsRead(float temperature) {
     
     float voltage = tdsGetVoltage();
     
+    // Hardware Validation: Detect unplugged sensor (near 0V) or short circuit (near VREF)
+    if (voltage < 0.05f || voltage > (TDS_VREF - 0.05f)) {
+        _tdsLastResult = NAN;
+        return NAN;
+    }
+    
     // --- Advanced Temperature Compensation ---
     // Standard linear factor is 1/(1+0.02(T-25))
     // Optimized for nutrient solution (approx 0.019 coeff)
@@ -204,13 +212,16 @@ float tdsRead(float temperature) {
         _tdsLastResult = NAN;
         return NAN;
     }
-    float tempP = temperature;
+    float tempP = temperature; // Copy to avoid modifying param directly if needed.
     
     float compensationCoefficient = 1.0f + 0.019f * (tempP - 25.0f);
     float compensationVoltage = voltage / compensationCoefficient;
     
     float tdsValue = _calculateTdsFromVoltage(compensationVoltage);
-    if (tdsValue < 0) tdsValue = 0;
+    
+    // Clamp values to safe boundaries defined in config.h
+    if (tdsValue < TDS_MIN) tdsValue = TDS_MIN;
+    if (tdsValue > TDS_MAX) tdsValue = TDS_MAX;
     
     // --- Moving Average Filter (Alpha 0.1) ---
     static float _tdsMovingAverage = -1.0f;

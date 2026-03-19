@@ -203,14 +203,10 @@
     </div>
 
     <script>
-        // Get current host IP
-        const host = window.location.hostname;
-        const port = "8081"; // Python MJPEG HTTP server port
+        // Use the Flask proxy endpoint to allow Cloudflare Tunnel routing
+        const streamUrl = `/cam-stream`;
         
-        // cam_server.py serves proper HTTP MJPEG stream
-        const streamUrl = `http://${host}:${port}/stream`;
-
-        document.getElementById("streamUrl").innerText = streamUrl;
+        document.getElementById("streamUrl").innerText = window.location.host + streamUrl;
         
         const img = document.getElementById("camStream");
         const dot = document.getElementById("statusDot");

@@ -463,6 +463,18 @@ def serve_pwa(filename):
 def live_page():
     return send_file('live.html')
 
+@app.route('/cam-stream')
+def cam_stream():
+    """Proxy the camera stream from localhost:8081 for remote access"""
+    try:
+        from flask import Response
+        import requests
+        req = requests.get('http://127.0.0.1:8081/stream', stream=True, timeout=5)
+        return Response(req.iter_content(chunk_size=5120), content_type=req.headers.get('Content-Type', 'multipart/x-mixed-replace; boundary=frame'))
+    except Exception as e:
+        print(f"❌ Camera Proxy Error: {e}")
+        return "Camera stream not available locally (port 8081)", 502
+
 @app.route('/api/settings', methods=['GET'])
 def get_settings():
     global app_settings

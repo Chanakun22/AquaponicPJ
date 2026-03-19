@@ -793,13 +793,14 @@
             document.getElementById("ipInput").value = window.location.hostname;
         }
 
-        if(ip.startsWith("http")) {
+        if(ip.startsWith("http://") || ip.startsWith("https://")) {
              deviceIp = ip;
         } else {
-             deviceIp = `http://${ip}`;
+             // Use current protocol (http or https) instead of hardcoding http
+             deviceIp = `${window.location.protocol}//${ip}`;
         }
         
-        document.getElementById("deviceIp").textContent = ip.replace(/https?:\/\//, "");
+        document.getElementById("deviceIp").textContent = deviceIp.replace(/https?:\/\//, "");
         addLog("info", `Connecting to ${deviceIp}...`);
 
         if (updateInterval) { clearInterval(updateInterval); updateInterval = null; }

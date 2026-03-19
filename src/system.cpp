@@ -6,6 +6,11 @@
 #include "system.h"
 #include "logger.h"
 #include "config.h"
+#include "phSensor.h"
+#include "TdsSensor.h"
+#include "tempSensor.h"
+#include "dhtSensor.h"
+#include "lightSensor.h"
 #include <Preferences.h>
 #include <WiFi.h>
 
@@ -158,8 +163,50 @@ void systemGetHealth(SystemHealth_t* health) {
     const char* rst = systemGetResetReasonString();
     strlcpy(health->resetReason, rst, sizeof(health->resetReason));
     
-    // Check if sensors are OK (simplified - can be enhanced)
-    health->sensorsOk = true;  // TODO: Implement sensor health check
+    // Check if sensors are OK
+    bool sensorsOk = true;
+    
+    // Check pH Sensor
+    if (systemGetSensorEnabled(SENSOR_PH)) {
+        if (!phIsReady() || isnan(phRead())) {
+            sensorsOk = false;
+            LOG_DEBUG("Health: pH sensor not ready or NAN");
+        }
+    }
+    
+    // Check TDS Sensor
+    if (systemGetSensorEnabled(SENSOR_TDS)) {
+        if (!tdsIsReady() || tdsGetLastValue() < 0) {
+            sensorsOk = false;
+            LOG_DEBUG("Health: TDS sensor not ready or invalid");
+        }
+    }
+    
+    // Check Water Temp (DS18B20)
+    if (systemGetSensorEnabled(SENSOR_WATER_TEMP)) {
+        if (isnan(tempRead())) {
+            sensorsOk = false;
+            LOG_DEBUG("Health: Water temp sensor NAN");
+        }
+    }
+    
+    // Check Air Temp/Humidity (DHT22)
+    if (systemGetSensorEnabled(SENSOR_AIR_TEMP)) {
+        if (isnan(dhtReadTemperature()) || isnan(dhtReadHumidity())) {
+            sensorsOk = false;
+            LOG_DEBUG("Health: DHT22 sensor NAN");
+        }
+    }
+    
+    // Check Light Sensor (BH1750)
+    if (systemGetSensorEnabled(SENSOR_LIGHT)) {
+        if (!lightIsReady() || lightRead() < 0) {
+            sensorsOk = false;
+            LOG_DEBUG("Health: Light sensor not ready or invalid");
+        }
+    }
+    
+    health->sensorsOk = sensorsOk;
 }
 
 void systemFactoryReset(void) {

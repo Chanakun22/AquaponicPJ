@@ -2,9 +2,28 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
-## [Unreleased]
+## [2026-03-10] - Deployment Automation & Health Monitoring
 
-- Deployment automation scripts (`setup.sh`, `aquaponics.service`).
+### Added
+
+- **Deployment automation scripts:**
+  - `setup.sh`: Automated install script for Pi (packages, python libs, services).
+  - `aquaponics.service`: Systemd service for the main dashboard app.
+  - Improved `download_assets.sh` with relative path support.
+- **System Health Enhancement:**
+  - Implemented real sensor health check in `system.cpp`.
+  - `SystemHealth_t::sensorsOk` now accurately reflects the status of all enabled sensors.
+- **Unit Testing:**
+  - Created `test/test_ph/test_ph_filter.cpp` to verify pH EMA filter and error handling (Native environment).
+
+## [2026-03-02] - pH Sensor Filter Enhancement
+
+### Changed
+
+- **feat: pH EMA Filter (`phSensor.cpp`):**
+  - เพิ่ม Exponential Moving Average (α=0.15) หลัง Trimmed Mean เพื่อ smooth ค่า pH ข้ามรอบ
+  - Pipeline ใหม่: `ADC Buffer → Trimmed Mean (ตัด 20%) → EMA (α=0.15)`
+  - รองรับ NaN จาก hardware validation (sensor หลุด/short circuit)
 
 ## [2026-02-16] - Pi AP+Client Bridge Mode
 

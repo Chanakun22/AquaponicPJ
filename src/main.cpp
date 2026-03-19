@@ -234,6 +234,7 @@ void TaskControl(void *pvParameters) {
 // MAIN FUNCTIONS
 // ============================================================================
 
+#ifndef PIO_UNIT_TESTING
 void setup() {
     // เริ่มต้น Serial
     Serial.begin(SERIAL_BAUD_RATE);
@@ -322,3 +323,4 @@ void loop() {
     // Can be used for background low-priority work
     vTaskDelay(pdMS_TO_TICKS(1000));
 }
+#endif // PIO_UNIT_TESTING
