@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📋 Activity Logs - Smart Aquaponics</title>
+    <link rel="manifest" href="/pwa/manifest.json">
+    <meta name="theme-color" content="#00f2aa">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="/static/fa/css/all.min.css" rel="stylesheet">
+    <link href="/base.css" rel="stylesheet">
+    <script src="/header.js"></script>
+    <style>
+        .brand i { color: var(--accent); filter: drop-shadow(0 0 8px rgba(56,189,248,0.4)); }
+        .brand h1 {
+            background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .container { max-width: 1200px; }
+
+        .toolbar {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+            padding: 16px 20px;
+            background: var(--bg-panel);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+        }
+
+        .toolbar select, .toolbar input {
+            background: rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: white;
+            padding: 9px 14px;
+            border-radius: var(--radius-sm);
+            font-family: inherit;
+            font-size: 0.85rem;
+        }
+
+        .toolbar select:focus, .toolbar input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .toolbar select {
+            cursor: pointer;
+            min-width: 160px;
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.06);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.12);
+            padding: 9px 16px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover { background: rgba(255,255,255,0.12); }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), #0ea5e9);
+            color: #000; border: none; font-weight: 600;
+        }
+
+        .log-table-wrap {
+            background: var(--bg-panel);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        thead th {
+            background: rgba(0,0,0,0.3);
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--glass-border);
+            white-space: nowrap;
+        }
+
+        tbody td {
+            padding: 10px 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            color: var(--text-main);
+        }
+
+        tbody tr:hover { background: rgba(255,255,255,0.03); }
+
+        .action-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 10px;
+            border-radius: 16px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
+        .action-badge.login { background: rgba(16,185,129,0.15); color: #10b981; }
+        .action-badge.logout { background: rgba(139,155,180,0.15); color: #8b9bb4; }
+        .action-badge.settings { background: rgba(56,189,248,0.15); color: #38bdf8; }
+        .action-badge.calibration { background: rgba(251,191,36,0.15); color: #fbbf24; }
+        .action-badge.ota { background: rgba(168,85,247,0.15); color: #a855f7; }
+        .action-badge.user_mgmt { background: rgba(236,72,153,0.15); color: #ec4899; }
+
+        .empty-state {
+            text-align: center;
+            padding: 48px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-state i { font-size: 2rem; margin-bottom: 12px; display: block; opacity: 0.4; }
+
+        .stats-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .stat-pill {
+            padding: 8px 16px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .stat-pill strong {
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            body { padding: 12px; }
+            .header { flex-direction: column; text-align: center; padding: 16px; gap: 12px; }
+            .brand { justify-content: center; }
+            .toolbar { flex-direction: column; }
+            table { font-size: 0.78rem; }
+            thead th, tbody td { padding: 8px 10px; }
+            .hide-mobile { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+    <header class="header">
+        <div class="header-top">
+            <div class="brand">
+                <i class="fas fa-clipboard-list"></i>
+                <div>
+                    <h1>Activity Logs</h1>
+                    <div class="subtitle">Admin Audit Trail</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <select id="filterAction">
+            <option value="">All Actions</option>
+            <option value="login">Login</option>
+            <option value="logout">Logout</option>
+            <option value="settings">Settings</option>
+            <option value="calibration">Calibration</option>
+            <option value="ota">OTA Update</option>
+            <option value="user_mgmt">User Management</option>
+        </select>
+        <input type="date" id="filterDate">
+        <button class="btn btn-primary" onclick="loadLogs()">
+            <i class="fas fa-search"></i> Filter
+        </button>
+        <button class="btn" onclick="loadLogs()">
+            <i class="fas fa-sync-alt"></i> Refresh
+        </button>
+        <div style="flex:1;"></div>
+        <div class="stats-row" id="statsRow"></div>
+    </div>
+
+    <!-- Table -->
+    <div class="log-table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>User</th>
+                    <th>Action</th>
+                    <th>Detail</th>
+                    <th class="hide-mobile">IP Address</th>
+                </tr>
+            </thead>
+            <tbody id="logBody">
+                <tr><td colspan="5" class="empty-state">
+                    <i class="fas fa-spinner fa-spin"></i> Loading...
+                </td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    </div>
+
+    <script>
+    const actionIcons = {
+        'login': '<i class="fas fa-sign-in-alt"></i>',
+        'logout': '<i class="fas fa-sign-out-alt"></i>',
+        'settings': '<i class="fas fa-cog"></i>',
+        'calibration': '<i class="fas fa-flask"></i>',
+        'ota': '<i class="fas fa-upload"></i>',
+        'user_mgmt': '<i class="fas fa-users-cog"></i>'
+    };
+
+    async function loadLogs() {
+        const action = document.getElementById('filterAction').value;
+        const date = document.getElementById('filterDate').value;
+        let url = '/api/admin/logs?';
+        if (action) url += `action=${action}&`;
+        if (date) url += `date=${date}&`;
+
+        try {
+            const resp = await fetch(url);
+            const data = await resp.json();
+
+            const body = document.getElementById('logBody');
+
+            if (!data.logs || data.logs.length === 0) {
+                body.innerHTML = '<tr><td colspan="5" class="empty-state"><i class="fas fa-inbox"></i> No activity logs found</td></tr>';
+                return;
+            }
+
+            body.innerHTML = data.logs.map(log => `
+                <tr>
+                    <td style="white-space:nowrap; font-family:'JetBrains Mono',monospace; font-size:0.78rem; color:var(--text-muted);">
+                        ${log.timestamp}
+                    </td>
+                    <td><strong>${log.username || '—'}</strong></td>
+                    <td>
+                        <span class="action-badge ${log.action}">
+                            ${actionIcons[log.action] || ''} ${log.action}
+                        </span>
+                    </td>
+                    <td style="max-width:300px; overflow:hidden; text-overflow:ellipsis;">
+                        ${log.detail || '—'}
+                    </td>
+                    <td class="hide-mobile" style="font-family:'JetBrains Mono',monospace; font-size:0.78rem; color:var(--text-muted);">
+                        ${log.ip || '—'}
+                    </td>
+                </tr>
+            `).join('');
+
+            // Stats
+            const stats = document.getElementById('statsRow');
+            stats.innerHTML = `<div class="stat-pill">Total: <strong>${data.total || data.logs.length}</strong></div>`;
+
+        } catch (err) {
+            document.getElementById('logBody').innerHTML =
+                `<tr><td colspan="5" class="empty-state"><i class="fas fa-exclamation-triangle"></i> Error loading logs</td></tr>`;
+        }
+    }
+
+    // Load on page load
+    loadLogs();
+    // Auto-refresh every 30 seconds
+    setInterval(loadLogs, 30000);
+    </script>
+</body>
+</html>

@@ -470,8 +470,9 @@
         letter-spacing: 1px;
       }
     </style>
-    <!-- Socket.IO Client -->
-    <script src="/static/js/socket.io.min.js"></script>
+    <!-- Shared Header (nav + logout) -->
+    <link href="/base.css" rel="stylesheet">
+    <script src="/header.js"></script>
   </head>
   <body>
     <div class="container">
@@ -490,43 +491,18 @@
           <div class="status-bar">
             <div class="status-pill">
               <div class="status-indicator" id="statusDot"></div>
-              <span id="statusText">Disconnected</span>
+              <span id="statusText">Connecting...</span>
             </div>
             <div class="status-pill">
               <i class="fa-solid fa-clock"></i>
               <span id="lastUpdate">--:--:--</span>
             </div>
-            <div class="status-pill">
-              <i class="fa-solid fa-network-wired"></i>
-              <span id="deviceIp">--</span>
-            </div>
-            <div class="status-pill"><i class="fas fa-arrow-down ns-dl"></i> <span class="ns-val" id="nsDl">—</span></div>
-            <div class="status-pill"><i class="fas fa-arrow-up ns-ul"></i> <span class="ns-val" id="nsUl">—</span></div>
-            <div class="status-pill"><i class="fas fa-signal ns-pg"></i> <span class="ns-val" id="nsPing">—</span></div>
           </div>
         </div>
-
-        <!-- Navigation Bar -->
-        <nav class="nav-bar">
-          <a href="/" class="nav-link active"><i class="fa-solid fa-leaf"></i> Dashboard</a>
-          <a href="/live" class="nav-link"><i class="fa-solid fa-video"></i> Live</a>
-          <a href="/graphs" class="nav-link"><i class="fa-solid fa-chart-line"></i> Graphs</a>
-          <a href="/full_logs" class="nav-link"><i class="fa-solid fa-file-alt"></i> Logs</a>
-          <a href="/settings" class="nav-link"><i class="fa-solid fa-cog"></i> Settings</a>
-          <a href="/ota" class="nav-link"><i class="fa-solid fa-upload"></i> OTA</a>
-          <a href="/wifi" class="nav-link"><i class="fa-solid fa-wifi"></i> WiFi</a>
-          <a href="/terminal" class="nav-link"><i class="fa-solid fa-terminal"></i> Terminal</a>
-        </nav>
-        <script>document.querySelector('.nav-link.active')?.scrollIntoView({inline:'nearest',block:'nearest'})</script>
+        <!-- Nav bar injected by header.js -->
       </header>
 
-      <!-- Connection -->
-      <div class="connect-bar">
-        <input type="text" class="connect-input" id="ipInput" placeholder="Enter Device IP (e.g., 192.168.0.100)">
-        <button class="btn-connect" onclick="connect()">
-          <i class="fa-solid fa-link"></i> CONNECT
-        </button>
-      </div>
+
 
       <!-- Main Sensors -->
       <div class="dashboard-grid">
@@ -720,14 +696,11 @@
 
     <script>
        // ============================================
-       // NOTE: Logic preserved from original file
+       // Dashboard — HTTP Polling Mode
        // ============================================
 
-      let deviceIp = "";
-      let updateInterval = null;
       let wasOnline = false;
       let lastMqttStatus = null;
-      let lastWifiReconnects = 0;
       
       const THRESHOLDS = {
         ph: { min: 6.0, max: 8.5, name: "pH" },
@@ -741,7 +714,7 @@
         if (!+bytes) return '0 Bytes';
         const k = 1024;
         const dm = decimals < 0 ? 0 : decimals;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
       }
@@ -761,8 +734,6 @@
         const time = new Date().toLocaleTimeString("en-US", {hour12: false});
         entry.innerHTML = `<span style="opacity: 0.5; margin-right: 8px;">[${time}]</span> ${message}`;
         container.prepend(entry);
-        
-        // Limit logs
         while (container.children.length > 50) {
             container.removeChild(container.lastChild);
         }
@@ -770,7 +741,6 @@
 
       function getTdsQuality(tds) {
         if (tds === null || tds === undefined || tds < 0) return "--";
-        // Emoji removed for cleaner UI, using text
         if (tds <= 50)   return "Excellent (RO/Distilled)";
         if (tds <= 150)  return "Good (Drinking)";
         if (tds <= 300)  return "Standard (Tap)";
@@ -780,146 +750,46 @@
         return "Contaminated!";
       }
 
-      let socket = null;
-      let usingWebSocket = false;
-
-      async function connect() {
-        // Auto-use window location if input is empty
-        let ip = document.getElementById("ipInput").value.trim();
-        
-        if (!ip) {
-            const port = window.location.port ? `:${window.location.port}` : "";
-            ip = `${window.location.protocol}//${window.location.hostname}${port}`;
-            document.getElementById("ipInput").value = window.location.hostname;
-        }
-
-        if(ip.startsWith("http://") || ip.startsWith("https://")) {
-             deviceIp = ip;
-        } else {
-             // Use current protocol (http or https) instead of hardcoding http
-             deviceIp = `${window.location.protocol}//${ip}`;
-        }
-        
-        document.getElementById("deviceIp").textContent = deviceIp.replace(/https?:\/\//, "");
-        addLog("info", `Connecting to ${deviceIp}...`);
-
-        if (updateInterval) { clearInterval(updateInterval); updateInterval = null; }
-
-        // Fetch settings once (device name, etc)
-        try {
-            const settingsRes = await fetch(`${deviceIp}/api/settings`);
-            const settings = await settingsRes.json();
-            const deviceName = settings.display?.device_name || "Aquaponics AI";
-            document.getElementById("deviceName").textContent = deviceName;
-            document.title = `🌿 ${deviceName}`;
-            
-            // Update sensor disabled state
-            if (settings.sensor_config) {
-                updateSensorDisabledState(settings.sensor_config);
-            }
-        } catch(e) {
-            console.log("Settings fetch failed, using defaults");
-        }
-
-        // Try WebSocket first
-        try {
-            if (socket) { socket.disconnect(); }
-            
-            socket = io(deviceIp, {
-                transports: ['websocket', 'polling'],
-                reconnection: true,
-                reconnectionDelay: 2000,
-                reconnectionAttempts: Infinity
-            });
-
-            socket.on('connect', function() {
-                usingWebSocket = true;
-                if (updateInterval) { clearInterval(updateInterval); updateInterval = null; }
-                addLog("info", "⚡ WebSocket connected — real-time mode");
-                setOnline(true);
-                wasOnline = true;
-            });
-
-            socket.on('dashboard_update', function(data) {
-                try {
-                    if (data.sensors) updateSensors(data.sensors);
-                    if (data.health) updateHealth(data.health);
-                    if (data.info) updateInfo(data.info);
-                    if (data.logs) updateLogs(data.logs);
-                    setOnline(true);
-                    wasOnline = true;
-                } catch(e) {
-                    console.error("WS update error:", e);
-                }
-            });
-
-            socket.on('disconnect', function() {
-                addLog("warn", "WebSocket disconnected, reconnecting...");
-                setOnline(false);
-            });
-
-            socket.on('connect_error', function(err) {
-                console.log("WebSocket error, falling back to polling", err.message);
-                if (!usingWebSocket && !updateInterval) {
-                    // WebSocket never connected — fallback to polling
-                    addLog("info", "Using HTTP polling mode");
-                    fallbackToPolling();
-                }
-            });
-
-        } catch(e) {
-            console.log("WebSocket init failed, using polling", e);
-            fallbackToPolling();
-        }
-      }
-
-      function fallbackToPolling() {
-          usingWebSocket = false;
-          fetchData();
-          updateInterval = setInterval(fetchData, 3000);
-      }
-
-      // Auto-connect on load
-      window.onload = function() {
-          const currentHost = window.location.hostname;
-          if(currentHost) {
-              document.getElementById("ipInput").value = currentHost;
-              connect();
-          }
-      };
-
+      // === HTTP Polling ===
       async function fetchData() {
         try {
-          const sensorsRes = await fetch(`${deviceIp}/api/sensors`, { timeout: 5000 });
+          const [sensorsRes, healthRes, infoRes] = await Promise.all([
+            fetch('/api/sensors'),
+            fetch('/api/health'),
+            fetch('/api/info')
+          ]);
+
           const sensors = await sensorsRes.json();
-
-          const healthRes = await fetch(`${deviceIp}/api/health`, { timeout: 5000 });
           const health = await healthRes.json();
-
-          const infoRes = await fetch(`${deviceIp}/api/info`, { timeout: 5000 });
           const info = await infoRes.json();
-
-          try {
-             const logsRes = await fetch(`${deviceIp}/api/logs`, { timeout: 3000 });
-             if(logsRes.ok) {
-                const remoteLogs = await logsRes.json();
-                updateLogs(remoteLogs);
-             }
-          } catch(e) { console.log("Log fetch failed", e); }
 
           updateSensors(sensors);
           updateHealth(health);
           updateInfo(info);
-          
-          // Update sensor disabled state
+
+          // Fetch logs (non-critical)
           try {
-            const settingsRes = await fetch(`${deviceIp}/api/settings`, { timeout: 3000 });
-            if(settingsRes.ok) {
-              const settings = await settingsRes.json();
-              updateSensorDisabledState(settings.sensor_config);
+            const logsRes = await fetch('/api/logs');
+            if (logsRes.ok) {
+              const remoteLogs = await logsRes.json();
+              updateLogs(remoteLogs);
             }
-          } catch(e) { console.log("Settings fetch for sensor state failed", e); }
-          
+          } catch(e) {}
+
+          // Fetch settings for sensor disabled state (non-critical)
+          try {
+            const settingsRes = await fetch('/api/settings');
+            if (settingsRes.ok) {
+              const settings = await settingsRes.json();
+              if (settings.display?.device_name) {
+                document.getElementById("deviceName").textContent = settings.display.device_name;
+              }
+              if (settings.sensor_config) {
+                updateSensorDisabledState(settings.sensor_config);
+              }
+            }
+          } catch(e) {}
+
           setOnline(true);
           wasOnline = true;
           
@@ -933,23 +803,23 @@
         }
       }
 
+      // Auto-start polling on page load
+      fetchData();
+      setInterval(fetchData, 3000);
+
       let lastLogsHash = "";
 
       function updateLogs(logs) {
           const container = document.getElementById("logContainer");
-          
-          // Simple hash/string comparison to see if logs changed
           const currentLogsHash = JSON.stringify(logs);
-          if (currentLogsHash === lastLogsHash) return; // No change, do nothing
+          if (currentLogsHash === lastLogsHash) return;
           lastLogsHash = currentLogsHash;
 
-          // Build HTML string first (smoother than clear + append loop)
           const newHtml = logs.map(log => {
               let type = "";
               if(log.includes("[ERROR]") || log.includes("❌")) type = "error";
               else if(log.includes("[WARN]") || log.includes("⚠️")) type = "warn";
               else if(log.includes("[INFO]") || log.includes("✅")) type = "info";
-              else type = ""; 
               
               const safeLog = log.replace(/</g, "&lt;").replace(/>/g, "&gt;");
               return `<div class="log-line ${type}">${safeLog}</div>`;
@@ -959,7 +829,6 @@
       }
 
       function updateSensors(data) {
-        // Values
         document.getElementById("waterTemp").innerText = data.water_temp != null ? data.water_temp.toFixed(1) : "--";
         document.getElementById("airTemp").innerText = data.air_temp != null ? data.air_temp.toFixed(1) : "--";
         document.getElementById("humidity").innerText = data.humidity != null ? data.humidity.toFixed(1) : "--";
@@ -967,32 +836,23 @@
         document.getElementById("ph").innerText = data.ph != null ? data.ph.toFixed(2) : "--";
         document.getElementById("light").innerText = data.light != null ? data.light.toFixed(0) + " lux" : "--";
         
-        // Logic parts
         document.getElementById("tdsQuality").textContent = getTdsQuality(data.tds);
         document.getElementById("lightState").textContent = data.light_state ? "DAY MODE" : "NIGHT MODE";
-
         document.getElementById("lastUpdate").textContent = new Date().toLocaleTimeString("en-US", {hour12: false});
       }
 
-      // Toggle disabled indicator on sensor cards
       function updateSensorDisabledState(sensorConfig) {
         if (!sensorConfig) return;
-        
         const toggleCard = (cardId, isEnabled) => {
           const card = document.getElementById(cardId);
           if (card) {
-            if (isEnabled === false) {
-              card.classList.add("sensor-disabled");
-            } else {
-              card.classList.remove("sensor-disabled");
-            }
+            if (isEnabled === false) card.classList.add("sensor-disabled");
+            else card.classList.remove("sensor-disabled");
           }
         };
-        
         toggleCard("card-water", sensorConfig.water);
         toggleCard("card-air", sensorConfig.air);
         toggleCard("card-tds", sensorConfig.tds);
-        // pH and Light are in the same card, disable if EITHER is false
         const phLightEnabled = (sensorConfig.ph !== false) && (sensorConfig.light !== false);
         toggleCard("card-phlight", phLightEnabled);
       }
@@ -1000,23 +860,19 @@
       function updateHealth(data) {
         document.getElementById("uptime").innerText = formatUptime(data.uptime_sec);
         document.getElementById("rssi").innerText = data.wifi_rssi + " dBm";
-        document.getElementById("firmware").innerText = "v3 (Heartbeat)";
-        // document.getElementById("freeHeap").innerText = formatBytes(data.free_heap); // moved to mini stat hidden
 
-        // MQTT Status (Netpie)
+        // MQTT Status
         const mqttEl = document.getElementById("mqttStatus");
-        if(data.mqtt_connected) {
-             mqttEl.innerHTML = '<span style="color:var(--success)">ONLINE</span>';
-        } else {
-             mqttEl.innerHTML = '<span style="color:var(--error)">OFFLINE</span>';
-        }
+        mqttEl.innerHTML = data.mqtt_connected
+          ? '<span style="color:var(--primary)">ONLINE</span>'
+          : '<span style="color:var(--danger)">OFFLINE</span>';
 
-        // ESP32 Heartbeat Status (New!)
+        // ESP32 Heartbeat Status
         const espStatEl = document.getElementById("espStatus");
         if(data.esp_status === "ONLINE") {
-            espStatEl.innerHTML = '<span style="color:var(--success); font-weight:bold;"><i class="fas fa-check-circle"></i> ONLINE</span>';
+            espStatEl.innerHTML = '<span style="color:var(--primary); font-weight:bold;"><i class="fas fa-check-circle"></i> ONLINE</span>';
         } else {
-            espStatEl.innerHTML = '<span style="color:var(--error); font-weight:bold; animation: pulse 1s infinite;"><i class="fas fa-exclamation-triangle"></i> OFFLINE</span>';
+            espStatEl.innerHTML = '<span style="color:var(--danger); font-weight:bold;"><i class="fas fa-exclamation-triangle"></i> OFFLINE</span>';
         }
 
         // === ESP32 ===
@@ -1058,13 +914,12 @@
         piRamBar.className = "prog-fill " + (piRamPercent > 90 ? "red" : piRamPercent > 70 ? "yellow" : "");
 
         document.getElementById("piCpuTemp").textContent = piTemp.toFixed(1) + "°C";
-
         document.getElementById("piCpuLoad").textContent = piCpuPercent.toFixed(1) + "%";
         document.getElementById("piLoadState").textContent = piCpuPercent > 80 ? "Heavy" : piCpuPercent > 30 ? "Moderate" : "Idle";
         
         const piLoadBar = document.getElementById("piLoadBar");
         piLoadBar.style.width = piCpuPercent + "%";
-        piLoadBar.className = "prog-fill " + (piCpuPercent > 90 ? "red" : piCpuPercent > 70 ? "yellow" : ""); // Fix: piLoadBar was missing
+        piLoadBar.className = "prog-fill " + (piCpuPercent > 90 ? "red" : piCpuPercent > 70 ? "yellow" : "");
 
         // === System ===
         document.getElementById("wifiReconnects").textContent = data.wifi_reconnects || 0;
@@ -1078,7 +933,6 @@
           else addLog("warn", "MQTT Disconnected");
         }
         lastMqttStatus = mqttConnected;
-        
         document.getElementById("mqttStatus").textContent = mqttConnected ? "Online" : "Offline";
       }
 
@@ -1110,12 +964,6 @@
             .catch(err => console.log('[PWA] SW registration failed:', err));
         });
       }
-    </script>
-    <script>
-      let _nsRx=null,_nsTx=null,_nsT=null;
-      function _nsFmt(b){if(b<1024)return b.toFixed(0)+' B/s';if(b<1048576)return(b/1024).toFixed(1)+' KB/s';return(b/1048576).toFixed(2)+' MB/s';}
-      async function _nsPoll(){try{const r=await fetch('/api/wifi/netstats'),d=await r.json(),n=Date.now();if(_nsRx!==null){const t=(n-_nsT)/1000;if(t>0){document.getElementById('nsDl').textContent=_nsFmt((d.rx_bytes-_nsRx)/t);document.getElementById('nsUl').textContent=_nsFmt((d.tx_bytes-_nsTx)/t);}}_nsRx=d.rx_bytes;_nsTx=d.tx_bytes;_nsT=n;document.getElementById('nsPing').textContent=d.ping_ms!==null?d.ping_ms+' ms':'\u2014';}catch(e){}}
-      _nsPoll();setInterval(_nsPoll,3000);
     </script>
   </body>
 </html>

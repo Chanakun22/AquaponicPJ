@@ -28,6 +28,17 @@
         .nav-link.active { background: rgba(0,242,170,0.1); color: var(--primary, #00f2aa); border-color: rgba(0,242,170,0.2); }
         .nav-link i { font-size: 0.85rem; }
 
+        /* Logout Button */
+        .btn-logout {
+            display: flex; align-items: center; gap: 6px; padding: 7px 14px;
+            border-radius: 10px; font-size: 0.8rem; font-weight: 500;
+            color: #ff6b8a; background: rgba(255,42,109,0.08);
+            border: 1px solid rgba(255,42,109,0.2); cursor: pointer;
+            font-family: inherit; transition: all 0.25s ease; white-space: nowrap;
+        }
+        .btn-logout:hover { background: rgba(255,42,109,0.15); border-color: rgba(255,42,109,0.4); }
+        .btn-logout i { font-size: 0.8rem; }
+
         /* Net Stats Pills */
         .net-stats { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
         .ns-item {
@@ -53,25 +64,30 @@
     document.head.appendChild(css);
 
     // === Navigation links ===
+    // admin: true means only visible to admin users
     const NAV_LINKS = [
-        { href: '/',          icon: 'fa-solid fa-leaf',       label: 'Dashboard' },
-        { href: '/live',      icon: 'fa-solid fa-video',      label: 'Live' },
-        { href: '/graphs',    icon: 'fa-solid fa-chart-line', label: 'Graphs' },
-        { href: '/full_logs', icon: 'fa-solid fa-file-alt',   label: 'Logs' },
-        { href: '/settings',  icon: 'fa-solid fa-cog',        label: 'Settings' },
-        { href: '/ota',       icon: 'fa-solid fa-upload',     label: 'OTA' },
-        { href: '/wifi',      icon: 'fa-solid fa-wifi',       label: 'WiFi' },
-        { href: '/terminal',  icon: 'fa-solid fa-terminal',   label: 'Terminal' },
+        { href: '/',            icon: 'fa-solid fa-leaf',           label: 'Dashboard' },
+        { href: '/live',        icon: 'fa-solid fa-video',          label: 'Live' },
+        { href: '/graphs',      icon: 'fa-solid fa-chart-line',     label: 'Graphs' },
+        { href: '/full_logs',   icon: 'fa-solid fa-file-alt',       label: 'Logs' },
+        { href: '/settings',    icon: 'fa-solid fa-cog',            label: 'Settings',  admin: true },
+        { href: '/ota',         icon: 'fa-solid fa-upload',         label: 'OTA',       admin: true },
+        { href: '/wifi',        icon: 'fa-solid fa-wifi',           label: 'WiFi',      admin: true },
+        { href: '/terminal',    icon: 'fa-solid fa-terminal',       label: 'Terminal',   admin: true },
+        { href: '/admin/logs',  icon: 'fa-solid fa-clipboard-list', label: 'Activity',   admin: true },
+        { href: '/admin/users', icon: 'fa-solid fa-users-cog',      label: 'Users',      admin: true },
     ];
 
     // === Auto-detect active page ===
     const currentPath = window.location.pathname.replace(/\/$/, '') || '/';
 
-    // === Build nav-bar HTML ===
-    function buildNavBar() {
+    // === Build nav-bar HTML (filtered by role) ===
+    function buildNavBar(userRole) {
         const nav = document.createElement('nav');
         nav.className = 'nav-bar';
         NAV_LINKS.forEach(link => {
+            // Hide admin-only links for non-admin users
+            if (link.admin && userRole !== 'admin') return;
             const a = document.createElement('a');
             a.href = link.href;
             a.className = 'nav-link';
@@ -97,14 +113,40 @@
     }
 
     // === Inject into page ===
-    function init() {
+    async function init() {
         const header = document.querySelector('.header');
         if (!header) return;
 
-        // Insert net-stats pills into header-top (right side)
+        // Fetch user role
+        let userRole = 'user';
+        try {
+            const resp = await fetch('/api/me');
+            if (resp.ok) {
+                const data = await resp.json();
+                userRole = data.role || 'user';
+            }
+        } catch(e) {}
+
+        // Insert net-stats pills and logout button into header-top (right side)
         const headerTop = header.querySelector('.header-top');
         if (headerTop) {
-            headerTop.appendChild(buildNetStats());
+            const rightGroup = document.createElement('div');
+            rightGroup.style.cssText = 'display:flex; align-items:center; gap:10px; flex-wrap:wrap;';
+            rightGroup.appendChild(buildNetStats());
+
+            // Logout button
+            const logoutBtn = document.createElement('button');
+            logoutBtn.className = 'btn-logout';
+            logoutBtn.innerHTML = '<i class="fas fa-sign-out-alt"></i> Logout';
+            logoutBtn.onclick = async function() {
+                try {
+                    await fetch('/api/logout', { method: 'POST' });
+                } catch(e) {}
+                window.location.href = '/login';
+            };
+            rightGroup.appendChild(logoutBtn);
+
+            headerTop.appendChild(rightGroup);
         }
 
         // Insert nav-bar after header-top
@@ -112,9 +154,9 @@
         if (existingNav) existingNav.remove(); // Remove old nav if exists
 
         if (headerTop) {
-            headerTop.after(buildNavBar());
+            headerTop.after(buildNavBar(userRole));
         } else {
-            header.appendChild(buildNavBar());
+            header.appendChild(buildNavBar(userRole));
         }
 
         // Scroll active link into view

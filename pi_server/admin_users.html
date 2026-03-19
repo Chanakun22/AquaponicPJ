@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>👥 User Management - Smart Aquaponics</title>
+    <link rel="manifest" href="/pwa/manifest.json">
+    <meta name="theme-color" content="#00f2aa">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="/static/fa/css/all.min.css" rel="stylesheet">
+    <link href="/base.css" rel="stylesheet">
+    <script src="/header.js"></script>
+    <style>
+        .brand i { color: var(--accent); filter: drop-shadow(0 0 8px rgba(56,189,248,0.4)); }
+        .brand h1 {
+            background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .container { max-width: 900px; }
+
+        .card {
+            background: var(--bg-panel);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            padding: 28px;
+            position: relative;
+            overflow: hidden;
+        }
+        .card::before {
+            content: '';
+            position: absolute; top: 0; left: 0; right: 0; height: 3px;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            opacity: 0.8;
+        }
+        .card h2 {
+            font-size: 1.05rem; font-weight: 600; margin-bottom: 20px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .card h2 i {
+            font-size: 1rem; width: 32px; height: 32px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 8px; background: rgba(56,189,248,0.1); color: var(--accent);
+        }
+
+        .form-group { margin-bottom: 16px; }
+        .form-group label {
+            display: block; font-size: 0.82rem; font-weight: 500;
+            color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.3px;
+        }
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            background: rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: white; padding: 11px 14px;
+            border-radius: var(--radius-sm);
+            font-family: inherit; font-size: 0.92rem;
+            transition: all 0.3s ease;
+        }
+        input:focus {
+            outline: none; border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(56,189,248,0.1);
+            background: rgba(0,0,0,0.6);
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.06); color: white;
+            border: 1px solid rgba(255,255,255,0.12);
+            padding: 10px 20px; border-radius: var(--radius-sm);
+            cursor: pointer; font-family: inherit; font-size: 0.9rem;
+            font-weight: 500; display: inline-flex; align-items: center;
+            gap: 8px; transition: all 0.3s ease;
+        }
+        .btn:hover { background: rgba(255,255,255,0.12); transform: translateY(-1px); }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), #0ea5e9);
+            color: #000; border: none; font-weight: 600;
+        }
+        .btn-primary:hover { box-shadow: 0 4px 16px rgba(56,189,248,0.3); }
+        .btn-success {
+            background: linear-gradient(135deg, var(--success), #059669);
+            color: #fff; border: none; font-weight: 600;
+        }
+        .btn-danger { color: var(--danger); border-color: rgba(255,42,109,0.3); }
+        .btn-danger:hover { background: rgba(255,42,109,0.1); border-color: var(--danger); }
+        .btn-sm { padding: 7px 14px; font-size: 0.8rem; }
+
+        /* User list */
+        .user-list { display: flex; flex-direction: column; gap: 10px; }
+        .user-item {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 18px; border-radius: var(--radius-sm);
+            background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06);
+            transition: all 0.2s ease;
+        }
+        .user-item:hover { border-color: rgba(255,255,255,0.12); }
+        .user-info { display: flex; align-items: center; gap: 12px; }
+        .user-avatar {
+            width: 40px; height: 40px; border-radius: 10px;
+            background: linear-gradient(135deg, rgba(0,242,170,0.15), rgba(0,200,255,0.15));
+            display: flex; align-items: center; justify-content: center;
+            color: var(--primary); font-weight: 700; font-size: 1rem;
+        }
+        .user-name { font-weight: 600; font-size: 0.95rem; }
+        .user-role {
+            font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;
+            letter-spacing: 0.5px; margin-top: 2px;
+        }
+        .user-actions { display: flex; gap: 8px; }
+
+        /* Modals */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+            display: none; align-items: center; justify-content: center;
+            z-index: 1000; padding: 20px; backdrop-filter: blur(4px);
+        }
+        .modal-overlay.show { display: flex; }
+        .modal {
+            background: var(--bg-panel); border: 1px solid var(--glass-border);
+            border-radius: var(--radius); padding: 32px; width: 100%; max-width: 420px;
+            position: relative; animation: fadeInUp 0.3s ease;
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .modal h3 {
+            font-size: 1.1rem; font-weight: 600; margin-bottom: 20px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .modal-close {
+            position: absolute; top: 16px; right: 16px;
+            background: none; border: none; color: var(--text-muted);
+            font-size: 1.1rem; cursor: pointer; transition: color 0.2s;
+        }
+        .modal-close:hover { color: var(--text-main); }
+        .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+
+        .toast {
+            position: fixed; bottom: 30px; left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: linear-gradient(135deg, var(--success), #059669);
+            color: white; padding: 14px 28px; border-radius: var(--radius-sm);
+            font-weight: 600; font-size: 0.9rem; z-index: 1100;
+            opacity: 0; pointer-events: none;
+            transition: all 0.4s cubic-bezier(0.4,0,0.2,1);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        .toast.error { background: linear-gradient(135deg, var(--danger), #dc2626); }
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+
+        @media (max-width: 768px) {
+            body { padding: 12px; }
+            .header { flex-direction: column; text-align: center; padding: 16px; gap: 12px; }
+            .brand { justify-content: center; }
+            .user-item { flex-direction: column; gap: 12px; align-items: flex-start; }
+            .user-actions { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+    <header class="header">
+        <div class="header-top">
+            <div class="brand">
+                <i class="fas fa-users-cog"></i>
+                <div>
+                    <h1>User Management</h1>
+                    <div class="subtitle">Manage Dashboard Users</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Add User -->
+    <div class="card">
+        <h2><i class="fas fa-user-plus"></i> Add New User</h2>
+        <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+            <div class="form-group" style="flex:1; min-width:150px; margin-bottom:0;">
+                <label>Username</label>
+                <input type="text" id="newUsername" placeholder="Enter username">
+            </div>
+            <div class="form-group" style="flex:1; min-width:150px; margin-bottom:0;">
+                <label>Password</label>
+                <input type="password" id="newPassword" placeholder="Enter password">
+            </div>
+            <button class="btn btn-success" onclick="addUser()" style="height:42px;">
+                <i class="fas fa-plus"></i> Add User
+            </button>
+        </div>
+    </div>
+
+    <!-- User List -->
+    <div class="card">
+        <h2><i class="fas fa-users"></i> Users <span id="userCount" style="font-size:0.8rem; color:var(--text-muted); font-weight:400;"></span></h2>
+        <div class="user-list" id="userList">
+            <div style="text-align:center; padding:20px; color:var(--text-muted);">
+                <i class="fas fa-spinner fa-spin"></i> Loading...
+            </div>
+        </div>
+    </div>
+
+    </div>
+
+    <!-- Change Password Modal -->
+    <div class="modal-overlay" id="passwordModal">
+        <div class="modal">
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+            <h3><i class="fas fa-key" style="color:var(--accent);"></i> Change Password</h3>
+            <div class="form-group">
+                <label>User: <strong id="modalUser"></strong></label>
+            </div>
+            <div class="form-group">
+                <label>New Password</label>
+                <input type="password" id="modalPassword" placeholder="Enter new password">
+            </div>
+            <div class="form-group">
+                <label>Confirm Password</label>
+                <input type="password" id="modalPasswordConfirm" placeholder="Confirm new password">
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="changePassword()">
+                    <i class="fas fa-save"></i> Save
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirm Modal -->
+    <div class="modal-overlay" id="deleteModal">
+        <div class="modal">
+            <button class="modal-close" onclick="closeDeleteModal()">&times;</button>
+            <h3><i class="fas fa-exclamation-triangle" style="color:var(--danger);"></i> Delete User</h3>
+            <p style="color:var(--text-muted); margin-bottom:8px;">
+                Are you sure you want to delete user <strong id="deleteUser" style="color:var(--danger);"></strong>?
+            </p>
+            <p style="color:var(--text-muted); font-size:0.85rem;">This action cannot be undone.</p>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeDeleteModal()">Cancel</button>
+                <button class="btn btn-danger" onclick="confirmDelete()">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+    let _deleteTarget = '';
+
+    function showToast(msg, isError) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = 'toast show' + (isError ? ' error' : '');
+        setTimeout(() => t.className = 'toast', 3000);
+    }
+
+    async function loadUsers() {
+        try {
+            const resp = await fetch('/api/admin/users');
+            const data = await resp.json();
+            const list = document.getElementById('userList');
+            const count = document.getElementById('userCount');
+
+            if (!data.users || data.users.length === 0) {
+                list.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">No users found</div>';
+                count.textContent = '';
+                return;
+            }
+
+            count.textContent = `(${data.users.length})`;
+            list.innerHTML = data.users.map(u => `
+                <div class="user-item">
+                    <div class="user-info">
+                        <div class="user-avatar">${u.username.charAt(0).toUpperCase()}</div>
+                        <div>
+                            <div class="user-name">${u.username}</div>
+                            <div class="user-role">${u.role || 'user'}</div>
+                        </div>
+                    </div>
+                    <div class="user-actions">
+                        <button class="btn btn-sm" onclick="openPasswordModal('${u.username}')">
+                            <i class="fas fa-key"></i> Password
+                        </button>
+                        ${u.username !== 'admin' ? `
+                            <button class="btn btn-sm btn-danger" onclick="openDeleteModal('${u.username}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        } catch (err) {
+            document.getElementById('userList').innerHTML =
+                '<div style="text-align:center; padding:20px; color:var(--danger);">Error loading users</div>';
+        }
+    }
+
+    async function addUser() {
+        const username = document.getElementById('newUsername').value.trim();
+        const password = document.getElementById('newPassword').value;
+        if (!username || !password) { showToast('Please fill in all fields', true); return; }
+        if (password.length < 4) { showToast('Password must be at least 4 characters', true); return; }
+
+        try {
+            const resp = await fetch('/api/admin/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await resp.json();
+            if (data.status === 'ok') {
+                showToast('User added successfully!');
+                document.getElementById('newUsername').value = '';
+                document.getElementById('newPassword').value = '';
+                loadUsers();
+            } else {
+                showToast(data.message || 'Failed to add user', true);
+            }
+        } catch (err) {
+            showToast('Connection error', true);
+        }
+    }
+
+    function openPasswordModal(username) {
+        document.getElementById('modalUser').textContent = username;
+        document.getElementById('modalPassword').value = '';
+        document.getElementById('modalPasswordConfirm').value = '';
+        document.getElementById('passwordModal').classList.add('show');
+    }
+
+    function closeModal() {
+        document.getElementById('passwordModal').classList.remove('show');
+    }
+
+    async function changePassword() {
+        const username = document.getElementById('modalUser').textContent;
+        const password = document.getElementById('modalPassword').value;
+        const confirm = document.getElementById('modalPasswordConfirm').value;
+
+        if (!password) { showToast('Please enter a password', true); return; }
+        if (password !== confirm) { showToast('Passwords do not match', true); return; }
+        if (password.length < 4) { showToast('Password must be at least 4 characters', true); return; }
+
+        try {
+            const resp = await fetch('/api/admin/users/password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await resp.json();
+            if (data.status === 'ok') {
+                showToast('Password changed successfully!');
+                closeModal();
+            } else {
+                showToast(data.message || 'Failed to change password', true);
+            }
+        } catch (err) {
+            showToast('Connection error', true);
+        }
+    }
+
+    function openDeleteModal(username) {
+        _deleteTarget = username;
+        document.getElementById('deleteUser').textContent = username;
+        document.getElementById('deleteModal').classList.add('show');
+    }
+
+    function closeDeleteModal() {
+        document.getElementById('deleteModal').classList.remove('show');
+        _deleteTarget = '';
+    }
+
+    async function confirmDelete() {
+        if (!_deleteTarget) return;
+        try {
+            const resp = await fetch('/api/admin/users/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: _deleteTarget })
+            });
+            const data = await resp.json();
+            if (data.status === 'ok') {
+                showToast('User deleted');
+                closeDeleteModal();
+                loadUsers();
+            } else {
+                showToast(data.message || 'Failed to delete', true);
+            }
+        } catch (err) {
+            showToast('Connection error', true);
+        }
+    }
+
+    loadUsers();
+    </script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, send_file, request
+from flask import Flask, jsonify, send_file, request, session, redirect, url_for
 from flask_socketio import SocketIO, emit
 import paho.mqtt.client as mqtt
 import json
@@ -7,9 +7,76 @@ import psutil
 import time
 from datetime import datetime, timedelta
 import os
+from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
+app.secret_key = os.urandom(24).hex()  # Session encryption key
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+
+# === Authentication Config ===
+AUTH_FILE = "auth_config.json"
+
+def load_auth_config():
+    """Load user credentials from auth config file"""
+    default = {
+        "users": [
+            {
+                "username": "admin",
+                "password_hash": generate_password_hash("0824028770zz"),
+                "role": "admin"
+            }
+        ]
+    }
+    try:
+        if os.path.exists(AUTH_FILE):
+            with open(AUTH_FILE, "r") as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"Error loading auth config: {e}")
+    # Save default if not exists
+    save_auth_config(default)
+    return default
+
+def save_auth_config(config):
+    """Save auth config to file"""
+    try:
+        tmp_file = f"{AUTH_FILE}.tmp"
+        with open(tmp_file, "w") as f:
+            json.dump(config, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_file, AUTH_FILE)
+    except Exception as e:
+        print(f"Error saving auth config: {e}")
+
+auth_config = load_auth_config()
+
+def login_required(f):
+    """Decorator to protect routes — redirects to /login if not authenticated"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' not in session:
+            if request.path.startswith('/api/'):
+                return jsonify({"status": "error", "message": "Authentication required"}), 401
+            return redirect('/login')
+        return f(*args, **kwargs)
+    return decorated_function
+
+def admin_required(f):
+    """Decorator for admin-only routes — user role must be 'admin'"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' not in session:
+            if request.path.startswith('/api/'):
+                return jsonify({"status": "error", "message": "Authentication required"}), 401
+            return redirect('/login')
+        if session.get('role') != 'admin':
+            if request.path.startswith('/api/'):
+                return jsonify({"status": "error", "message": "Admin access required"}), 403
+            return redirect('/')
+        return f(*args, **kwargs)
+    return decorated_function
 
 # === Settings File ===
 SETTINGS_FILE = "settings.json"
@@ -211,12 +278,24 @@ def init_db():
                 )
             ''')
             
-            # Settings History Table (New)
+            # Settings History Table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS settings_history (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     settings_json TEXT
+                )
+            ''')
+            
+            # Activity Logs Table (Admin Audit Trail)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS activity_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    username TEXT,
+                    action TEXT,
+                    detail TEXT,
+                    ip_address TEXT
                 )
             ''')
             
@@ -230,6 +309,24 @@ def init_db():
 
 # Initialize DB on start
 init_db()
+
+def log_activity(username, action, detail="", ip=""):
+    """Log an important admin action to the database"""
+    with db_lock:
+        conn = None
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute(
+                'INSERT INTO activity_logs (username, action, detail, ip_address) VALUES (?, ?, ?, ?)',
+                (username, action, detail, ip)
+            )
+            conn.commit()
+        except Exception as e:
+            print(f"❌ Activity log error: {e}")
+        finally:
+            if conn:
+                conn.close()
 
 def save_settings_to_db(settings):
     """Save settings snapshot to database"""
@@ -426,7 +523,63 @@ def start_mqtt():
         print(f"❌ Could not connect to MQTT Broker: {e}")
         save_log(f"MQTT Error: {e}")
 
+# === Auth Routes (Public) ===
+@app.route('/login')
+def login_page():
+    if 'username' in session:
+        return redirect('/')
+    return send_file('login.html')
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    global auth_config
+    try:
+        data = request.get_json()
+        username = data.get('username', '').strip()
+        password = data.get('password', '')
+        ip = request.remote_addr
+
+        if not username or not password:
+            return jsonify({"status": "error", "message": "กรุณากรอก username และ password"}), 400
+
+        # Find user
+        auth_config = load_auth_config()
+        user = next((u for u in auth_config.get('users', []) if u['username'] == username), None)
+
+        if user and check_password_hash(user['password_hash'], password):
+            session['username'] = username
+            session['role'] = user.get('role', 'user')
+            session.permanent = True
+            app.permanent_session_lifetime = timedelta(days=7)
+            log_activity(username, 'login', 'Login successful', ip)
+            print(f"✅ Login: {username} from {ip}")
+            return jsonify({"status": "ok", "redirect": "/"})
+        else:
+            log_activity(username or '(unknown)', 'login', 'Login failed — wrong credentials', ip)
+            print(f"❌ Login failed: {username} from {ip}")
+            return jsonify({"status": "error", "message": "Username หรือ Password ไม่ถูกต้อง"}), 401
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/logout', methods=['POST'])
+def api_logout():
+    username = session.get('username', 'unknown')
+    ip = request.remote_addr
+    log_activity(username, 'logout', 'User logged out', ip)
+    session.clear()
+    return jsonify({"status": "ok"})
+
+@app.route('/api/me')
+@login_required
+def api_me():
+    """Return current user info for frontend role-based UI"""
+    return jsonify({
+        "username": session.get('username', ''),
+        "role": session.get('role', 'user')
+    })
+
 # === Web Server Routes ===
+# Public (no auth needed)
 @app.route('/base.css')
 def serve_base_css():
     return send_file('base.css')
@@ -435,35 +588,47 @@ def serve_base_css():
 def serve_header_js():
     return send_file('header.js')
 
-@app.route('/')
-def index():
-    return send_file('index.html')
-
-@app.route('/graphs')
-def graphs_page():
-    return send_file('graphs.html')
-
-@app.route('/full_logs')
-def full_logs_page():
-    return send_file('full_logs.html')
-
-@app.route('/api/sensors')
-def get_sensors():
-    return jsonify(last_data)
-
-@app.route('/settings')
-def settings_page():
-    return send_file('settings.html')
-
 @app.route('/pwa/<path:filename>')
 def serve_pwa(filename):
     return send_file(f'pwa/{filename}')
 
+@app.route('/static/<path:filename>')
+def serve_static_assets(filename):
+    return send_file(f'static/{filename}')
+
+# Protected pages
+@app.route('/')
+@login_required
+def index():
+    return send_file('index.html')
+
+@app.route('/graphs')
+@login_required
+def graphs_page():
+    return send_file('graphs.html')
+
+@app.route('/full_logs')
+@login_required
+def full_logs_page():
+    return send_file('full_logs.html')
+
+@app.route('/api/sensors')
+@login_required
+def get_sensors():
+    return jsonify(last_data)
+
+@app.route('/settings')
+@admin_required
+def settings_page():
+    return send_file('settings.html')
+
 @app.route('/live')
+@login_required
 def live_page():
     return send_file('live.html')
 
 @app.route('/cam-stream')
+@login_required
 def cam_stream():
     """Proxy the camera stream from localhost:8081 for remote access"""
     try:
@@ -476,11 +641,13 @@ def cam_stream():
         return "Camera stream not available locally (port 8081)", 502
 
 @app.route('/api/settings', methods=['GET'])
+@admin_required
 def get_settings():
     global app_settings
     return jsonify(app_settings)
 
 @app.route('/api/settings', methods=['POST'])
+@admin_required
 def post_settings():
     global app_settings
     try:
@@ -492,14 +659,13 @@ def post_settings():
                 try:
                     sensor_payload = json.dumps(new_settings["sensor_config"])
                     if mqtt_client and mqtt_client.is_connected():
-                         # Note: Client connection check might fail if threaded, but try best effort
                          mqtt_client.publish("aquaponics/config/sensors", sensor_payload, qos=1, retain=True)
                          print(f"📤 Sensor Config sent to ESP32: {sensor_payload}")
                 except Exception as ex:
                     print(f"MQTT Publish Error: {ex}")
 
             if save_settings(app_settings):
-
+                log_activity(session.get('username', '?'), 'settings', 'Settings updated', request.remote_addr)
                 return jsonify({"status": "ok", "message": "Settings saved"})
             else:
                 return jsonify({"status": "error", "message": "Failed to save"}), 500
@@ -509,12 +675,14 @@ def post_settings():
 
 # === TDS Calibration API ===
 @app.route('/api/tds_voltage')
+@admin_required
 def get_tds_voltage():
     """Get current TDS voltage from ESP32 sensor data"""
     voltage = last_data.get("tds_voltage", 0)
     return jsonify({"voltage": voltage})
 
 @app.route('/api/tds_calibrate', methods=['POST'])
+@admin_required
 def post_tds_calibrate():
     """Save TDS calibration and send to ESP32 via MQTT"""
     global app_settings, mqtt_client
@@ -544,6 +712,7 @@ def post_tds_calibrate():
             "calibrated": True
         }
         save_settings(app_settings)
+        log_activity(session.get('username', '?'), 'calibration', f'TDS Cal: Low={low_ppm}ppm, High={high_ppm}ppm', request.remote_addr)
         
         # Publish to ESP32 via MQTT
         if mqtt_client and mqtt_client.is_connected():
@@ -564,6 +733,7 @@ def post_tds_calibrate():
 
 # === pH Calibration API ===
 @app.route('/api/ph_voltage')
+@admin_required
 def get_ph_voltage():
     """Get current pH voltage and value from ESP32 sensor data"""
     voltage = last_data.get("ph_voltage", 0)
@@ -571,6 +741,7 @@ def get_ph_voltage():
     return jsonify({"voltage": voltage, "ph_value": ph_value})
 
 @app.route('/api/ph_calibrate', methods=['POST'])
+@admin_required
 def post_ph_calibrate():
     """Send pH calibration command to ESP32 via MQTT"""
     global app_settings, mqtt_client
@@ -587,6 +758,7 @@ def post_ph_calibrate():
             mqtt_client.publish("aquaponics/config/ph_cal", payload, qos=1)
             print(f"📤 pH Calibration command sent to ESP32: {action}")
             save_log(f"pH Calibration triggered: {action}")
+            log_activity(session.get('username', '?'), 'calibration', f'pH calibration: {action}', request.remote_addr)
             
             # Update local settings
             app_settings.setdefault("ph_calibration", {})
@@ -629,6 +801,7 @@ def monitor_heartbeat():
             time.sleep(5)
 
 @app.route('/api/health')
+@login_required
 def get_health():
     # Update Real-time Pi Stats
     last_data["pi_cpu_percent"] = psutil.cpu_percent()
@@ -645,10 +818,12 @@ def get_health():
     return jsonify(last_data) 
 
 @app.route('/api/info')
+@login_required
 def get_info():
     return jsonify({"firmware": "Pi-Server-v2 (Monitoring)", "status": "online"})
 
 @app.route('/api/health/details')
+@login_required
 def get_health_details():
     """Check Pi services and ESP32 sensors status"""
     import subprocess, time as _time
@@ -730,19 +905,23 @@ def get_health_details():
     return jsonify(result)
 
 @app.route('/api/logs')
+@login_required
 def get_logs():
     return jsonify(list(log_buffer))
 
 @app.route('/logs_view')
+@login_required
 def logs_view():
     return send_file('full_logs.html')
 
 @app.route('/graphs_view')
+@login_required
 def graphs_view():
     return send_file('graphs.html')
 
 # === Camera Settings API ===
 @app.route('/api/camera_restart', methods=['POST'])
+@admin_required
 def restart_camera():
     """Save camera settings and restart cam_server.py"""
     global app_settings
@@ -789,6 +968,7 @@ def restart_camera():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/api/full_logs_file')
+@login_required
 def get_full_logs_file():
     try:
         with open(LOG_FILE, "r") as f:
@@ -797,17 +977,18 @@ def get_full_logs_file():
         return "No logs found."
 
 @app.route('/api/clear_logs', methods=['POST'])
+@admin_required
 def clear_logs_file():
     try:
-        # Clear the file
         open(LOG_FILE, 'w').close()
-        # Clear memory buffer too
         log_buffer.clear()
+        log_activity(session.get('username', '?'), 'settings', 'System logs cleared', request.remote_addr)
         return jsonify({"status": "success", "message": "Logs cleared"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/history')
+@login_required
 def get_history():
     global app_settings
     try:
@@ -928,10 +1109,12 @@ import tempfile
 ota_tasks = {}
 
 @app.route('/ota')
+@admin_required
 def ota_page():
     return send_file('ota.html')
 
 @app.route('/api/ota/upload', methods=['POST'])
+@admin_required
 def ota_upload():
     """Receive firmware.bin from browser, then flash to ESP32 via espota.py"""
     try:
@@ -1006,11 +1189,13 @@ def ota_upload():
         thread.daemon = True
         thread.start()
 
+        log_activity(session.get('username', '?'), 'ota', f'OTA firmware uploaded ({file_size} bytes)', request.remote_addr)
         return jsonify({"status": "uploading", "task_id": task_id})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/ota/status/<task_id>')
+@admin_required
 def ota_status(task_id):
     """Check OTA flash status"""
     task = ota_tasks.get(task_id)
@@ -1022,10 +1207,12 @@ def ota_status(task_id):
 import re
 
 @app.route('/wifi')
+@admin_required
 def wifi_page():
     return send_file('wifi.html')
 
 @app.route('/api/wifi/status')
+@admin_required
 def wifi_status():
     """Get current WiFi connection info"""
     try:
@@ -1066,6 +1253,7 @@ def wifi_status():
         return jsonify({"connected": False, "ssid": "", "ip": "", "signal": 0, "error": str(e)})
 
 @app.route('/api/wifi/netstats')
+@login_required
 def wifi_netstats():
     """Get network throughput bytes and ping latency"""
     stats = {"rx_bytes": 0, "tx_bytes": 0, "ping_ms": None}
@@ -1089,6 +1277,7 @@ def wifi_netstats():
     return jsonify(stats)
 
 @app.route('/api/wifi/scan')
+@admin_required
 def wifi_scan():
     """Scan for available WiFi networks"""
     try:
@@ -1139,6 +1328,7 @@ def wifi_scan():
         return jsonify({"networks": [], "error": str(e)}), 500
 
 @app.route('/api/wifi/connect', methods=['POST'])
+@admin_required
 def wifi_connect():
     """Connect to a WiFi network using nmcli (NetworkManager)"""
     try:
@@ -1211,6 +1401,7 @@ import socket as _socket
 _telnet_sessions = {}
 
 @app.route('/terminal')
+@admin_required
 def terminal_page():
     return send_file('terminal.html')
 
@@ -1311,6 +1502,176 @@ def handle_ws_disconnect():
             pass
         del _telnet_sessions[sid]
         print(f"🖥️ Terminal session cleaned up (sid={sid[:8]})")
+
+# =============================================================================
+# Admin Panel — Activity Logs & User Management
+# =============================================================================
+
+@app.route('/admin/logs')
+@admin_required
+def admin_logs_page():
+    return send_file('admin_logs.html')
+
+@app.route('/admin/users')
+@admin_required
+def admin_users_page():
+    return send_file('admin_users.html')
+
+@app.route('/api/admin/logs')
+@admin_required
+def get_admin_logs():
+    """Get activity logs with optional filters"""
+    action_filter = request.args.get('action', '')
+    date_filter = request.args.get('date', '')
+    limit = int(request.args.get('limit', 200))
+
+    with db_lock:
+        conn = None
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            query = 'SELECT * FROM activity_logs WHERE 1=1'
+            params = []
+
+            if action_filter:
+                query += ' AND action = ?'
+                params.append(action_filter)
+            if date_filter:
+                query += ' AND date(timestamp) = ?'
+                params.append(date_filter)
+
+            query += ' ORDER BY id DESC LIMIT ?'
+            params.append(limit)
+
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+
+            logs = []
+            for row in rows:
+                ts_raw = row['timestamp']
+                # Convert UTC to Thai time (UTC+7)
+                try:
+                    dt = datetime.strptime(ts_raw, "%Y-%m-%d %H:%M:%S")
+                    dt_thai = dt + timedelta(hours=7)
+                    ts_display = dt_thai.strftime("%d/%m/%Y %H:%M:%S")
+                except:
+                    ts_display = ts_raw
+
+                logs.append({
+                    'id': row['id'],
+                    'timestamp': ts_display,
+                    'username': row['username'],
+                    'action': row['action'],
+                    'detail': row['detail'],
+                    'ip': row['ip_address']
+                })
+
+            return jsonify({'logs': logs, 'total': len(logs)})
+        except Exception as e:
+            return jsonify({'logs': [], 'error': str(e)}), 500
+        finally:
+            if conn:
+                conn.close()
+
+@app.route('/api/admin/users', methods=['GET'])
+@admin_required
+def get_admin_users():
+    """List all users (without password hashes)"""
+    global auth_config
+    auth_config = load_auth_config()
+    users = [{'username': u['username'], 'role': u.get('role', 'user')} for u in auth_config.get('users', [])]
+    return jsonify({'users': users})
+
+@app.route('/api/admin/users', methods=['POST'])
+@admin_required
+def add_admin_user():
+    """Add a new user"""
+    global auth_config
+    try:
+        data = request.get_json()
+        username = data.get('username', '').strip()
+        password = data.get('password', '')
+
+        if not username or not password:
+            return jsonify({'status': 'error', 'message': 'Username and password are required'}), 400
+        if len(password) < 4:
+            return jsonify({'status': 'error', 'message': 'Password must be at least 4 characters'}), 400
+
+        auth_config = load_auth_config()
+
+        # Check if username already exists
+        if any(u['username'] == username for u in auth_config.get('users', [])):
+            return jsonify({'status': 'error', 'message': f'User "{username}" already exists'}), 400
+
+        auth_config['users'].append({
+            'username': username,
+            'password_hash': generate_password_hash(password),
+            'role': 'user'
+        })
+        save_auth_config(auth_config)
+        log_activity(session.get('username', '?'), 'user_mgmt', f'Added user: {username}', request.remote_addr)
+        print(f"👤 User added: {username}")
+        return jsonify({'status': 'ok', 'message': f'User "{username}" added'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/admin/users/password', methods=['POST'])
+@admin_required
+def change_user_password():
+    """Change a user's password"""
+    global auth_config
+    try:
+        data = request.get_json()
+        username = data.get('username', '').strip()
+        new_password = data.get('password', '')
+
+        if not username or not new_password:
+            return jsonify({'status': 'error', 'message': 'Username and password are required'}), 400
+        if len(new_password) < 4:
+            return jsonify({'status': 'error', 'message': 'Password must be at least 4 characters'}), 400
+
+        auth_config = load_auth_config()
+        user = next((u for u in auth_config.get('users', []) if u['username'] == username), None)
+        if not user:
+            return jsonify({'status': 'error', 'message': f'User "{username}" not found'}), 404
+
+        user['password_hash'] = generate_password_hash(new_password)
+        save_auth_config(auth_config)
+        log_activity(session.get('username', '?'), 'user_mgmt', f'Changed password for: {username}', request.remote_addr)
+        print(f"🔑 Password changed for: {username}")
+        return jsonify({'status': 'ok', 'message': f'Password updated for "{username}"'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/admin/users/delete', methods=['POST'])
+@admin_required
+def delete_admin_user():
+    """Delete a user (cannot delete 'admin')"""
+    global auth_config
+    try:
+        data = request.get_json()
+        username = data.get('username', '').strip()
+
+        if not username:
+            return jsonify({'status': 'error', 'message': 'Username is required'}), 400
+        if username == 'admin':
+            return jsonify({'status': 'error', 'message': 'Cannot delete the admin account'}), 400
+
+        auth_config = load_auth_config()
+        original_len = len(auth_config.get('users', []))
+        auth_config['users'] = [u for u in auth_config.get('users', []) if u['username'] != username]
+
+        if len(auth_config['users']) == original_len:
+            return jsonify({'status': 'error', 'message': f'User "{username}" not found'}), 404
+
+        save_auth_config(auth_config)
+        log_activity(session.get('username', '?'), 'user_mgmt', f'Deleted user: {username}', request.remote_addr)
+        print(f"🗑️ User deleted: {username}")
+        return jsonify({'status': 'ok', 'message': f'User "{username}" deleted'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 if __name__ == '__main__':
     # Start MQTT Thread

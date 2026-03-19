@@ -89,5 +89,7 @@ bool otaIsEnabled(void) {
     return _otaInitialized;
     #else
     return false;
-    #endif
+    #endif 
+
+    
 }

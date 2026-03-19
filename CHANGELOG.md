@@ -2,6 +2,35 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-03-20] - Login System & Admin Panel
+
+### Added
+
+- **Authentication System (`app.py`):**
+  - Flask session-based login with `login_required` decorator on all protected routes.
+  - Hashed passwords via `werkzeug.security` stored in `auth_config.json` (gitignored).
+  - API: `POST /api/login`, `POST /api/logout` with session management (7-day expiry).
+  - Auto-redirect unauthenticated users to `/login` page.
+- **Activity Logging (`app.py` + `admin_logs.html`):**
+  - `activity_logs` SQLite table for admin audit trail.
+  - Tracks: Login, Logout, Settings changes, TDS/pH Calibration, OTA uploads, User management.
+  - Admin Logs page with filtering by action type and date.
+- **User Management (`admin_users.html`):**
+  - Admin page to add, edit password, and delete users.
+  - API: `GET/POST /api/admin/users`, `POST /api/admin/users/password`, `POST /api/admin/users/delete`.
+  - Cannot delete the `admin` account.
+- **Login Page (`login.html`):**
+  - Standalone dark-theme login page with glassmorphism design.
+  - Animated login icon, error handling, AJAX form submission.
+- **Navigation Update (`header.js`):**
+  - Added "Activity" and "Users" nav links.
+  - Added Logout button in header (red accent, all pages).
+
+### Changed
+
+- `app.py`: All 30+ routes now require authentication except `/login`, static assets, and PWA files.
+- `.gitignore`: Added `pi_server/auth_config.json`.
+
 ## [2026-03-10] - Deployment Automation & Health Monitoring
 
 ### Added

@@ -15,3 +15,4 @@ pi_server/aquaponics-cam.service
 AGENTS.md
 pi_server/*.sh
 pi_server/*.conf
+pi_server/auth_config.json
