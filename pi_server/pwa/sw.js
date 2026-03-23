@@ -1,16 +1,22 @@
 // Service Worker for Aquaponics PWA
-const CACHE_NAME = 'aquaponics-v1';
+const CACHE_NAME = 'aquaponics-v3';
 const STATIC_ASSETS = [
     '/',
-    '/index.html',
-    '/graphs',
-    '/settings',
-    '/full_logs',
+    '/static/fonts/fonts.css',
+    '/static/fonts/outfit-300.ttf',
+    '/static/fonts/outfit-400.ttf',
+    '/static/fonts/outfit-500.ttf',
+    '/static/fonts/outfit-600.ttf',
+    '/static/fonts/outfit-700.ttf',
+    '/static/fa/css/all.min.css',
     '/pwa/manifest.json',
     '/pwa/icon.svg',
-    'https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap',
-    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
-    'https://cdn.jsdelivr.net/npm/chart.js'
+    '/base.css',
+    '/header.js',
+    '/static/js/socket.io.min.js',
+    '/static/js/chart.umd.min.js',
+    '/static/js/hammer.min.js',
+    '/static/js/chartjs-plugin-zoom.min.js'
 ];
 
 // Install - cache static assets

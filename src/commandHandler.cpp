@@ -60,6 +60,7 @@ static void _showHelp(CommandOutput_t out) {
     commandPrintf(out, "  status   - แสดงค่าเซ็นเซอร์ทั้งหมด\r\n");
     commandPrintf(out, "  test     - รันระบบ Self-Test\r\n");
     commandPrintf(out, "  health   - แสดงสุขภาพระบบ\r\n");
+    commandPrintf(out, "  tasks    - แสดงสถานะ Task (heartbeat + stack)\r\n");
     commandPrintf(out, "  wifi     - แสดงข้อมูล WiFi\r\n");
     commandPrintf(out, "  mqtt     - แสดงสถานะ NETPIE\r\n");
     commandPrintf(out, "  ph       - อ่านค่า pH ปัจจุบัน\r\n");
@@ -288,6 +289,16 @@ void commandProcess(char* cmd, CommandOutput_t output) {
         commandPrintf(output, "[SYS] Factory Reset...\r\n");
         Serial.flush();
         systemFactoryReset();
+    }
+    else if (strcmp(cleanCmd, "tasks") == 0) {
+        commandPrintf(output, "\r\n========== TASK HEALTH ==========\r\n");
+        for (int i = 0; i < TASK_ID_COUNT; i++) {
+            unsigned long age = systemGetTaskHeartbeatAge((TaskId_t)i);
+            const char* status = (age == 0) ? "NOT STARTED" : (age > TASK_STUCK_THRESHOLD_MS) ? "STUCK!" : "OK";
+            commandPrintf(output, "  %-12s : %s (heartbeat %lums ago)\r\n", TASK_NAMES[i], status, age);
+        }
+        systemPrintStackInfo();
+        commandPrintf(output, "=================================\r\n");
     }
     else {
         commandPrintf(output, "[CMD] Unknown: %s (type 'help')\r\n", cleanCmd);

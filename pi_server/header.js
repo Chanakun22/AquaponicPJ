@@ -213,7 +213,7 @@
 
     function startNetStatsPoll() {
         pollNetStats();
-        setInterval(pollNetStats, 3000);
+        setInterval(pollNetStats, 10000);
     }
 
     // === Run on DOM ready ===

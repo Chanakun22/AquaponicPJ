@@ -2,6 +2,28 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-03-24] - Web Dashboard Performance Optimization
+
+### Changed
+
+- **perf: Dashboard WebSocket Migration (`index.html`):**
+  - เปลี่ยนจาก HTTP Polling (5 API calls ทุก 3 วินาที) → WebSocket (SocketIO) ที่ server push ข้อมูลมาให้ทุก 2 วินาที
+  - ลดจำนวน HTTP requests จาก ~100/นาที เหลือ ~2/นาที (settings fetch ทุก 30 วินาที)
+  - ข้อมูลเซนเซอร์อัปเดตเร็วขึ้นและลดภาระ CPU ของ Pi อย่างมาก
+- **perf: Net Stats Polling Interval (`header.js`):**
+  - ลด polling `/api/wifi/netstats` จากทุก 3 วินาที → ทุก 10 วินาที ลดการรัน `ping` command บน Pi
+- **perf: Chart.js Local Hosting (`graphs.html`):**
+  - ย้าย Chart.js, HammerJS, chartjs-plugin-zoom จาก CDN ภายนอกมาเป็นไฟล์ local (`/static/js/`)
+  - กราฟทำงานได้แม้ไม่มีอินเทอร์เน็ต (Offline Mode)
+- **refactor: ลบ CSS ซ้ำใน `index.html`:**
+  - ลบ Nav Bar CSS ~40 บรรทัดที่ซ้ำกับ `header.js` และ `base.css`
+  - เพิ่ม `will-change: transform` ให้ card animations เพื่อลดภาระ GPU
+- **chore: PWA Cache Update (`sw.js`):**
+  - Bump cache version `v2` → `v3`
+  - เพิ่ม Socket.IO, Chart.js, HammerJS, chartjs-plugin-zoom เข้า PWA cache สำหรับ offline
+- **chore: Updated `download_assets.sh`:**
+  - เพิ่มคำสั่งดาวน์โหลด Chart.js + plugins สำหรับ offline mode
+
 ## [2026-03-20] - Login System & Admin Panel
 
 ### Added

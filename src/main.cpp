@@ -90,6 +90,7 @@ void TaskNetworking(void *pvParameters) {
         #if defined(ESP32) && WATCHDOG_ENABLED
         esp_task_wdt_reset();
         #endif
+        systemTaskHeartbeat(TASK_NETWORKING);
         
         // Handle WiFi connection / config portal
         wifiLoop();
@@ -142,6 +143,7 @@ void TaskSensors(void *pvParameters) {
         #if defined(ESP32) && WATCHDOG_ENABLED
         esp_task_wdt_reset();
         #endif
+        systemTaskHeartbeat(TASK_SENSORS);
         
         // Water Temp (OneWire is slow, blocking)
         if (systemGetSensorEnabled(SENSOR_WATER_TEMP)) {
@@ -214,12 +216,19 @@ void TaskControl(void *pvParameters) {
         #if defined(ESP32) && WATCHDOG_ENABLED
         esp_task_wdt_reset();
         #endif
+        systemTaskHeartbeat(TASK_CONTROL);
 
         // System Management (Button checks etc)
         systemLoop();
         
         // Light Controller Schedule
         lightCtrlLoop();
+        
+        // Check task heartbeats (detect stuck tasks)
+        if (!systemCheckTaskHealth()) {
+            LOG_ERROR("Task stuck detected! Printing stack info...");
+            systemPrintStackInfo();
+        }
         
         // System Health / Heap Check
         if (!systemIsHealthy()) {
@@ -245,6 +254,9 @@ void setup() {
     
     // Initialize system management
     systemInit();
+    
+    // Report if last reboot was caused by a stuck task
+    systemReportLastCrash();
     
 #if defined(ESP32) && WATCHDOG_ENABLED
     // ESP-IDF 5.x (Arduino 3.x) uses new WDT API with config struct
@@ -292,21 +304,28 @@ void setup() {
     
     LOG_INFO("Starting FreeRTOS Tasks...");
     
-    // Create Tasks
+    // Create Tasks (save handles for stack monitoring)
     // Core 0: WiFi/Network (Protocol stack runs here usually)
     // Core 1: Arduino Loop / Sensors / Control
     
+    TaskHandle_t hNet = NULL, hSens = NULL, hCtrl = NULL;
+    
     xTaskCreatePinnedToCore(
-        TaskNetworking,   "Networking",   8192,  NULL,  1,  NULL,  0 // Core 0
+        TaskNetworking,   "Networking",   8192,  NULL,  1,  &hNet,   0 // Core 0
     );
     
     xTaskCreatePinnedToCore(
-        TaskSensors,      "Sensors",      8192,  NULL,  1,  NULL,  1 // Core 1
+        TaskSensors,      "Sensors",      8192,  NULL,  1,  &hSens,  1 // Core 1
     );
     
     xTaskCreatePinnedToCore(
-        TaskControl,      "Control",      4096,  NULL,  1,  NULL,  1 // Core 1
+        TaskControl,      "Control",      4096,  NULL,  1,  &hCtrl,  1 // Core 1
     );
+    
+    // Register task handles for stack monitoring
+    systemSetTaskHandle(TASK_NETWORKING, hNet);
+    systemSetTaskHandle(TASK_SENSORS, hSens);
+    systemSetTaskHandle(TASK_CONTROL, hCtrl);
 
     LOG_INFO("All modules initialized & Tasks started");
     LOG_MODULE_END("Aquaponics Sensor System");

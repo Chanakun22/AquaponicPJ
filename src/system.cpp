@@ -358,4 +358,109 @@ bool systemGetSensorEnabled(SensorId_t id) {
     return _sensorEnabled[id];
 }
 
+// ============================================================================
+// TASK HEARTBEAT MONITOR IMPLEMENTATION
+// ============================================================================
+
+const char* TASK_NAMES[TASK_ID_COUNT] = {
+    "Networking",
+    "Sensors",
+    "Control"
+};
+
+static volatile unsigned long _taskHeartbeat[TASK_ID_COUNT] = {0, 0, 0};
+static TaskHandle_t _taskHandles[TASK_ID_COUNT] = {NULL, NULL, NULL};
+
+void systemTaskHeartbeat(TaskId_t taskId) {
+    if (taskId >= 0 && taskId < TASK_ID_COUNT) {
+        _taskHeartbeat[taskId] = millis();
+    }
+}
+
+void systemSetTaskHandle(TaskId_t taskId, TaskHandle_t handle) {
+    if (taskId >= 0 && taskId < TASK_ID_COUNT) {
+        _taskHandles[taskId] = handle;
+    }
+}
+
+unsigned long systemGetTaskHeartbeatAge(TaskId_t taskId) {
+    if (taskId < 0 || taskId >= TASK_ID_COUNT) return 0;
+    unsigned long hb = _taskHeartbeat[taskId];
+    if (hb == 0) return 0;  // Not started yet
+    return millis() - hb;
+}
+
+bool systemCheckTaskHealth(void) {
+    bool allOk = true;
+    unsigned long now = millis();
+    
+    for (int i = 0; i < TASK_ID_COUNT; i++) {
+        unsigned long hb = _taskHeartbeat[i];
+        if (hb == 0) continue;  // Task not started yet
+        
+        unsigned long age = now - hb;
+        if (age > TASK_STUCK_THRESHOLD_MS) {
+            LOG_ERROR("STUCK TASK: %s — no heartbeat for %lu seconds!", 
+                      TASK_NAMES[i], age / 1000);
+            
+            // Save to NVS so we know after reboot
+            Preferences crashPrefs;
+            crashPrefs.begin("crash", false);
+            crashPrefs.putString("task", TASK_NAMES[i]);
+            crashPrefs.putULong("age", age / 1000);
+            crashPrefs.putULong("uptime", (millis() - _bootTime) / 1000);
+            crashPrefs.end();
+            
+            allOk = false;
+        }
+    }
+    
+    return allOk;
+}
+
+void systemPrintStackInfo(void) {
+    for (int i = 0; i < TASK_ID_COUNT; i++) {
+        if (_taskHandles[i] != NULL) {
+            UBaseType_t hwm = uxTaskGetStackHighWaterMark(_taskHandles[i]);
+            unsigned long age = systemGetTaskHeartbeatAge((TaskId_t)i);
+            LOG_INFO("Task %-12s | Stack free: %4u bytes | Heartbeat: %lums ago",
+                     TASK_NAMES[i], (unsigned int)(hwm * 4), age);
+        }
+    }
+}
+
+bool systemGetLastCrashInfo(char* buf, size_t bufSize) {
+    Preferences crashPrefs;
+    crashPrefs.begin("crash", true);  // Read-only
+    
+    String taskName = crashPrefs.getString("task", "");
+    if (taskName.length() == 0) {
+        crashPrefs.end();
+        return false;  // No crash info
+    }
+    
+    unsigned long age = crashPrefs.getULong("age", 0);
+    unsigned long uptime = crashPrefs.getULong("uptime", 0);
+    crashPrefs.end();
+    
+    snprintf(buf, bufSize, "Task '%s' stuck %lus (uptime was %lus)",
+             taskName.c_str(), age, uptime);
+    return true;
+}
+
+void systemReportLastCrash(void) {
+    char crashInfo[128];
+    if (systemGetLastCrashInfo(crashInfo, sizeof(crashInfo))) {
+        LOG_WARN("=== LAST CRASH INFO ===");
+        LOG_WARN("%s", crashInfo);
+        LOG_WARN("Reset reason: %s", systemGetResetReasonString());
+        LOG_WARN("=======================");
+        
+        // Clear crash info after reporting
+        Preferences crashPrefs;
+        crashPrefs.begin("crash", false);
+        crashPrefs.clear();
+        crashPrefs.end();
+    }
+}
 

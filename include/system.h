@@ -137,4 +137,61 @@ void systemIncrementWifiReconnects(void);
  */
 void systemIncrementMqttReconnects(void);
 
+// ============================================================================
+// TASK HEARTBEAT MONITOR
+// ============================================================================
+
+/** Threshold before a task is considered stuck (ms) */
+#define TASK_STUCK_THRESHOLD_MS  30000
+
+/** Task IDs for heartbeat tracking */
+typedef enum {
+    TASK_NETWORKING = 0,
+    TASK_SENSORS,
+    TASK_CONTROL,
+    TASK_ID_COUNT
+} TaskId_t;
+
+/** Task names for logging */
+extern const char* TASK_NAMES[TASK_ID_COUNT];
+
+/**
+ * @brief Update heartbeat timestamp for a task (call in task loop)
+ */
+void systemTaskHeartbeat(TaskId_t taskId);
+
+/**
+ * @brief Check all task heartbeats, log warning if any is stuck
+ * @return true if all tasks are alive, false if any is stuck
+ */
+bool systemCheckTaskHealth(void);
+
+/**
+ * @brief Print stack high water mark for all tasks
+ */
+void systemPrintStackInfo(void);
+
+/**
+ * @brief Set FreeRTOS task handle for stack monitoring
+ */
+void systemSetTaskHandle(TaskId_t taskId, TaskHandle_t handle);
+
+/**
+ * @brief Get last heartbeat age in ms for a task
+ */
+unsigned long systemGetTaskHeartbeatAge(TaskId_t taskId);
+
+/**
+ * @brief Get last crash info from NVS (persisted across reboot)
+ * @param buf Buffer to write crash info string
+ * @param bufSize Buffer size
+ * @return true if there was crash info, false if clean boot
+ */
+bool systemGetLastCrashInfo(char* buf, size_t bufSize);
+
+/**
+ * @brief Report last crash info to Serial/logs (call once after boot)
+ */
+void systemReportLastCrash(void);
+
 #endif // SYSTEM_H
