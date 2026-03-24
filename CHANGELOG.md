@@ -2,6 +2,29 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-03-25] - Header Navigation & Responsive Fix
+
+### Changed
+
+- **feat: Mobile Hamburger Menu (`header.js`):**
+  - เพิ่มปุ่ม ☰ hamburger สำหรับมือถือ — กดแล้ว nav เปิดแนวตั้ง (เปลี่ยนเป็น ✕ ปิด)
+  - Nav bar เปลี่ยนจาก horizontal scroll เป็น vertical collapse บน mobile (≤768px)
+  - ซ่อน Net Stats pills บนหน้าจอเล็กมาก (≤480px) เพื่อประหยัดพื้นที่
+  - Nav links มี touch target ใหญ่ขึ้น (12px padding, full-width) สำหรับมือถือ
+- **refactor: ลบ CSS ซ้ำ (`graphs.html`, `terminal.html`, `ota.html`):**
+  - ลบ nav-bar/nav-link CSS overrides ที่ซ้ำกับ `header.js` ออกจาก 3 หน้า
+  - Nav styling ทั้งหมดจัดการจาก `header.js` ที่เดียว (Single Source of Truth)
+
+## [2026-03-25] - Fix Networking Task Stuck (30s Timeout)
+
+### Fixed
+
+- **fix: MQTT Connect Blocking (`netpie.cpp`, `localMqtt.cpp`):**
+  - ตั้ง `WiFiClient.setTimeout(5)` ลด TCP socket timeout จาก ~30 วินาที → 5 วินาที
+  - ตั้ง `PubSubClient.setSocketTimeout(5)` ลด MQTT keepalive timeout
+  - เพิ่ม heartbeat + WDT reset ระหว่าง `netpieLoop()` กับ `localMqttLoop()` ใน `TaskNetworking` (main.cpp)
+  - แก้ปัญหา "STUCK TASK: Networking — no heartbeat for 30 seconds" เมื่อ NETPIE หรือ Pi unreachable
+
 ## [2026-03-24] - Web Dashboard Performance Optimization
 
 ### Changed

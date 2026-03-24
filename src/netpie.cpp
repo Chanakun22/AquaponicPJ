@@ -190,9 +190,13 @@ static bool _mqttReconnect(void) {
 void netpieSetup(void) {
     LOG_INFO("Initializing NETPIE MQTT...");
     
+    // Set TCP socket timeout to 5 seconds (default ~30s causes task stuck detection)
+    _wifiClient.setTimeout(5);  // seconds
+    
     _mqtt.setServer(MQTT_BROKER, MQTT_PORT);
     _mqtt.setCallback(_mqttCallback);
     _mqtt.setBufferSize(1024);  // เพิ่ม buffer size
+    _mqtt.setSocketTimeout(5);  // PubSubClient keepalive timeout (seconds)
     
     LOG_INFO("MQTT Broker: %s:%d", MQTT_BROKER, MQTT_PORT);
 }

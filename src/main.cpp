@@ -101,14 +101,26 @@ void TaskNetworking(void *pvParameters) {
         // Handle OTA updates
         otaLoop();
         
-        // Handle Netpie MQTT (Blocking connect can take 15-30s if internet is down)
+        // Handle Netpie MQTT (connect timeout set to 5s in netpieSetup)
         netpieLoop();
+        
+        // Reset heartbeat after Netpie (connect can take up to 5s)
+        systemTaskHeartbeat(TASK_NETWORKING);
+        #if defined(ESP32) && WATCHDOG_ENABLED
+        esp_task_wdt_reset();
+        #endif
         
         // Yield to IDLE task to prevent Task WDT accumulation timeout
         vTaskDelay(pdMS_TO_TICKS(10));
         
-        // Handle Local MQTT (Pi) (Blocking connect can take 15-30s if Pi is down)
+        // Handle Local MQTT (Pi) (connect timeout set to 5s in localMqttSetup)
         localMqttLoop();
+        
+        // Reset heartbeat after Local MQTT (connect can take up to 5s)
+        systemTaskHeartbeat(TASK_NETWORKING);
+        #if defined(ESP32) && WATCHDOG_ENABLED
+        esp_task_wdt_reset();
+        #endif
         
         // Command Handling from Serial/Telnet is safe here or needs mutex?
         // Serial is hardware, Telnet is network. 

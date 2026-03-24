@@ -1,6 +1,6 @@
 /**
  * Aquaponics System - Shared Header Component
- * Nav-bar + Net-stats pills + Auto-active detection + Polling
+ * Nav-bar + Net-stats pills + Auto-active detection + Hamburger menu
  * 
  * Usage: Add to any page's <head>:
  *   <script src="/header.js"></script>
@@ -15,9 +15,8 @@
         .nav-bar {
             display: flex; gap: 4px; padding: 8px 12px;
             background: rgba(0,0,0,0.25); border-top: 1px solid var(--glass-border, rgba(255,255,255,0.08));
-            overflow-x: auto; scrollbar-width: none;
+            flex-wrap: wrap;
         }
-        .nav-bar::-webkit-scrollbar { display: none; }
         .nav-link {
             display: flex; align-items: center; gap: 8px; padding: 10px 18px;
             border-radius: 10px; font-size: 0.85rem; font-weight: 500;
@@ -46,7 +45,7 @@
             background: rgba(255,255,255,0.03); border-radius: 16px;
             border: 1px solid var(--glass-border, rgba(255,255,255,0.08));
             font-size: 0.75rem; color: var(--text-muted, #8b9bb4);
-            cursor: help; /* Hint that there is a tooltip */
+            cursor: help;
         }
         .ns-dl { color: #10b981; }
         .ns-ul { color: #38bdf8; }
@@ -56,15 +55,63 @@
             font-family: 'JetBrains Mono', monospace; font-size: 0.75rem;
         }
 
+        /* Header Right Group */
+        .header-right-group {
+            display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        }
+
+        /* Hamburger Button */
+        .hamburger-btn {
+            display: none; /* Hidden on desktop */
+            align-items: center; justify-content: center;
+            width: 40px; height: 40px;
+            border-radius: 10px; border: 1px solid var(--glass-border, rgba(255,255,255,0.08));
+            background: rgba(255,255,255,0.06); color: var(--text-main, #fff);
+            cursor: pointer; font-size: 1.2rem;
+            transition: all 0.25s ease;
+        }
+        .hamburger-btn:hover { background: rgba(255,255,255,0.12); }
+        .hamburger-btn.open { background: rgba(0,242,170,0.1); color: var(--primary, #00f2aa); }
+
+        /* ===== MOBILE RESPONSIVE ===== */
         @media (max-width: 768px) {
-            .nav-bar { padding: 6px 8px; gap: 2px; }
-            .nav-link { padding: 8px 14px; font-size: 0.8rem; }
+            /* Show hamburger */
+            .hamburger-btn { display: flex; }
+
+            /* Nav bar: collapsible */
+            .nav-bar {
+                display: none; /* Hidden by default on mobile */
+                flex-direction: column;
+                padding: 8px;
+                gap: 2px;
+            }
+            .nav-bar.open { display: flex; }
+            .nav-link {
+                padding: 12px 16px; font-size: 0.9rem;
+                border-radius: 8px; width: 100%;
+            }
+
+            /* Header top: stack on very small */
+            .header-right-group {
+                gap: 6px;
+            }
+
+            /* Net stats: smaller */
+            .ns-item { padding: 3px 7px; font-size: 0.7rem; }
+            .ns-val { font-size: 0.7rem; }
+
+            /* Logout: compact */
+            .btn-logout { padding: 5px 10px; font-size: 0.75rem; }
+        }
+
+        @media (max-width: 480px) {
+            .net-stats { display: none; } /* Hide net stats on very small screens */
+            .header-right-group { gap: 6px; }
         }
     `;
     document.head.appendChild(css);
 
     // === Navigation links ===
-    // admin: true means only visible to admin users
     const NAV_LINKS = [
         { href: '/',            icon: 'fa-solid fa-leaf',           label: 'Dashboard' },
         { href: '/live',        icon: 'fa-solid fa-video',          label: 'Live' },
@@ -85,8 +132,8 @@
     function buildNavBar(userRole) {
         const nav = document.createElement('nav');
         nav.className = 'nav-bar';
+        nav.id = 'mainNavBar';
         NAV_LINKS.forEach(link => {
-            // Hide admin-only links for non-admin users
             if (link.admin && userRole !== 'admin') return;
             const a = document.createElement('a');
             a.href = link.href;
@@ -97,6 +144,26 @@
             nav.appendChild(a);
         });
         return nav;
+    }
+
+    // === Build hamburger button ===
+    function buildHamburger() {
+        const btn = document.createElement('button');
+        btn.className = 'hamburger-btn';
+        btn.id = 'hamburgerBtn';
+        btn.innerHTML = '<i class="fas fa-bars"></i>';
+        btn.setAttribute('aria-label', 'Toggle navigation');
+        btn.onclick = function() {
+            const nav = document.getElementById('mainNavBar');
+            if (nav) {
+                nav.classList.toggle('open');
+                btn.classList.toggle('open');
+                btn.innerHTML = nav.classList.contains('open')
+                    ? '<i class="fas fa-times"></i>'
+                    : '<i class="fas fa-bars"></i>';
+            }
+        };
+        return btn;
     }
 
     // === Build net-stats pills HTML ===
@@ -127,11 +194,11 @@
             }
         } catch(e) {}
 
-        // Insert net-stats pills and logout button into header-top (right side)
+        // Insert hamburger, net-stats pills and logout button into header-top (right side)
         const headerTop = header.querySelector('.header-top');
         if (headerTop) {
             const rightGroup = document.createElement('div');
-            rightGroup.style.cssText = 'display:flex; align-items:center; gap:10px; flex-wrap:wrap;';
+            rightGroup.className = 'header-right-group';
             rightGroup.appendChild(buildNetStats());
 
             // Logout button
@@ -146,12 +213,15 @@
             };
             rightGroup.appendChild(logoutBtn);
 
+            // Hamburger button (only visible on mobile via CSS)
+            rightGroup.appendChild(buildHamburger());
+
             headerTop.appendChild(rightGroup);
         }
 
         // Insert nav-bar after header-top
         const existingNav = header.querySelector('.nav-bar');
-        if (existingNav) existingNav.remove(); // Remove old nav if exists
+        if (existingNav) existingNav.remove();
 
         if (headerTop) {
             headerTop.after(buildNavBar(userRole));
@@ -159,10 +229,12 @@
             header.appendChild(buildNavBar(userRole));
         }
 
-        // Scroll active link into view
-        const activeLink = header.querySelector('.nav-link.active');
-        if (activeLink) {
-            activeLink.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+        // Scroll active link into view (desktop only)
+        if (window.innerWidth > 768) {
+            const activeLink = header.querySelector('.nav-link.active');
+            if (activeLink) {
+                activeLink.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+            }
         }
 
         // Start net-stats polling
@@ -202,13 +274,10 @@
                 if (d.ping_target) {
                     const title = 'Ping to: ' + d.ping_target;
                     pg.parentElement.title = title;
-                    pg.title = title; // Set on span too just in case
-                } else {
-                    // Debug: No ping target received?
-                    console.log('No ping_target in response:', d);
+                    pg.title = title;
                 }
             }
-        } catch (e) { console.error('Poll error:', e); }
+        } catch (e) { /* silent */ }
     }
 
     function startNetStatsPoll() {

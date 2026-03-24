@@ -205,7 +205,12 @@ static bool _reconnect() {
 
 void localMqttSetup(void) {
     LOG_INFO("Initializing Local MQTT...");
+    
+    // Set TCP socket timeout to 5 seconds (default ~30s causes task stuck detection)
+    _localWifiClient.setTimeout(5);  // seconds
+    
     _localMqtt.setBufferSize(512);
+    _localMqtt.setSocketTimeout(5);  // PubSubClient keepalive timeout (seconds)
     
     // Create a queue for passing logs across tasks safely (20 items of 128 bytes)
     _logQueue = xQueueCreate(20, 128);
