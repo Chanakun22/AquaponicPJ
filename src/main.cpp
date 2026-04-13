@@ -20,6 +20,7 @@
 #include "netpie.h"
 #include "localMqtt.h"
 #include "commandHandler.h"
+#include "automator.h"
 
 
 #if defined(ESP32) && WATCHDOG_ENABLED
@@ -95,11 +96,14 @@ void TaskNetworking(void *pvParameters) {
         // Handle WiFi connection / config portal
         wifiLoop();
         
-        // Handle Telnet clients
-        telnetLoop();
-        
-        // Handle OTA updates
-        otaLoop();
+        // Skip all network services when WiFi not connected
+        if (wifiIsConnected()) {
+            // Handle Telnet clients
+            telnetLoop();
+            
+            // Handle OTA updates
+            otaLoop();
+        }
         
         // Handle Netpie MQTT (connect timeout set to 5s in netpieSetup)
         netpieLoop();
@@ -126,6 +130,8 @@ void TaskNetworking(void *pvParameters) {
         // Serial is hardware, Telnet is network. 
         // commandCheckSerial() uses Serial.read(), safe to poll here or in separate task.
         commandCheckSerial();
+        commandPumpTestTick();      // Auto-off pump test after 3 seconds (CLI)
+        localMqttHwTestTick();      // Auto-off pump test after duration (Web HW Test)
         
         // Publish Data if connected
         static unsigned long lastPublish = 0;
@@ -236,6 +242,9 @@ void TaskControl(void *pvParameters) {
         // Light Controller Schedule
         lightCtrlLoop();
         
+        // Automation Engine (Process State Machine)
+        automatorLoop();
+        
         // Check task heartbeats (detect stuck tasks)
         if (!systemCheckTaskHealth()) {
             LOG_ERROR("Task stuck detected! Printing stack info...");
@@ -310,6 +319,9 @@ void setup() {
     tempSetup();
     lightSetup();
     phSetup();
+    
+    // เริ่มต้นสมองกลอัตโนมัติ
+    automatorSetup();
     
     // Command Handler
     commandSetup();

@@ -433,6 +433,148 @@
         text-transform: uppercase;
         letter-spacing: 1px;
       }
+
+      /* === Workflow Widget (n8n style) === */
+      .workflow-card {
+        background: var(--bg-panel);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius);
+        padding: 20px 24px;
+        margin-bottom: 24px;
+        position: relative;
+        overflow: hidden;
+      }
+      
+      .workflow-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        cursor: pointer;
+      }
+      
+      .workflow-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      
+      .workflow-title i { color: #8b5cf6; } /* Purple Automation */
+      
+      .workflow-status-badge {
+        font-size: 0.75rem;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-weight: 600;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+      }
+      
+      .ws-disabled { background: rgba(255,255,255,0.1); color: var(--text-muted); }
+      .ws-active { background: rgba(139, 92, 246, 0.2); color: #c4b5fd; border: 1px solid rgba(139, 92, 246, 0.5); }
+      
+      .workflow-steps {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 0;
+        position: relative;
+        transition: max-height 0.3s ease-out, opacity 0.3s;
+        max-height: 200px;
+        opacity: 1;
+        overflow: hidden;
+      }
+      
+      .workflow-steps.collapsed {
+        max-height: 0;
+        opacity: 0;
+        padding: 0;
+        margin: 0;
+      }
+      
+      /* Connecting line between steps */
+      .workflow-steps::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 40px;
+        right: 40px;
+        height: 2px;
+        background: var(--glass-border);
+        z-index: 1;
+        transform: translateY(-50%);
+      }
+      
+      .step-node {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+        text-align: center;
+      }
+      
+      .step-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: var(--bg-dark);
+        border: 2px solid var(--glass-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        color: var(--text-muted);
+        transition: all 0.3s;
+      }
+      
+      .step-label {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        font-weight: 500;
+      }
+      
+      /* Active Step Animations */
+      .step-node.active .step-icon {
+        border-color: #8b5cf6;
+        color: #c4b5fd;
+        background: rgba(139, 92, 246, 0.2);
+        box-shadow: 0 0 15px rgba(139, 92, 246, 0.4);
+        animation: pulse-ring 2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+      }
+      .step-node.active .step-label { color: #c4b5fd; font-weight: 700; }
+      
+      /* Completed Step */
+      .step-node.done .step-icon {
+        border-color: var(--primary);
+        color: var(--primary);
+      }
+      .step-node.done .step-label { color: var(--text-main); }
+      
+      .workflow-reason {
+        font-size: 0.8rem;
+        color: var(--warning);
+        text-align: center;
+        margin-top: 12px;
+        font-style: italic;
+      }
+      
+      @keyframes pulse-ring {
+        0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.5); }
+        70% { box-shadow: 0 0 0 15px rgba(139, 92, 246, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+      }
+      
+      @media (max-width: 600px) {
+        .step-label { font-size: 0.65rem; }
+        .step-icon { width: 36px; height: 36px; font-size: 0.9rem; }
+        .workflow-steps::before { left: 20px; right: 20px; }
+      }
     </style>
     <!-- Shared Header (nav + logout) -->
     <link href="/base.css" rel="stylesheet">
@@ -467,6 +609,52 @@
       </header>
 
 
+
+      <!-- Automation Workflow Tracker -->
+      <div class="workflow-card" id="workflowModule">
+        <div class="workflow-header" onclick="toggleWorkflow()">
+          <div class="workflow-title">
+            <i class="fa-solid fa-wand-magic-sparkles" id="wfIcon"></i>
+            Automation Engine
+            <span class="workflow-status-badge ws-disabled" id="autoStatusBadge">DISABLED</span>
+          </div>
+          <i class="fa-solid fa-chevron-up" id="wfToggleIcon" style="color: var(--text-muted); transition: transform 0.3s;"></i>
+        </div>
+        
+        <div class="workflow-steps" id="workflowSteps">
+          <!-- Step 1: Evaluating -->
+          <div class="step-node" id="step-id-eval">
+            <div class="step-icon"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
+            <div class="step-label">EVALUATING</div>
+          </div>
+          
+          <!-- Step 2: Dosing A -->
+          <div class="step-node" id="step-id-dose-a">
+            <div class="step-icon"><i class="fa-solid fa-flask-vial"></i></div>
+            <div class="step-label">NUTRIENT A</div>
+          </div>
+          
+          <!-- Step 3: Dosing B -->
+          <div class="step-node" id="step-id-dose-b">
+            <div class="step-icon"><i class="fa-solid fa-vial"></i></div>
+            <div class="step-label">NUTRIENT B</div>
+          </div>
+          
+          <!-- Step 4: Water Dosing (if needed) -->
+          <div class="step-node" id="step-id-water">
+            <div class="step-icon"><i class="fa-solid fa-faucet-drip"></i></div>
+            <div class="step-label">WATER</div>
+          </div>
+          
+          <!-- Step 5: Cooldown -->
+          <div class="step-node" id="step-id-cooldown">
+            <div class="step-icon"><i class="fa-solid fa-hourglass-half"></i></div>
+            <div class="step-label">COOLDOWN<br><span id="wfCooldownTime" style="font-size: 0.7rem; font-weight: normal; color: var(--text-muted);">--</span></div>
+          </div>
+        </div>
+        
+        <div class="workflow-reason" id="workflowReason"></div>
+      </div>
 
       <!-- Main Sensors -->
       <div class="dashboard-grid">
@@ -791,6 +979,110 @@
         document.getElementById("tdsQuality").textContent = getTdsQuality(data.tds);
         document.getElementById("lightState").textContent = data.light_state ? "DAY MODE" : "NIGHT MODE";
         document.getElementById("lastUpdate").textContent = new Date().toLocaleTimeString("en-US", {hour12: false});
+        
+        updateWorkflow(data);
+      }
+
+      function toggleWorkflow() {
+        const steps = document.getElementById("workflowSteps");
+        const icon = document.getElementById("wfToggleIcon");
+        if (steps.classList.contains("collapsed")) {
+          steps.classList.remove("collapsed");
+          icon.style.transform = "rotate(0deg)";
+        } else {
+          steps.classList.add("collapsed");
+          icon.style.transform = "rotate(-180deg)";
+        }
+      }
+
+      function updateWorkflow(data) {
+        // Safe check
+        if (data.auto_enabled === undefined) return;
+        
+        const enabled = data.auto_enabled;
+        const state = data.auto_state || "IDLE";
+        const reason = data.auto_reason || "";
+        const timeLeft = data.auto_time_left || 0;
+        
+        const badge = document.getElementById("autoStatusBadge");
+        
+        if (!enabled) {
+          badge.className = "workflow-status-badge ws-disabled";
+          badge.textContent = "DISABLED";
+          document.getElementById("workflowReason").textContent = "Automation is currently turned off in Settings.";
+          document.getElementById("workflowReason").style.color = "var(--text-muted)";
+          
+          // Reset all steps
+          ["eval", "dose-a", "dose-b", "water", "cooldown"].forEach(s => {
+             document.getElementById(`step-id-${s}`).className = "step-node";
+          });
+          document.getElementById("wfCooldownTime").textContent = "--";
+          // Collapse by default if disabled
+          if (!document.getElementById("workflowSteps").classList.contains("collapsed")) {
+             toggleWorkflow();
+          }
+          return;
+        }
+        
+        // Ensure it's expanded when running
+        if (state !== "IDLE" && document.getElementById("workflowSteps").classList.contains("collapsed")) {
+            toggleWorkflow();
+        }
+        
+        badge.className = "workflow-status-badge ws-active";
+        badge.textContent = "ACTIVE";
+        
+        // Reset all
+        const allSteps = ["eval", "dose-a", "dose-b", "water", "cooldown"];
+        allSteps.forEach(s => {
+           document.getElementById(`step-id-${s}`).className = "step-node";
+        });
+        document.getElementById("wfCooldownTime").textContent = "--";
+        
+        document.getElementById("workflowReason").textContent = reason;
+        document.getElementById("workflowReason").style.color = reason ? "var(--warning)" : "transparent";
+
+        // State Machine logic
+        if (state === "EVALUATING" || state === "IDLE") {
+            document.getElementById("step-id-eval").className = "step-node active";
+        } 
+        else if (state === "EXECUTING") {
+            document.getElementById("step-id-eval").className = "step-node done"; // eval done
+            
+            if (reason.includes("A")) {
+               document.getElementById("step-id-dose-a").className = "step-node active";
+            } else if (reason.includes("B")) {
+               document.getElementById("step-id-dose-a").className = "step-node done";
+               document.getElementById("step-id-dose-b").className = "step-node active";
+            } else if (reason.includes("Water")) {
+               document.getElementById("step-id-dose-a").className = "step-node done";
+               document.getElementById("step-id-dose-b").className = "step-node done";
+               document.getElementById("step-id-water").className = "step-node active";
+            }
+        }
+        else if (state === "COOLDOWN") {
+            document.getElementById("step-id-eval").className = "step-node done";
+            
+            // Just mark executed ones as done depending on reason
+            if (reason.includes("A") || reason.includes("A")) {
+                document.getElementById("step-id-dose-a").className = "step-node done";
+            }
+            if (reason.includes("B")) {
+                document.getElementById("step-id-dose-a").className = "step-node done";
+                document.getElementById("step-id-dose-b").className = "step-node done";
+            }
+            if (reason.includes("Water")) {
+                document.getElementById("step-id-water").className = "step-node done";
+            }
+            
+            document.getElementById("step-id-cooldown").className = "step-node active";
+            // Convert ms to minutes/seconds
+            if (timeLeft > 0) {
+               const m = Math.floor(timeLeft / 60000);
+               const s = Math.floor((timeLeft % 60000) / 1000);
+               document.getElementById("wfCooldownTime").textContent = `${m}m ${s}s`;
+            }
+        }
       }
 
       function updateSensorDisabledState(sensorConfig) {

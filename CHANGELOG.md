@@ -2,6 +2,46 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-04-09] - Hardware Pin Rework & WiFi Direct Connect (v2.5.0)
+
+### Changed
+
+- **refactor: WiFi Direct Connect (`wifiConn.cpp`):**
+  - เปลี่ยนจาก WiFiManager (AP Portal) → `WiFi.begin()` ต่อตรงไปยัง Pi Hotspot
+  - SSID: `Aquaponics-LAN`, Password: `aqua1234` (จาก `hostapd.conf`)
+  - ลบ dependency `WiFiManager` library ออก — ลด Flash usage
+  - Auto-reconnect ทุก 10 วินาที (เดิม 30 วินาที)
+- **refactor: Light Controller → Relay (`lightController.cpp`):**
+  - เปลี่ยนจาก NeoPixel RGB LED (GPIO 48) → Relay ผ่าน `LIGHT_RELAY_PIN` (GPIO 12)
+  - ลบ dependency `Adafruit_NeoPixel` library ออก
+  - ใช้ `digitalWrite()` แบบ Active LOW (LOW = ON, HIGH = OFF)
+- **refactor: Pin Assignment (`config.h`):**
+  - `LIGHT_RELAY_PIN` เปลี่ยนจาก `LED_BUILTIN` → GPIO 12
+  - ลบ `PUMP_WATER_PIN` ออกจาก codebase ทั้งหมด (ยังไม่ใช้)
+  - ลบ references จาก: `localMqtt.cpp`, `commandHandler.cpp`, `automator.cpp`
+
+### Removed
+
+- **`PUMP_WATER_PIN`** — ลบ define + ลบ `pump_w` CLI command + ลบ hw_test handler
+- **`Adafruit_NeoPixel`** — ไม่ใช้ NeoPixel แล้ว (ใช้ Relay แทน)
+- **`WiFiManager`** — ไม่ใช้ AP Portal แล้ว (ต่อตรง Pi)
+
+## [2026-03-26] - Offline-Safe Networking
+
+### Fixed
+
+- **fix: NETPIE MQTT reconnect spam (`netpie.cpp`):**
+  - เพิ่ม Exponential Backoff (5s → 10s → 20s → 30s → 60s max) แทน fixed 5s interval
+  - ลด log spam จาก ~12 ครั้ง/นาที เหลือ ~1-2 ครั้ง/นาที เมื่อ broker unavailable
+  - Reset backoff กลับ 5s เมื่อเชื่อมต่อสำเร็จ
+- **fix: Skip network services when WiFi offline (`main.cpp`):**
+  - `telnetLoop()` และ `otaLoop()` จะไม่ถูกเรียกเมื่อ WiFi ยังไม่เชื่อม
+  - ลด CPU waste จาก socket operations ที่ทำไม่ได้
+- **fix: getLocalTime() blocking (`lightController.cpp`):**
+  - เพิ่ม timeout 10ms แทน default 5s — ป้องกัน block เมื่อ NTP ยังไม่ sync
+- **fix: Log queue overflow เมื่อ MQTT offline (`localMqtt.cpp`):**
+  - ไม่ queue log เมื่อ MQTT ยังไม่เชื่อม — ประหยัด memory
+
 ## [2026-03-25] - Header Navigation & Responsive Fix
 
 ### Changed

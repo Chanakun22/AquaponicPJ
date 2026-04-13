@@ -13,9 +13,9 @@
 // ============================================================================
 
 #define FIRMWARE_VERSION_MAJOR 2
-#define FIRMWARE_VERSION_MINOR 3
+#define FIRMWARE_VERSION_MINOR 5
 #define FIRMWARE_VERSION_PATCH 0
-#define FIRMWARE_VERSION_STRING "2.3.0"
+#define FIRMWARE_VERSION_STRING "2.5.0"
 
 // ============================================================================
 // SYSTEM HEALTH MONITORING

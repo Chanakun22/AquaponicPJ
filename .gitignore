@@ -4,8 +4,6 @@
 .vscode/launch.json
 .vscode/ipch
 include/secrets.h
-pi_server/index.html
-pi_server/app.py
 PI_COMMANDS.md
 tools/monitor/index.html
 secrets.ini
@@ -16,3 +14,5 @@ AGENTS.md
 pi_server/*.sh
 pi_server/*.conf
 pi_server/auth_config.json
+.agent/skills
+webex

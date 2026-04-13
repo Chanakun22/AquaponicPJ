@@ -108,7 +108,7 @@ void systemLoop(void) {
             LOG_WARN("Factory Reset Button Detected!");
             
             // Blink LED rapidly to indicate reset
-            // Note: Removed digitalWrite blinking to avoid conflict with RMT/NeoPixel on ESP32-S3
+            // Note: Removed LED blinking to avoid GPIO conflict
             LOG_INFO("Resetting in 3... 2... 1...");
             LOG_INFO("Resetting in 3... 2... 1...");
             // Non-blocking wait not strictly needed here since we are about to reset anyway, 
@@ -214,11 +214,6 @@ void systemFactoryReset(void) {
     
     // Clear all preferences
     Preferences prefs;
-    
-    // Clear WiFi settings
-    prefs.begin("WiFiManager", false);
-    prefs.clear();
-    prefs.end();
 
     // Force erase WiFi credentials from NVS
     #if defined(ESP32)

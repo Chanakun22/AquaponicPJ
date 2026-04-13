@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔧 HW Test - Smart Aquaponics</title>
+    <link rel="manifest" href="/pwa/manifest.json">
+    <meta name="theme-color" content="#00f2aa">
+    <link href="/static/fonts/fonts.css" rel="stylesheet">
+    <link href="/static/fa/css/all.min.css" rel="stylesheet">
+    <link href="/base.css" rel="stylesheet">
+    <script src="/header.js"></script>
+    <style>
+        .brand i { color: #f59e0b; filter: drop-shadow(0 0 8px rgba(245,158,11,0.4)); }
+        .brand h1 {
+            background: linear-gradient(135deg, #fff 0%, #fbbf24 100%);
+            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .container { max-width: 1100px; }
+
+        /* Flow Canvas */
+        .flow-canvas {
+            display: flex; flex-direction: column; gap: 20px;
+            padding: 24px; position: relative;
+        }
+
+        /* Flow Row */
+        .flow-row {
+            display: flex; align-items: center; gap: 0;
+            position: relative;
+        }
+
+        /* Node Base */
+        .node {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-width: 140px; min-height: 90px; padding: 14px 18px;
+            border-radius: 14px; border: 2px solid var(--glass-border);
+            background: var(--glass-bg); backdrop-filter: blur(12px);
+            cursor: pointer; transition: all 0.35s ease; position: relative;
+            user-select: none;
+        }
+        .node:hover { border-color: rgba(255,255,255,0.2); transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+        .node-icon { font-size: 1.6rem; margin-bottom: 6px; transition: all 0.3s; }
+        .node-label { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .node-value { font-size: 0.85rem; color: var(--text-main); margin-top: 4px; min-height: 1.2em; }
+        .node-status { font-size: 0.7rem; margin-top: 4px; padding: 2px 8px; border-radius: 6px; font-weight: 600; }
+
+        /* Node States */
+        .node.idle { border-color: rgba(255,255,255,0.08); }
+        .node.idle .node-icon { color: var(--text-muted); }
+        .node.running { border-color: #3b82f6; background: rgba(59,130,246,0.08); animation: pulse-border 1.5s ease-in-out infinite; }
+        .node.running .node-icon { color: #3b82f6; }
+        .node.running .node-status { background: rgba(59,130,246,0.15); color: #60a5fa; }
+        .node.done { border-color: #10b981; background: rgba(16,185,129,0.06); }
+        .node.done .node-icon { color: #10b981; }
+        .node.done .node-status { background: rgba(16,185,129,0.15); color: #34d399; }
+        .node.error { border-color: #ef4444; background: rgba(239,68,68,0.06); }
+        .node.error .node-icon { color: #ef4444; }
+        .node.error .node-status { background: rgba(239,68,68,0.15); color: #f87171; }
+
+        @keyframes pulse-border {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.3); }
+            50% { box-shadow: 0 0 0 8px rgba(59,130,246,0); }
+        }
+
+        /* Connection Lines */
+        .conn {
+            width: 40px; height: 2px; background: var(--glass-border); position: relative; flex-shrink: 0;
+        }
+        .conn::after {
+            content: ''; position: absolute; right: -4px; top: -3px;
+            border: solid var(--glass-border); border-width: 0 2px 2px 0;
+            padding: 3px; transform: rotate(-45deg);
+        }
+        .conn.active { background: #3b82f6; }
+        .conn.active::after { border-color: #3b82f6; }
+        .conn.done { background: #10b981; }
+        .conn.done::after { border-color: #10b981; }
+
+        /* Progress Bar inside node */
+        .node-progress {
+            width: 100%; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.1);
+            margin-top: 6px; overflow: hidden;
+        }
+        .node-progress-bar {
+            height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa);
+            border-radius: 2px; width: 0%; transition: width 0.1s linear;
+        }
+
+        /* Emergency Stop */
+        .estop-container { display: flex; justify-content: center; margin-top: 16px; }
+        .estop-btn {
+            display: flex; align-items: center; gap: 10px; padding: 14px 36px;
+            background: linear-gradient(135deg, #dc2626, #b91c1c); color: #fff;
+            border: 2px solid #ef4444; border-radius: 14px; font-size: 1rem; font-weight: 700;
+            cursor: pointer; transition: all 0.3s; text-transform: uppercase; letter-spacing: 1px;
+            font-family: inherit;
+        }
+        .estop-btn:hover { transform: scale(1.05); box-shadow: 0 0 30px rgba(239,68,68,0.4); }
+        .estop-btn:active { transform: scale(0.98); }
+        .estop-btn i { font-size: 1.2rem; }
+
+        /* Sensor Results Grid */
+        .sensor-results {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 8px; margin-top: 8px; width: 100%;
+        }
+        .sensor-item {
+            text-align: center; padding: 6px 4px; border-radius: 8px;
+            background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+        }
+        .sensor-item .si-label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; }
+        .sensor-item .si-val { font-size: 0.9rem; font-weight: 600; color: var(--text-main); }
+
+        /* Section Title */
+        .flow-section { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); padding: 4px 0; display: flex; align-items: center; gap: 8px; }
+        .flow-section::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--glass-border), transparent); }
+
+        /* Sensor node wider */
+        .node.sensor-node { min-width: 100%; flex-direction: column; }
+
+        /* Log area */
+        .test-log { margin-top: 20px; padding: 16px; border-radius: 14px; background: var(--glass-bg); border: 1px solid var(--glass-border); max-height: 200px; overflow-y: auto; }
+        .test-log-title { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); margin-bottom: 8px; }
+        .test-log-entry { font-size: 0.78rem; color: var(--text-muted); padding: 3px 0; font-family: 'Fira Code', monospace; }
+        .test-log-entry .time { color: #6b7280; margin-right: 8px; }
+        
+        @media (max-width: 600px) {
+            .flow-row { flex-wrap: wrap; gap: 10px; }
+            .conn { display: none; }
+            .node { min-width: 100px; min-height: 70px; padding: 10px 12px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-top">
+            <div class="brand"><i class="fas fa-vial"></i><h1>Hardware Test</h1></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="card" style="margin-top:20px;">
+            <div class="flow-canvas" id="flowCanvas">
+                
+                <!-- SENSORS -->
+                <div class="flow-section"><i class="fas fa-microchip"></i> Sensors</div>
+                <div class="flow-row" id="sensorRow">
+                    <div class="node idle sensor-node" id="nodeSensors" onclick="runTest('read_sensors')">
+                        <div class="node-icon"><i class="fas fa-wave-square"></i></div>
+                        <div class="node-label">Read All Sensors</div>
+                        <div class="node-status" id="sensorStatus">Tap to read</div>
+                        <div class="sensor-results" id="sensorResults" style="display:none;">
+                            <div class="sensor-item"><div class="si-label">Water °C</div><div class="si-val" id="srWater">—</div></div>
+                            <div class="sensor-item"><div class="si-label">Air °C</div><div class="si-val" id="srAir">—</div></div>
+                            <div class="sensor-item"><div class="si-label">Humidity</div><div class="si-val" id="srHumid">—</div></div>
+                            <div class="sensor-item"><div class="si-label">TDS ppm</div><div class="si-val" id="srTds">—</div></div>
+                            <div class="sensor-item"><div class="si-label">pH</div><div class="si-val" id="srPh">—</div></div>
+                            <div class="sensor-item"><div class="si-label">Light lux</div><div class="si-val" id="srLight">—</div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PUMPS -->
+                <div class="flow-section"><i class="fas fa-pump-medical"></i> Dosing Pumps</div>
+                
+                <div class="flow-row">
+                    <div class="node idle" id="nodePumpA" onclick="runPump('pump_a')">
+                        <div class="node-icon"><i class="fas fa-flask"></i></div>
+                        <div class="node-label">Pump A</div>
+                        <div class="node-value">Nutrient A</div>
+                        <div class="node-status" id="pumpAStatus">GPIO 10</div>
+                        <div class="node-progress"><div class="node-progress-bar" id="pumpABar"></div></div>
+                    </div>
+                    <div class="conn" id="connA1"></div>
+                    <div class="node idle" id="nodePumpATimer">
+                        <div class="node-icon"><i class="fas fa-hourglass-half"></i></div>
+                        <div class="node-label">Timer</div>
+                        <div class="node-value" id="pumpATime">3.0s</div>
+                    </div>
+                    <div class="conn" id="connA2"></div>
+                    <div class="node idle" id="nodePumpAResult">
+                        <div class="node-icon"><i class="fas fa-check-circle"></i></div>
+                        <div class="node-label">Result</div>
+                        <div class="node-value" id="pumpAResult">—</div>
+                    </div>
+                </div>
+
+                <div class="flow-row">
+                    <div class="node idle" id="nodePumpB" onclick="runPump('pump_b')">
+                        <div class="node-icon"><i class="fas fa-flask"></i></div>
+                        <div class="node-label">Pump B</div>
+                        <div class="node-value">Nutrient B</div>
+                        <div class="node-status" id="pumpBStatus">GPIO 11</div>
+                        <div class="node-progress"><div class="node-progress-bar" id="pumpBBar"></div></div>
+                    </div>
+                    <div class="conn" id="connB1"></div>
+                    <div class="node idle" id="nodePumpBTimer">
+                        <div class="node-icon"><i class="fas fa-hourglass-half"></i></div>
+                        <div class="node-label">Timer</div>
+                        <div class="node-value" id="pumpBTime">3.0s</div>
+                    </div>
+                    <div class="conn" id="connB2"></div>
+                    <div class="node idle" id="nodePumpBResult">
+                        <div class="node-icon"><i class="fas fa-check-circle"></i></div>
+                        <div class="node-label">Result</div>
+                        <div class="node-value" id="pumpBResult">—</div>
+                    </div>
+                </div>
+
+                <div class="flow-row">
+                    <div class="node idle" id="nodePumpW" onclick="runPump('pump_w')">
+                        <div class="node-icon"><i class="fas fa-faucet"></i></div>
+                        <div class="node-label">Water</div>
+                        <div class="node-value">Water Pump</div>
+                        <div class="node-status" id="pumpWStatus">GPIO 12</div>
+                        <div class="node-progress"><div class="node-progress-bar" id="pumpWBar"></div></div>
+                    </div>
+                    <div class="conn" id="connW1"></div>
+                    <div class="node idle" id="nodePumpWTimer">
+                        <div class="node-icon"><i class="fas fa-hourglass-half"></i></div>
+                        <div class="node-label">Timer</div>
+                        <div class="node-value" id="pumpWTime">3.0s</div>
+                    </div>
+                    <div class="conn" id="connW2"></div>
+                    <div class="node idle" id="nodePumpWResult">
+                        <div class="node-icon"><i class="fas fa-check-circle"></i></div>
+                        <div class="node-label">Result</div>
+                        <div class="node-value" id="pumpWResult">—</div>
+                    </div>
+                </div>
+
+                <!-- LIGHT -->
+                <div class="flow-section"><i class="fas fa-lightbulb"></i> Light Control</div>
+                <div class="flow-row">
+                    <div class="node idle" id="nodeLightOn" onclick="runTest('light_on')">
+                        <div class="node-icon"><i class="fas fa-sun"></i></div>
+                        <div class="node-label">Light ON</div>
+                        <div class="node-status" id="lightOnStatus">NeoPixel</div>
+                    </div>
+                    <div class="conn" id="connL"></div>
+                    <div class="node idle" id="nodeLightOff" onclick="runTest('light_off')">
+                        <div class="node-icon"><i class="fas fa-moon"></i></div>
+                        <div class="node-label">Light OFF</div>
+                        <div class="node-status" id="lightOffStatus">NeoPixel</div>
+                    </div>
+                </div>
+
+                <!-- EMERGENCY STOP -->
+                <div class="estop-container">
+                    <button class="estop-btn" onclick="emergencyStop()">
+                        <i class="fas fa-hand-paper"></i> Emergency Stop All
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Test Log -->
+        <div class="test-log" id="testLog">
+            <div class="test-log-title"><i class="fas fa-scroll"></i> Test Log</div>
+            <div id="logEntries"></div>
+        </div>
+    </div>
+
+    <script src="/static/js/socket.io.min.js"></script>
+    <script>
+        const socket = io();
+        const PUMP_DURATION = 3000;
+        let pumpTimers = {};
+
+        function timeStr() {
+            return new Date().toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+        }
+
+        function addLog(msg) {
+            const el = document.getElementById('logEntries');
+            const div = document.createElement('div');
+            div.className = 'test-log-entry';
+            div.innerHTML = `<span class="time">${timeStr()}</span>${msg}`;
+            el.prepend(div);
+            // Keep max 50 entries
+            while (el.children.length > 50) el.removeChild(el.lastChild);
+        }
+
+        // Generic test command
+        async function runTest(cmd) {
+            // Prevent duplicate clicks if node is already running
+            if (cmd === 'read_sensors' && document.getElementById('nodeSensors').className.includes('running')) return;
+            if (cmd === 'light_on' && document.getElementById('nodeLightOn').className.includes('running')) return;
+            if (cmd === 'light_off' && document.getElementById('nodeLightOff').className.includes('running')) return;
+
+            addLog(`▶️ Sending: ${cmd}`);
+            try {
+                const r = await fetch('/api/hwtest/command', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({cmd, duration: PUMP_DURATION})
+                });
+                const d = await r.json();
+                if (d.status === 'ok') {
+                    addLog(`📡 Command sent: ${cmd}`);
+                    if (cmd === 'read_sensors') {
+                        setNodeState('nodeSensors', 'running');
+                        document.getElementById('sensorStatus').textContent = 'Reading...';
+                    }
+                    if (cmd === 'light_on') setNodeState('nodeLightOn', 'running');
+                    if (cmd === 'light_off') setNodeState('nodeLightOff', 'running');
+                } else {
+                    addLog(`❌ Error: ${d.message}`);
+                }
+            } catch(e) {
+                addLog(`❌ Network error: ${e.message}`);
+            }
+        }
+
+        // Pump test with visual countdown
+        async function runPump(cmd) {
+            const key = cmd.replace('pump_', '');
+            const prefix = key.toUpperCase();
+            
+            // Prevent multiple clicks while pump is running
+            if (document.getElementById('pump' + prefix + 'Status').textContent === 'RUNNING') {
+                addLog(`⚠️ Pump ${prefix} is already running!`);
+                return;
+            }
+            
+            // Send command
+            addLog(`▶️ Starting Pump ${prefix} test (${PUMP_DURATION/1000}s)...`);
+            try {
+                const r = await fetch('/api/hwtest/command', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({cmd, duration: PUMP_DURATION})
+                });
+                const d = await r.json();
+                if (d.status !== 'ok') {
+                    addLog(`❌ Error: ${d.message}`);
+                    return;
+                }
+            } catch(e) {
+                addLog(`❌ Network error: ${e.message}`);
+                return;
+            }
+            
+            // Visual: set running state
+            const nodeId = 'nodePump' + prefix;
+            const timerId = 'nodePump' + prefix + 'Timer';
+            const barId = 'pump' + prefix + 'Bar';
+            const timeId = 'pump' + prefix + 'Time';
+            const statusId = 'pump' + prefix + 'Status';
+            const connId1 = 'conn' + prefix + '1';
+            
+            setNodeState(nodeId, 'running');
+            setNodeState(timerId, 'running');
+            document.getElementById(statusId).textContent = 'RUNNING';
+            document.getElementById(connId1).className = 'conn active';
+            
+            // Countdown animation
+            const start = Date.now();
+            if (pumpTimers[key]) clearInterval(pumpTimers[key]);
+            
+            pumpTimers[key] = setInterval(() => {
+                const elapsed = Date.now() - start;
+                const pct = Math.min(100, (elapsed / PUMP_DURATION) * 100);
+                const remain = Math.max(0, (PUMP_DURATION - elapsed) / 1000);
+                
+                document.getElementById(barId).style.width = pct + '%';
+                document.getElementById(timeId).textContent = remain.toFixed(1) + 's';
+                
+                if (elapsed >= PUMP_DURATION) {
+                    clearInterval(pumpTimers[key]);
+                    
+                    // Send pump_stop command — same path as Emergency Stop (proven to work!)
+                    addLog(`⏱️ Timer expired — sending stop command for Pump ${prefix}`);
+                    fetch('/api/hwtest', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({cmd: 'pump_stop'})
+                    }).then(() => {
+                        addLog(`✅ Stop command sent for Pump ${prefix}`);
+                    }).catch(e => {
+                        addLog(`❌ Failed to send stop: ${e.message}`);
+                    });
+                    
+                    // Update UI to done
+                    setNodeState(nodeId, 'done');
+                    setNodeState(timerId, 'done');
+                    setNodeState('nodePump' + prefix + 'Result', 'done');
+                    document.getElementById('pump' + prefix + 'Result').textContent = '✅ Done';
+                    document.getElementById(statusId).textContent = 'COMPLETED';
+                    document.getElementById(barId).style.width = '100%';
+                    document.getElementById(connId1).className = 'conn done';
+                    document.getElementById('conn' + prefix + '2').className = 'conn done';
+                }
+            }, 50);
+        }
+
+        function emergencyStop() {
+            addLog('🛑 EMERGENCY STOP — All pumps');
+            runTest('pump_stop');
+            // Reset all pump nodes
+            ['A','B','W'].forEach(k => {
+                const nodeId = 'nodePump' + k;
+                const timerId = 'nodePump' + k + 'Timer';
+                const resultId = 'nodePump' + k + 'Result';
+                setNodeState(nodeId, 'error');
+                setNodeState(timerId, 'idle');
+                setNodeState(resultId, 'error');
+                document.getElementById('pump' + k + 'Result').textContent = 'STOPPED';
+                document.getElementById('pump' + k + 'Status').textContent = 'STOPPED';
+                document.getElementById('pump' + k + 'Bar').style.width = '0%';
+                document.getElementById('conn' + k + '1').className = 'conn';
+                document.getElementById('conn' + k + '2').className = 'conn';
+                if (pumpTimers[k.toLowerCase()]) clearInterval(pumpTimers[k.toLowerCase()]);
+            });
+        }
+
+        function setNodeState(nodeId, state) {
+            const el = document.getElementById(nodeId);
+            if (!el) return;
+            el.className = el.className.replace(/idle|running|done|error/g, '').trim() + ' ' + state;
+        }
+
+        // WebSocket: receive results from ESP32
+        socket.on('hwtest_result', function(data) {
+            const cmd = data.cmd;
+            const status = data.status;
+            addLog(`📩 Result: ${cmd} → ${status}`);
+            
+            // Sensor results
+            if (cmd === 'read_sensors' && status === 'ok') {
+                setNodeState('nodeSensors', 'done');
+                document.getElementById('sensorStatus').textContent = '✅ Done';
+                document.getElementById('sensorResults').style.display = 'grid';
+                if (data.water_temp) document.getElementById('srWater').textContent = data.water_temp;
+                if (data.air_temp) document.getElementById('srAir').textContent = data.air_temp;
+                if (data.humidity) document.getElementById('srHumid').textContent = data.humidity + '%';
+                if (data.tds) document.getElementById('srTds').textContent = data.tds;
+                if (data.ph) document.getElementById('srPh').textContent = data.ph;
+                if (data.light) document.getElementById('srLight').textContent = data.light;
+            }
+            
+            // Pump completed
+            if (cmd.startsWith('pump_') && cmd !== 'pump_stop') {
+                const key = cmd.replace('pump_', '').toUpperCase();
+                
+                if (status === 'running') {
+                    // Already handled by runPump()
+                }
+                if (status === 'completed') {
+                    const resultId = 'nodePump' + key + 'Result';
+                    const timerId = 'nodePump' + key + 'Timer';
+                    const connId2 = 'conn' + key + '2';
+                    
+                    setNodeState('nodePump' + key, 'done');
+                    setNodeState(timerId, 'done');
+                    setNodeState(resultId, 'done');
+                    document.getElementById('pump' + key + 'Result').textContent = '✅ Done';
+                    document.getElementById('pump' + key + 'Status').textContent = 'COMPLETED';
+                    document.getElementById('pump' + key + 'Bar').style.width = '100%';
+                    document.getElementById('pump' + key + 'Time').textContent = '0.0s';
+                    document.getElementById(connId2).className = 'conn done';
+                    document.getElementById('conn' + key + '1').className = 'conn done';
+                }
+            }
+            
+            // Pump stop
+            if (cmd === 'pump_stop') {
+                addLog('🛑 All pumps stopped');
+            }
+            
+            // Light
+            if (cmd === 'light_on' && status === 'on') {
+                setNodeState('nodeLightOn', 'done');
+                document.getElementById('lightOnStatus').textContent = '✅ ON';
+                setNodeState('nodeLightOff', 'idle');
+                document.getElementById('lightOffStatus').textContent = 'NeoPixel';
+            }
+            if (cmd === 'light_off' && status === 'off') {
+                setNodeState('nodeLightOff', 'done');
+                document.getElementById('lightOffStatus').textContent = '✅ OFF';
+                setNodeState('nodeLightOn', 'idle');
+                document.getElementById('lightOnStatus').textContent = 'NeoPixel';
+            }
+        });
+
+        addLog('🔧 Hardware Test Panel ready');
+    </script>
+</body>
+</html>

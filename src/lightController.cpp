@@ -7,13 +7,9 @@
 #include "logger.h"
 #include "wifiConn.h"
 #include <time.h>
-#include <Adafruit_NeoPixel.h>
 #include <Preferences.h>
 
-// NeoPixel สำหรับ RGB LED บน ESP32-S3
-#define NEOPIXEL_PIN    48       // RGB LED on ESP32-S3-DevKitC
-#define NEOPIXEL_COUNT  1        // 1 LED
-static Adafruit_NeoPixel _neopixel(NEOPIXEL_COUNT, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
+// Light Relay Control (Active LOW: LOW = ON, HIGH = OFF)
 
 // ============================================================================
 // PRIVATE VARIABLES
@@ -159,14 +155,12 @@ static bool _isInSchedule(int currentDay, int currentHour, int currentMinute) {
 void lightCtrlSetup(void) {
     LOG_INFO("Initializing light controller...");
     
-    // ตั้งค่า NeoPixel RGB LED
-    _neopixel.begin();
-    _neopixel.setBrightness(50);  // 0-255
-    _neopixel.clear();
-    _neopixel.show();
+    // ตั้งค่า Light Relay
+    pinMode(LIGHT_RELAY_PIN, OUTPUT);
+    digitalWrite(LIGHT_RELAY_PIN, HIGH);  // OFF (Active LOW)
     _currentState = false;
     
-    LOG_INFO("NeoPixel RGB LED initialized (GPIO 48)");
+    LOG_INFO("Light Relay initialized (GPIO %d)", LIGHT_RELAY_PIN);
     
     // โหลดตารางเวลาจาก Memory (Offline mode support)
     _loadSchedule();
@@ -201,7 +195,7 @@ void lightCtrlLoop(void) {
     
     // ถ้า WiFi ไม่ได้เชื่อมต่อ ใช้เวลาจาก RTC ภายใน
     struct tm timeinfo;
-    if (!getLocalTime(&timeinfo)) {
+    if (!getLocalTime(&timeinfo, 10)) {  // 10ms timeout — non-blocking
         if (showDebug) {
             LOG_DEBUG("NTP NOT synced yet!");
         }
@@ -244,17 +238,14 @@ void lightCtrlLoop(void) {
 void lightCtrlSetState(bool state) {
     _currentState = state;
     
-    // ใช้ NeoPixel RGB LED แทน digitalWrite
+    // Relay control (Active LOW: LOW = ON, HIGH = OFF)
     if (state) {
-        // ON: สีม่วง (Magenta)
-        _neopixel.setPixelColor(0, _neopixel.Color(255, 0, 255));
+        digitalWrite(LIGHT_RELAY_PIN, LOW);   // ON
     } else {
-        // OFF: ปิด LED
-        _neopixel.setPixelColor(0, _neopixel.Color(0, 0, 0));
+        digitalWrite(LIGHT_RELAY_PIN, HIGH);  // OFF
     }
-    _neopixel.show();
     
-    LOG_DEBUG("NeoPixel: %s", state ? "MAGENTA (ON)" : "OFF");
+    LOG_DEBUG("Light Relay (GPIO %d): %s", LIGHT_RELAY_PIN, state ? "ON" : "OFF");
 }
 
 bool lightCtrlGetState(void) {
@@ -271,7 +262,7 @@ bool lightCtrlGetTime(char* buffer, size_t bufferSize) {
     }
     
     struct tm timeinfo;
-    if (!getLocalTime(&timeinfo)) {
+    if (!getLocalTime(&timeinfo, 10)) {  // 10ms timeout — non-blocking
         strncpy(buffer, "N/A", bufferSize - 1);
         buffer[bufferSize - 1] = '\0';
         return false;

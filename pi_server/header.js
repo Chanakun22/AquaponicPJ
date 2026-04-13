@@ -117,6 +117,7 @@
         { href: '/live',        icon: 'fa-solid fa-video',          label: 'Live' },
         { href: '/graphs',      icon: 'fa-solid fa-chart-line',     label: 'Graphs' },
         { href: '/full_logs',   icon: 'fa-solid fa-file-alt',       label: 'Logs' },
+        { href: '/hwtest',      icon: 'fa-solid fa-vial',           label: 'HW Test',   admin: true },
         { href: '/settings',    icon: 'fa-solid fa-cog',            label: 'Settings',  admin: true },
         { href: '/ota',         icon: 'fa-solid fa-upload',         label: 'OTA',       admin: true },
         { href: '/wifi',        icon: 'fa-solid fa-wifi',           label: 'WiFi',      admin: true },

@@ -24,6 +24,10 @@ static unsigned long _lastReconnectAttempt = 0;
 static unsigned long _lastPublishTime = 0;
 static bool _shadowRequested = false;
 
+// Exponential backoff for reconnection
+static unsigned long _reconnectInterval = MQTT_RECONNECT_INTERVAL;  // Start at 5s
+static const unsigned long MAX_NETPIE_RECONNECT_INTERVAL = 60000;   // Max 60s
+
 // ============================================================================
 // PRIVATE FUNCTION PROTOTYPES
 // ============================================================================
@@ -203,18 +207,21 @@ void netpieSetup(void) {
 
 void netpieLoop(void) {
     if (!wifiIsConnected()) {
-        return;
+        return;  // ไม่ต่อ MQTT ถ้า WiFi ยังไม่เชื่อม
     }
     
     if (!_mqtt.connected()) {
         unsigned long now = millis();
-        if (now - _lastReconnectAttempt >= MQTT_RECONNECT_INTERVAL) {
+        if (now - _lastReconnectAttempt >= _reconnectInterval) {
             _lastReconnectAttempt = now;
             if (_mqttReconnect()) {
                 _lastReconnectAttempt = 0;
-                // หมายเหตุ: นับ reconnect เฉพาะเมื่อสำเร็จ (หมายถึง reconnect 1 ครั้ง)
-                // สถิตินี้ใช้ดูว่า connection หลุดกี่ครั้ง
+                _reconnectInterval = MQTT_RECONNECT_INTERVAL;  // Reset backoff on success
                 systemIncrementMqttReconnects();
+            } else {
+                // Exponential backoff: 5s -> 10s -> 20s -> 30s -> 60s (max)
+                _reconnectInterval = min(_reconnectInterval * 2, MAX_NETPIE_RECONNECT_INTERVAL);
+                LOG_DEBUG("NETPIE next reconnect in %lu ms", _reconnectInterval);
             }
         }
     } else {

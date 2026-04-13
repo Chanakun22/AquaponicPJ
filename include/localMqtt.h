@@ -39,6 +39,12 @@ bool localMqttIsConnected(void);
 
 void localMqttPublishLog(const char* logMsg);
 
+/**
+ * @brief HW Test pump safety auto-off tick
+ * @note MUST be called every TaskNetworking loop iteration
+ */
+void localMqttHwTestTick(void);
+
 
 
 #endif // LOCAL_MQTT_H

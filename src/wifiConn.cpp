@@ -1,78 +1,68 @@
 /**
  * @file wifiConn.cpp
- * @brief WiFi Connection Manager using WiFiManager library (Non-blocking)
- * @details ใช้ WiFiManager แบบ Non-Blocking (setConfigPortalBlocking(false))
+ * @brief WiFi Connection — Fixed to Pi AP (Aquaponics-LAN)
+ * @details เชื่อมต่อ WiFi ตรงไปยัง Pi Hotspot โดยไม่ใช้ WiFiManager
  */
 
 #include "wifiConn.h"
 #include "logger.h"
 #include "system.h"
 #include <WiFi.h>
-#include <WiFiManager.h>
 #include <esp_wifi.h>
+
+// ============================================================================
+// FIXED WIFI CREDENTIALS (Pi Hotspot)
+// ============================================================================
+
+static const char* WIFI_SSID = "Aquaponics-LAN";
+static const char* WIFI_PASS = "aqua1234";
 
 // ============================================================================
 // PRIVATE VARIABLES
 // ============================================================================
 
-static WiFiManager _wifiMgr;
 static unsigned long _wifiLastCheckTime = 0;
 static bool _wifiConnected = false;
 static unsigned long _lastReconnectAttempt = 0;
-static const unsigned long RECONNECT_INTERVAL = 30000; // พยายาม reconnect ทุก 30 วินาที
-
-// NOTE: Factory Reset button ถูกจัดการใน systemLoop() (system.cpp) แล้ว
-// เพื่อหลีกเลี่ยงการตรวจสอบซ้ำซ้อนและ race condition
+static const unsigned long RECONNECT_INTERVAL = 10000; // reconnect ทุก 10 วินาที
 
 // ============================================================================
 // PUBLIC FUNCTIONS
 // ============================================================================
 
 void wifiSetup(void) {
-    LOG_INFO("Initializing WiFiManager (Non-blocking)...");
+    LOG_INFO("Connecting to fixed WiFi: %s", WIFI_SSID);
     
-    // NOTE: Factory Reset pin ถูก init ใน systemInit() แล้ว
+    WiFi.mode(WIFI_STA);
+    WiFi.setAutoReconnect(true);
+    WiFi.setSleep(false);
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
     
-    // Configure WiFiManager
-    // IMPORTANT: Set non-blocking mode
-    _wifiMgr.setConfigPortalBlocking(false);
-    _wifiMgr.setConfigPortalTimeout(WIFI_CONNECT_TIMEOUT);
-    _wifiMgr.setConnectTimeout(30);
-    _wifiMgr.setDebugOutput(false);
+    // รอเชื่อมต่อสูงสุด 10 วินาที (non-blocking style)
+    unsigned long startAttempt = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 10000) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
     
-    LOG_INFO("Connecting to saved WiFi or starting AP: %s", WIFI_AP_NAME);
-    
-    // Attempt connection
-    bool connected = _wifiMgr.autoConnect(WIFI_AP_NAME, WIFI_AP_PASS);
-    
-    if (connected) {
+    if (WiFi.status() == WL_CONNECTED) {
         _wifiConnected = true;
+        esp_wifi_set_ps(WIFI_PS_NONE);
+        
         LOG_INFO("========================================");
         LOG_INFO("WiFi Connected!");
         LOG_INFO("SSID: %s", WiFi.SSID().c_str());
         LOG_INFO("IP Address: %s", WiFi.localIP().toString().c_str());
+        LOG_INFO("RSSI: %d dBm", WiFi.RSSI());
         LOG_INFO("========================================");
-        
-        // Enable auto-reconnect
-        WiFi.setAutoReconnect(true);
-        WiFi.setSleep(false);
-        esp_wifi_set_ps(WIFI_PS_NONE);
     } else {
-        LOG_INFO("========================================");
-        LOG_INFO("WiFi Not Connected / Portal Running");
-        LOG_INFO("Connect to AP: %s", WIFI_AP_NAME);
-        LOG_INFO("Open: http://192.168.4.1");
-        LOG_INFO("Sensors will continue working!");
-        LOG_INFO("========================================");
+        LOG_WARN("========================================");
+        LOG_WARN("WiFi Not Connected — will retry in background");
+        LOG_WARN("Target SSID: %s", WIFI_SSID);
+        LOG_WARN("========================================");
     }
 }
 
 void wifiLoop(void) {
-    // Process WiFiManager (handles config portal if active)
-    _wifiMgr.process();
-    
-    // NOTE: Factory Reset button ถูกตรวจสอบใน systemLoop() แล้ว
-    
     // Periodic connection check (non-blocking)
     if (millis() - _wifiLastCheckTime >= WIFI_CHECK_INTERVAL) {
         _wifiLastCheckTime = millis();
@@ -83,7 +73,7 @@ void wifiLoop(void) {
         if (_wifiConnected && !currentStatus) {
             _wifiConnected = false;
             LOG_WARN("WiFi disconnected! Will attempt reconnection...");
-            _lastReconnectAttempt = 0; // Reset reconnect timer to try immediately
+            _lastReconnectAttempt = 0;
         }
         // Detect reconnect
         else if (!_wifiConnected && currentStatus) {
@@ -91,21 +81,19 @@ void wifiLoop(void) {
             systemIncrementWifiReconnects();
             LOG_INFO("WiFi Reconnected! IP: %s", WiFi.localIP().toString().c_str());
             
-            // Re-apply power saving settings
             WiFi.setSleep(false);
             esp_wifi_set_ps(WIFI_PS_NONE);
         }
     }
     
-    // Auto-reconnect logic when WiFi is disconnected (non-blocking)
+    // Auto-reconnect when disconnected (non-blocking)
     if (!_wifiConnected && WiFi.status() != WL_CONNECTED) {
         if (millis() - _lastReconnectAttempt >= RECONNECT_INTERVAL) {
             _lastReconnectAttempt = millis();
-            LOG_INFO("Attempting WiFi reconnection...");
+            LOG_INFO("Attempting WiFi reconnection to %s...", WIFI_SSID);
             
-            // Try reconnect without blocking
             WiFi.disconnect();
-            WiFi.reconnect();
+            WiFi.begin(WIFI_SSID, WIFI_PASS);
         }
     }
 }
@@ -115,10 +103,9 @@ bool wifiIsConnected(void) {
 }
 
 void wifiReset(void) {
-    LOG_WARN("Resetting WiFi settings...");
-    _wifiMgr.resetSettings();
-    // ไม่ต้องใช้ delay - restart จะทำให้ทุกอย่างหยุดอยู่แล้ว
-    ESP.restart();
+    LOG_WARN("Resetting WiFi — reconnecting to %s", WIFI_SSID);
+    WiFi.disconnect();
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
 }
 
 bool wifiGetIP(char* buffer, size_t bufferSize) {

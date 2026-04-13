@@ -40,7 +40,16 @@
 #define I2C_SCL_PIN         9       // ขา SCL สำหรับ I2C
 
 // Relay/Light Control
-#define LIGHT_RELAY_PIN     LED_BUILTIN  // ใช้ LED บนบอร์ดทดสอบ
+#define LIGHT_RELAY_PIN     12       // ขา Relay ควบคุมไฟ NeoPixel
+
+// Automation Pumps (Dosing & Water)
+#define PUMP_NUTRIENT_A_PIN 10      // ปั๊มปุ๋ย A
+#define PUMP_NUTRIENT_B_PIN 11      // ปั๊มปุ๋ย B
+
+
+// Relay Logic (Active Low: LOW = ON, HIGH = OFF)
+#define PUMP_ON   LOW
+#define PUMP_OFF  HIGH
 
 // ============================================================================
 // SENSOR CONFIGURATION
@@ -202,6 +211,12 @@
 #define LOCAL_MQTT_TOPIC_CONFIG_SENSORS "aquaponics/config/sensors" // MQTT Topic สำหรับ Config Sensors (Pi -> ESP)
 #define LOCAL_MQTT_TOPIC_STATUS_SENSORS "aquaponics/status/sensors" // MQTT Topic สำหรับ Status Sensors (ESP -> Pi)
 
+#define LOCAL_MQTT_TOPIC_CONFIG_AUTOMATION "aquaponics/config/automation" // MQTT Topic สำหรับกำหนดเป้าหมาย TDS/pH
+#define LOCAL_MQTT_TOPIC_STATUS_AUTOMATION "aquaponics/status/automation" // MQTT Topic แจ้งสถานะเป้าหมายปัจจุบัน
+
+#define LOCAL_MQTT_TOPIC_HW_TEST_CMD    "aquaponics/test/command"  // Pi → ESP: สั่งทดสอบ Hardware
+#define LOCAL_MQTT_TOPIC_HW_TEST_RESULT "aquaponics/test/result"   // ESP → Pi: ผลลัพธ์การทดสอบ
+
 /**
  * @section NTP Settings
  * @brief ตั้งค่าเวลาสำหรับ Light Schedule
@@ -218,6 +233,20 @@
  * @section Light Schedule Settings
  */
 #define LIGHT_CHECK_INTERVAL 1000             // ตรวจสอบตารางเวลาทุก (ms)
+
+// ============================================================================
+// AUTOMATOR CONFIGURATION
+// ============================================================================
+
+/**
+ * @section Automation Settings
+ * @brief ตั้งค่าพื้นฐานสำหรับระบบควบคุมอัตโนมัติ
+ */
+#define AUTOMATOR_CHECK_INTERVAL    5000    // ตรวจสอบสถานะทุก 5 วินาที
+#define AUTOMATOR_PUMP_DOSE_MS      3000    // ปั๊มทำงานครั้งละ 3 วินาที
+#define AUTOMATOR_COOLDOWN_MS       600000  // พักระบบ 10 นาที (600,000 ms) หลังจากการจ่ายปุ๋ย
+#define AUTOMATOR_DEFAULT_TDS       800.0f  // ค่า TDS พื้นฐาน
+#define AUTOMATOR_DEFAULT_PH        6.5f    // ค่า pH พื้นฐาน
 
 // ============================================================================
 // WATCHDOG TIMER CONFIGURATION

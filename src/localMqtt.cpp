@@ -13,8 +13,14 @@
 #include <ESPmDNS.h>
 #include <ArduinoJson.h>
 #include "netpie.h"
+#include "automator.h"
 #include "TdsSensor.h"  // For TDS calibration
 #include "phSensor.h"   // For pH calibration
+#include "tempSensor.h" // For HW test sensor reads
+#include "dhtSensor.h"  // For HW test sensor reads
+#include "lightSensor.h" // For HW test sensor reads
+#include "lightController.h" // For HW test light control
+#include "commandHandler.h"  // For pump test tick
 
 
 // ============================================================================
@@ -32,6 +38,45 @@ static uint8_t _connectionFailCount = 0;
 static const uint8_t MAX_FAIL_BEFORE_RERESOLUTION = 3; // Re-resolve mDNS หลังล้มเหลว 3 ครั้ง
 static unsigned long _reconnectInterval = 5000;          // Backoff interval (เริ่ม 5s, เพิ่มถึง 60s)
 static const unsigned long MAX_RECONNECT_INTERVAL = 60000; // สูงสุด 60 วินาที
+
+// HW Test: one-shot FreeRTOS task for guaranteed pump auto-off
+static TaskHandle_t _hwTestTaskHandle = NULL;
+static volatile bool _hwTestCompleted = false;  // Flag: task finished, tick should publish
+static char _hwTestCompletedCmd[16] = {0};
+
+struct HwTestParams {
+    uint8_t pin;
+    unsigned long durationMs;
+    char cmd[16];
+};
+
+/**
+ * @brief One-shot task: wait duration, turn off pump, set flag, self-delete
+ * @note Only does digitalWrite (thread-safe). MQTT publish done in tick.
+ */
+static void _hwTestAutoOffTask(void* param) {
+    HwTestParams* p = (HwTestParams*)param;
+    uint8_t pin = p->pin;
+    unsigned long dur = p->durationMs;
+    strncpy(_hwTestCompletedCmd, p->cmd, sizeof(_hwTestCompletedCmd) - 1);
+    delete p;
+    
+    LOG_INFO("[HW TEST] Auto-off task started: Pin=%d, Wait=%lu ms", pin, dur);
+    
+    // Wait for the duration (blocking in own task = safe)
+    vTaskDelay(pdMS_TO_TICKS(dur));
+    
+    // TURN OFF PUMP — this is just a register write, thread-safe
+    digitalWrite(pin, PUMP_OFF);
+    LOG_INFO("[HW TEST] Auto-off task: Pin %d -> OFF", pin);
+    
+    // Set flag for tick to handle MQTT publish + automator resume
+    _hwTestCompleted = true;
+    
+    _hwTestTaskHandle = NULL;
+    vTaskDelete(NULL);
+}
+
 static void _onMqttMessage(char* topic, byte* payload, unsigned int length);
 static bool _reconnect(void);
 static void _publishSensorConfig(void);
@@ -153,6 +198,130 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
         // Send feedback
         _publishSensorConfig();
     }
+    
+    // Handle Automation Target Config
+    if (strcmp(topic, LOCAL_MQTT_TOPIC_CONFIG_AUTOMATION) == 0) {
+        bool enabled = doc["enabled"] | false;
+        float tgtTds = doc["target_tds"] | AUTOMATOR_DEFAULT_TDS;
+        float tgtPh  = doc["target_ph"] | AUTOMATOR_DEFAULT_PH;
+        
+        automatorSetConfig(enabled, tgtTds, tgtPh);
+        LOG_INFO("Automation Config updated: En=%d, TDS=%.1f, pH=%.1f", enabled, tgtTds, tgtPh);
+    }
+    
+    // Handle Hardware Test Commands (Pi Dashboard → ESP32)
+    if (strcmp(topic, LOCAL_MQTT_TOPIC_HW_TEST_CMD) == 0) {
+        const char* cmd = doc["cmd"] | "";
+        unsigned long duration = doc["duration"] | 3000;
+        if (duration <= 0) duration = 3000;
+        
+        StaticJsonDocument<256> result;
+        result["cmd"] = cmd;
+        
+        // Pause automator during pump testing to prevent interference
+        if (strncmp(cmd, "pump_", 5) == 0) {
+            automatorPause();
+        }
+        
+        if (strcmp(cmd, "pump_a") == 0) {
+            digitalWrite(PUMP_NUTRIENT_A_PIN, PUMP_ON);
+            result["status"] = "running";
+            result["duration_ms"] = duration;
+            result["gpio"] = PUMP_NUTRIENT_A_PIN;
+            LOG_INFO("[HW TEST] Pump A ON for %d ms", duration);
+        }
+        else if (strcmp(cmd, "pump_b") == 0) {
+            digitalWrite(PUMP_NUTRIENT_B_PIN, PUMP_ON);
+            result["status"] = "running";
+            result["duration_ms"] = duration;
+            result["gpio"] = PUMP_NUTRIENT_B_PIN;
+            LOG_INFO("[HW TEST] Pump B ON for %d ms", duration);
+        }
+
+        else if (strcmp(cmd, "pump_stop") == 0) {
+            digitalWrite(PUMP_NUTRIENT_A_PIN, PUMP_OFF);
+            digitalWrite(PUMP_NUTRIENT_B_PIN, PUMP_OFF);
+            automatorResume();  // Resume automator after emergency stop
+            result["status"] = "stopped";
+            LOG_INFO("[HW TEST] All pumps STOPPED, automator resumed");
+        }
+        else if (strcmp(cmd, "light_on") == 0) {
+            lightCtrlSetState(true);
+            result["status"] = "on";
+            LOG_INFO("[HW TEST] Light ON");
+        }
+        else if (strcmp(cmd, "light_off") == 0) {
+            lightCtrlSetState(false);
+            result["status"] = "off";
+            LOG_INFO("[HW TEST] Light OFF");
+        }
+        else if (strcmp(cmd, "read_sensors") == 0) {
+            result["status"] = "ok";
+            float wt = tempRead();
+            float at = dhtReadTemperature();
+            float hm = dhtReadHumidity();
+            float td = tdsRead(wt);
+            float ph = phRead();
+            float lx = lightRead();
+            if (!isnan(wt)) result["water_temp"] = serialized(String(wt, 1));
+            if (!isnan(at)) result["air_temp"] = serialized(String(at, 1));
+            if (!isnan(hm)) result["humidity"] = serialized(String(hm, 1));
+            if (td >= 0) result["tds"] = serialized(String(td, 0));
+            if (ph >= 0) result["ph"] = serialized(String(ph, 2));
+            if (lx >= 0) result["light"] = serialized(String(lx, 0));
+            LOG_INFO("[HW TEST] Sensors read complete");
+        }
+        else {
+            result["status"] = "error";
+            result["message"] = "Unknown command";
+            LOG_WARN("[HW TEST] Unknown command: %s", cmd);
+        }
+        
+        // Publish result back
+        char buf[256];
+        serializeJson(result, buf, sizeof(buf));
+        _localMqtt.publish(LOCAL_MQTT_TOPIC_HW_TEST_RESULT, buf);
+        
+        // Schedule auto-off using one-shot FreeRTOS task
+        if (strncmp(cmd, "pump_", 5) == 0 && strcmp(cmd, "pump_stop") != 0) {
+            uint8_t pin = 0;
+            if (strcmp(cmd, "pump_a") == 0) pin = PUMP_NUTRIENT_A_PIN;
+            else if (strcmp(cmd, "pump_b") == 0) pin = PUMP_NUTRIENT_B_PIN;
+
+            
+            if (pin > 0) {
+                // Kill previous auto-off task if running
+                if (_hwTestTaskHandle != NULL) {
+                    vTaskDelete(_hwTestTaskHandle);
+                    _hwTestTaskHandle = NULL;
+                }
+                
+                // Allocate params for the task
+                HwTestParams* params = new HwTestParams();
+                params->pin = pin;
+                params->durationMs = duration;
+                strncpy(params->cmd, cmd, sizeof(params->cmd) - 1);
+                
+                // Create one-shot auto-off task (runs on any core)
+                BaseType_t ok = xTaskCreate(
+                    _hwTestAutoOffTask,
+                    "hwTestOff",
+                    4096,
+                    (void*)params,
+                    2,   // Priority 2 (above normal)
+                    &_hwTestTaskHandle
+                );
+                
+                if (ok == pdPASS) {
+                    LOG_INFO("[HW TEST] Auto-off task created: Pin=%d, Dur=%lu ms", pin, duration);
+                } else {
+                    LOG_ERROR("[HW TEST] xTaskCreate FAILED!");
+                    delete params;
+                    digitalWrite(pin, PUMP_OFF);
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -189,6 +358,8 @@ static bool _reconnect() {
         _localMqtt.subscribe("aquaponics/config/tds_cal", 1);
         _localMqtt.subscribe("aquaponics/config/ph_cal", 1);
         _localMqtt.subscribe(LOCAL_MQTT_TOPIC_CONFIG_SENSORS, 1);
+        _localMqtt.subscribe(LOCAL_MQTT_TOPIC_CONFIG_AUTOMATION, 1);
+        _localMqtt.subscribe(LOCAL_MQTT_TOPIC_HW_TEST_CMD, 1);
         LOG_INFO("Subscribed to MQTT topics (QoS 1)");
         
         return true;
@@ -245,6 +416,30 @@ void localMqttLoop(void) {
                 count++;
             }
         }
+        
+    }
+}
+
+/**
+ * @brief HW Test tick — publish completed + resume automator (thread-safe in TaskNetworking)
+ * @note Called from main.cpp TaskNetworking every loop iteration
+ */
+void localMqttHwTestTick(void) {
+    if (!_hwTestCompleted) return;
+    _hwTestCompleted = false;
+    
+    // Resume automator (safe from Core 0, automator checks volatile flag)
+    automatorResume();
+    
+    // Publish completed via MQTT (thread-safe: same task as PubSubClient)
+    if (_localMqtt.connected()) {
+        StaticJsonDocument<128> result;
+        result["cmd"] = _hwTestCompletedCmd;
+        result["status"] = "completed";
+        char buf[128];
+        serializeJson(result, buf, sizeof(buf));
+        _localMqtt.publish(LOCAL_MQTT_TOPIC_HW_TEST_RESULT, buf);
+        LOG_INFO("[HW TEST] Published 'completed' for %s", _hwTestCompletedCmd);
     }
 }
 
@@ -295,6 +490,16 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
     doc["watchdog_resets"] = health.watchdogResets;
     doc["reset_reason"] = health.resetReason;
     doc["cpu_temp"] = health.cpuTemp; // ESP32 Temp
+    
+    // Add Automator Process State (Process Tracker)
+    AutomatorConfig authCfg;
+    automatorGetConfig(&authCfg);
+    doc["auto_enabled"] = authCfg.enabled;
+    doc["auto_tgt_tds"] = authCfg.targetTds;
+    doc["auto_tgt_ph"] = authCfg.targetPh;
+    doc["auto_state"] = automatorGetStateString(automatorGetCurrentState());
+    doc["auto_reason"] = automatorGetActionReason();
+    doc["auto_time_left"] = automatorGetTimeRemainingSec();
 
     char payload[512];
     serializeJson(doc, payload);
@@ -307,8 +512,8 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
 }
 
 void localMqttPublishLog(const char* logMsg) {
-    // If not connected to wifi, drop the log early
-    if (!wifiIsConnected()) return;
+    // Skip if no network or MQTT not connected — don't fill queue needlessly
+    if (!wifiIsConnected() || !_localMqtt.connected()) return;
     
     // Safety check: if queue is ready, push to queue (0 ticks = non-blocking)
     if (_logQueue != NULL) {

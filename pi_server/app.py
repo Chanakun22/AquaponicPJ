@@ -228,6 +228,7 @@ def check_thresholds(data):
         send_line_notify(message)
 
 # เก็บข้อมูลล่าสุดไว้ในตัวแปร Memory
+last_auto_state = "IDLE"
 last_data = {
     # ESP32 Data
     "water_temp": 0, "air_temp": 0, "humidity": 0,
@@ -397,6 +398,7 @@ def on_connect(client, userdata, flags, rc):
     client.subscribe("aquaponics/logs")
     client.subscribe("aquaponics/status/sensors")
     client.subscribe("aquaponics/status/ph_cal")
+    client.subscribe("aquaponics/test/result")
 
 
 def on_message(client, userdata, msg):
@@ -408,6 +410,16 @@ def on_message(client, userdata, msg):
         if topic == "aquaponics/logs":
             print(f"📝 Log: {payload}")
             save_log(payload)
+            return
+        
+        # Forward HW test results to WebSocket clients
+        if topic == "aquaponics/test/result":
+            try:
+                result_data = json.loads(payload)
+                socketio.emit('hwtest_result', result_data)
+                print(f"🔧 HW Test Result: {result_data}")
+            except Exception as e:
+                print(f"❌ HW Test result parse error: {e}")
             return
             
         if topic == "aquaponics/status/sensors":
@@ -452,6 +464,18 @@ def on_message(client, userdata, msg):
         data = json.loads(payload)
         for key in data:
             last_data[key] = data[key]
+            
+        # Check for automation state change (for LINE notify)
+        new_auto_state = data.get("auto_state")
+        if new_auto_state:
+            global last_auto_state
+            if new_auto_state == "EXECUTING" and last_auto_state != "EXECUTING":
+                # State just changed to running!
+                reason = data.get("auto_reason", "Auto Action Triggered")
+                message = f"\n🤖 Automation Engine\nStarted Auto Dosing: {reason}"
+                send_line_notify(message)
+                save_log(f"🤖 Automation: Started Auto Dosing ({reason})")
+            last_auto_state = new_auto_state
         
         # If a sensor key is MISSING from payload, ESP32 read NaN → mark as failed
         SENSOR_KEYS = ["water_temp", "air_temp", "humidity", "tds", "ph", "light"]
@@ -918,6 +942,68 @@ def logs_view():
 @login_required
 def graphs_view():
     return send_file('graphs.html')
+
+# === Camera Settings API ===
+@app.route('/api/automation/config', methods=['POST'])
+@admin_required
+def automation_config():
+    """Receive automation targets from Web Dashboard and publish to MQTT"""
+    global app_settings
+    try:
+        data = request.get_json()
+        enabled = data.get('enabled', False)
+        target_tds = float(data.get('target_tds', 800))
+        target_ph = float(data.get('target_ph', 6.5))
+        
+        # Save to local settings file
+        app_settings['automation'] = {
+            'enabled': enabled,
+            'target_tds': target_tds,
+            'target_ph': target_ph
+        }
+        save_settings(app_settings)
+        
+        # Publish to ESP32
+        payload = {
+            "enabled": enabled,
+            "target_tds": target_tds,
+            "target_ph": target_ph
+        }
+        if mqtt_client:
+            mqtt_client.publish("aquaponics/config/automation", json.dumps(payload), qos=1)
+            
+        save_log(f"⚙️ Action: Automation Target Set -> Enabled: {enabled}, Target TDS: {target_tds}, Target pH: {target_ph}")
+        return jsonify({"status": "ok", "message": "Automation settings applied successfully"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+# === Hardware Test API ===
+@app.route('/hwtest')
+@admin_required
+def hwtest_page():
+    return send_file('hardware_test.html')
+
+@app.route('/api/hwtest/command', methods=['POST'])
+@admin_required
+def hwtest_command():
+    """Send hardware test command to ESP32 via MQTT"""
+    try:
+        data = request.get_json()
+        cmd = data.get('cmd', '')
+        duration = data.get('duration', 3000)
+        
+        if not cmd:
+            return jsonify({"status": "error", "message": "Missing cmd"}), 400
+        
+        payload = {"cmd": cmd, "duration": duration}
+        if mqtt_client:
+            mqtt_client.publish("aquaponics/test/command", json.dumps(payload), qos=1)
+            save_log(f"🔧 HW Test: {cmd} (duration={duration}ms)")
+            return jsonify({"status": "ok", "cmd": cmd})
+        else:
+            return jsonify({"status": "error", "message": "MQTT not connected"}), 503
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
 
 # === Camera Settings API ===
 @app.route('/api/camera_restart', methods=['POST'])

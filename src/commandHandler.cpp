@@ -17,8 +17,16 @@
 #include "tempSensor.h"
 #include "lightSensor.h"
 #include "lightController.h"
+#include "automator.h"
 #include "telnetServer.h"
 #include <WiFi.h>
+#include <Wire.h>
+
+// Pump test state (non-blocking auto-off)
+static unsigned long _pumpTestStartMs = 0;
+static uint8_t       _pumpTestPin     = 0;
+static bool          _pumpTestActive  = false;
+#define PUMP_TEST_DURATION_MS 3000  // 3 วินาที
 
 // ============================================================================
 // PRIVATE VARIABLES
@@ -68,9 +76,13 @@ static void _showHelp(CommandOutput_t out) {
     commandPrintf(out, "  cal4     - Calibrate pH 4.0\r\n");
     commandPrintf(out, "  light on - เปิดไฟปลูกพืช\r\n");
     commandPrintf(out, "  light off- ปิดไฟปลูกพืช\r\n");
+    commandPrintf(out, "  auto     - สถานะ Automator\r\n");
+    commandPrintf(out, "  pump a   - ทดสอบปั๊ม A (3 วินาที)\r\n");
+    commandPrintf(out, "  pump b   - ทดสอบปั๊ม B (3 วินาที)\r\n");
+    commandPrintf(out, "  pump stop- หยุดปั๊มทั้งหมด\r\n");
     commandPrintf(out, "  version  - แสดง Firmware Version\r\n");
     commandPrintf(out, "  reboot   - รีสตาร์ทบอร์ด\r\n");
-    commandPrintf(out, "  reset    - Factory Reset (ล้าง WiFi)\r\n");
+    commandPrintf(out, "  reset    - Factory Reset (ล้างค่า Calibration)\r\n");
     commandPrintf(out, "=========================================\r\n");
 }
 
@@ -144,20 +156,41 @@ static void _showMqtt(CommandOutput_t out) {
 // ============================================================================
 
 static void _runSystemTest(CommandOutput_t out) {
-    commandPrintf(out, "\r\n");
-    commandPrintf(out, "========== SYSTEM DIAGNOSTIC ==========\r\n");
+    int pass = 0, fail = 0, warn = 0;
     
-    // 1. Connectivity
-    commandPrintf(out, "[NET] WiFi       : %s\r\n", wifiIsConnected() ? "CONNECTED" : "FAIL");
-    if (wifiIsConnected()) {
-        commandPrintf(out, "      IP         : %s\r\n", WiFi.localIP().toString().c_str());
-        commandPrintf(out, "      RSSI       : %d dBm\r\n", WiFi.RSSI());
+    commandPrintf(out, "\r\n");
+    commandPrintf(out, "╔═══════════════════════════════════════════╗\r\n");
+    commandPrintf(out, "║     AQUAPONICS FULL SYSTEM DIAGNOSTIC     ║\r\n");
+    commandPrintf(out, "║          Firmware %s                    ║\r\n", systemGetVersion());
+    commandPrintf(out, "╚═══════════════════════════════════════════╝\r\n\r\n");
+    
+    // ─── 1. CONNECTIVITY ──────────────────────────────────────
+    commandPrintf(out, "─── 1. CONNECTIVITY ───────────────────────\r\n");
+    
+    bool wifiOk = wifiIsConnected();
+    commandPrintf(out, "  WiFi         : %s\r\n", wifiOk ? "✅ CONNECTED" : "❌ DISCONNECTED");
+    wifiOk ? pass++ : fail++;
+    
+    if (wifiOk) {
+        int rssi = WiFi.RSSI();
+        const char* quality = (rssi > -50) ? "Excellent" : (rssi > -60) ? "Good" : (rssi > -70) ? "Fair" : "Weak";
+        commandPrintf(out, "    SSID       : %s\r\n", WiFi.SSID().c_str());
+        commandPrintf(out, "    IP         : %s\r\n", WiFi.localIP().toString().c_str());
+        commandPrintf(out, "    RSSI       : %d dBm (%s)\r\n", rssi, quality);
+        if (rssi < -75) { warn++; commandPrintf(out, "    ⚠️  Signal weak! Consider moving closer to router\r\n"); }
     }
     
-    commandPrintf(out, "[NET] NETPIE     : %s\r\n", netpieIsConnected() ? "CONNECTED" : "FAIL");
-    commandPrintf(out, "[NET] Local MQTT : %s\r\n", localMqttIsConnected() ? "CONNECTED" : "FAIL");
+    bool netpieOk = netpieIsConnected();
+    commandPrintf(out, "  NETPIE Cloud : %s\r\n", netpieOk ? "✅ CONNECTED" : "❌ DISCONNECTED");
+    netpieOk ? pass++ : fail++;
     
-    // 2. Sensors
+    bool localOk = localMqttIsConnected();
+    commandPrintf(out, "  Local MQTT   : %s\r\n", localOk ? "✅ CONNECTED" : "❌ DISCONNECTED");
+    localOk ? pass++ : fail++;
+    
+    // ─── 2. SENSORS ──────────────────────────────────────────
+    commandPrintf(out, "\r\n─── 2. SENSORS ────────────────────────────\r\n");
+    
     float t_water = tempRead();
     float t_air = dhtReadTemperature();
     float humid = dhtReadHumidity();
@@ -165,39 +198,197 @@ static void _runSystemTest(CommandOutput_t out) {
     float light = lightRead();
     float ph = phRead();
     
-    commandPrintf(out, "[SEN] Water Temp : %.2f C  %s\r\n", t_water, isnan(t_water) ? "(FAIL)" : "(OK)");
-    commandPrintf(out, "[SEN] Air Temp   : %.2f C  %s\r\n", t_air, isnan(t_air) ? "(FAIL)" : "(OK)");
-    commandPrintf(out, "[SEN] Humidity   : %.2f %%  %s\r\n", humid, isnan(humid) ? "(FAIL)" : "(OK)");
-    commandPrintf(out, "[SEN] TDS        : %.0f ppm %s\r\n", tds, (tds < 0) ? "(FAIL)" : "(OK)");
-    commandPrintf(out, "[SEN] Light      : %.0f lux %s\r\n", light, (light < 0) ? "(FAIL)" : "(OK)");
-    commandPrintf(out, "[SEN] pH         : %.2f    %s\r\n", ph, (ph < 0) ? "(FAIL)" : "(OK)");
-    
-    // 3. System Health
-    SystemHealth_t health;
-    systemGetHealth(&health);
-    
-    commandPrintf(out, "[SYS] Uptime     : %lu s\r\n", health.uptimeMs / 1000);
-    commandPrintf(out, "[SYS] Free Heap  : %lu / %lu B (Min: %lu)\r\n", health.freeHeap, health.heapSize, health.minFreeHeap);
-    commandPrintf(out, "[SYS] CPU Temp   : %.1f C\r\n", health.cpuTemp);
-    
-    // Watchdog & Resets
-    commandPrintf(out, "[WDT] Resets     : %u %s\r\n", health.watchdogResets, (health.watchdogResets > 0) ? "(WARNING)" : "(OK)");
-    commandPrintf(out, "[SYS] Reset Reason: %s\r\n", health.resetReason);
-    commandPrintf(out, "[SYS] Reconnects : WiFi: %u, MQTT: %u\r\n", health.wifiReconnects, health.mqttReconnects);
-    
-    // Time Sync
-    struct tm timeinfo;
-    bool timeOk = getLocalTime(&timeinfo, 100); // 100ms timeout
-    if(timeOk) {
-        char timeStr[30];
-        strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", &timeinfo);
-        commandPrintf(out, "[CLK] Local Time : %s (OK)\r\n", timeStr);
+    // Water Temp
+    bool snsEnabled = systemGetSensorEnabled(SENSOR_WATER_TEMP);
+    if (!snsEnabled) {
+        commandPrintf(out, "  Water Temp   : ⏸️  DISABLED\r\n");
     } else {
-         commandPrintf(out, "[CLK] Local Time : UNSYNCED (FAIL)\r\n");
+        bool ok = !isnan(t_water) && t_water > 0;
+        commandPrintf(out, "  Water Temp   : %s %.1f °C\r\n", ok ? "✅" : "❌", t_water);
+        ok ? pass++ : fail++;
     }
-
-    commandPrintf(out, "=======================================\r\n");
-    commandPrintf(out, "TEST COMPLETE.\r\n");
+    
+    // Air Temp
+    snsEnabled = systemGetSensorEnabled(SENSOR_AIR_TEMP);
+    if (!snsEnabled) {
+        commandPrintf(out, "  Air Temp     : ⏸️  DISABLED\r\n");
+        commandPrintf(out, "  Humidity     : ⏸️  DISABLED\r\n");
+    } else {
+        bool ok1 = !isnan(t_air);
+        bool ok2 = !isnan(humid);
+        commandPrintf(out, "  Air Temp     : %s %.1f °C\r\n", ok1 ? "✅" : "❌", t_air);
+        commandPrintf(out, "  Humidity     : %s %.1f %%\r\n", ok2 ? "✅" : "❌", humid);
+        ok1 ? pass++ : fail++;
+        ok2 ? pass++ : fail++;
+    }
+    
+    // TDS
+    snsEnabled = systemGetSensorEnabled(SENSOR_TDS);
+    if (!snsEnabled) {
+        commandPrintf(out, "  TDS          : ⏸️  DISABLED\r\n");
+    } else {
+        bool ok = (tds >= 0);
+        commandPrintf(out, "  TDS          : %s %.0f ppm\r\n", ok ? "✅" : "❌", tds);
+        ok ? pass++ : fail++;
+    }
+    
+    // pH
+    snsEnabled = systemGetSensorEnabled(SENSOR_PH);
+    if (!snsEnabled) {
+        commandPrintf(out, "  pH           : ⏸️  DISABLED\r\n");
+    } else {
+        bool ok = (ph >= 0 && ph <= 14);
+        commandPrintf(out, "  pH           : %s %.2f\r\n", ok ? "✅" : "❌", ph);
+        ok ? pass++ : fail++;
+    }
+    
+    // Light
+    snsEnabled = systemGetSensorEnabled(SENSOR_LIGHT);
+    if (!snsEnabled) {
+        commandPrintf(out, "  Light        : ⏸️  DISABLED\r\n");
+    } else {
+        bool ok = (light >= 0);
+        commandPrintf(out, "  Light        : %s %.0f lux\r\n", ok ? "✅" : "❌", light);
+        ok ? pass++ : fail++;
+    }
+    
+    // ─── 3. I2C BUS SCAN ────────────────────────────────────
+    commandPrintf(out, "\r\n─── 3. I2C BUS SCAN ───────────────────────\r\n");
+    {
+        int i2cDevices = 0;
+        Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+        for (uint8_t addr = 1; addr < 127; addr++) {
+            Wire.beginTransmission(addr);
+            if (Wire.endTransmission() == 0) {
+                const char* devName = "Unknown";
+                if (addr == 0x23 || addr == 0x5C) devName = "BH1750 (Light)";
+                else if (addr >= 0x48 && addr <= 0x4F) devName = "ADS1115/PCF8591";
+                else if (addr == 0x27 || addr == 0x3F) devName = "LCD (I2C)";
+                else if (addr == 0x3C || addr == 0x3D) devName = "OLED (SSD1306)";
+                commandPrintf(out, "  0x%02X : %s ✅\r\n", addr, devName);
+                i2cDevices++;
+            }
+        }
+        if (i2cDevices == 0) {
+            commandPrintf(out, "  (No I2C devices found)\r\n");
+            if (systemGetSensorEnabled(SENSOR_LIGHT)) { fail++; }
+        } else {
+            commandPrintf(out, "  Total: %d device(s) found\r\n", i2cDevices);
+            pass++;
+        }
+    }
+    
+    // ─── 4. PUMP/RELAY GPIO ─────────────────────────────────
+    commandPrintf(out, "\r\n─── 4. PUMP RELAY GPIO ────────────────────\r\n");
+    commandPrintf(out, "  Relay logic  : Active LOW\r\n");
+    {
+        // Read current GPIO states (PUMP_OFF = HIGH for active low)
+        int pinA = digitalRead(PUMP_NUTRIENT_A_PIN);
+        int pinB = digitalRead(PUMP_NUTRIENT_B_PIN);
+        
+        commandPrintf(out, "  Pump A (GPIO %2d) : %s\r\n", PUMP_NUTRIENT_A_PIN, 
+                      (pinA == PUMP_OFF) ? "✅ OFF (idle)" : "⚠️  ON!");
+        commandPrintf(out, "  Pump B (GPIO %2d) : %s\r\n", PUMP_NUTRIENT_B_PIN, 
+                      (pinB == PUMP_OFF) ? "✅ OFF (idle)" : "⚠️  ON!");
+        
+        if (pinA == PUMP_OFF && pinB == PUMP_OFF) {
+            pass++;
+        } else {
+            warn++;
+            commandPrintf(out, "  ⚠️  One or more pumps are active!\r\n");
+        }
+        commandPrintf(out, "  Use 'pump a/b' to test, 'pump stop' to stop all\r\n");
+    }
+    
+    // ─── 5. AUTOMATOR ───────────────────────────────────────
+    commandPrintf(out, "\r\n─── 5. AUTOMATION ENGINE ──────────────────\r\n");
+    {
+        AutomatorConfig cfg;
+        automatorGetConfig(&cfg);
+        AutomatorState state = automatorGetCurrentState();
+        
+        commandPrintf(out, "  Enabled      : %s\r\n", cfg.enabled ? "✅ YES" : "⏸️  NO");
+        commandPrintf(out, "  State        : %s\r\n", automatorGetStateString(state));
+        commandPrintf(out, "  Reason       : %s\r\n", automatorGetActionReason());
+        commandPrintf(out, "  Target TDS   : %.0f ppm\r\n", cfg.targetTds);
+        commandPrintf(out, "  Target pH    : %.1f\r\n", cfg.targetPh);
+        commandPrintf(out, "  Time Left    : %d s\r\n", automatorGetTimeRemainingSec());
+        pass++; // Automator initialized = pass
+    }
+    
+    // ─── 6. TASK HEALTH ─────────────────────────────────────
+    commandPrintf(out, "\r\n─── 6. FREERTOS TASK HEALTH ───────────────\r\n");
+    {
+        bool allAlive = true;
+        for (int i = 0; i < TASK_ID_COUNT; i++) {
+            unsigned long age = systemGetTaskHeartbeatAge((TaskId_t)i);
+            bool stuck = (age > TASK_STUCK_THRESHOLD_MS);
+            const char* status = (age == 0) ? "NOT STARTED" : stuck ? "❌ STUCK!" : "✅ OK";
+            commandPrintf(out, "  %-12s : %s (%lu ms ago)\r\n", TASK_NAMES[i], status, age);
+            if (stuck || age == 0) allAlive = false;
+        }
+        allAlive ? pass++ : fail++;
+        
+        // Stack watermarks
+        commandPrintf(out, "  --- Stack Watermarks ---\r\n");
+        systemPrintStackInfo();
+    }
+    
+    // ─── 7. SYSTEM RESOURCES ────────────────────────────────
+    commandPrintf(out, "\r\n─── 7. SYSTEM RESOURCES ───────────────────\r\n");
+    {
+        SystemHealth_t health;
+        systemGetHealth(&health);
+        
+        commandPrintf(out, "  Uptime       : %lu s\r\n", health.uptimeMs / 1000);
+        commandPrintf(out, "  Free Heap    : %lu / %lu B\r\n", health.freeHeap, health.heapSize);
+        commandPrintf(out, "  Min Heap     : %lu B\r\n", health.minFreeHeap);
+        
+        if (health.minFreeHeap < 20000) {
+            commandPrintf(out, "  ⚠️  Low memory! Min heap below 20KB\r\n");
+            warn++;
+        } else {
+            pass++;
+        }
+        
+        commandPrintf(out, "  CPU Temp     : %.1f °C\r\n", health.cpuTemp);
+        if (health.cpuTemp > 70.0f) {
+            commandPrintf(out, "  ⚠️  CPU temperature high!\r\n");
+            warn++;
+        }
+        
+        commandPrintf(out, "  WDT Resets   : %u %s\r\n", health.watchdogResets, health.watchdogResets > 0 ? "⚠️" : "✅");
+        commandPrintf(out, "  Reconnects   : WiFi=%u, MQTT=%u\r\n", health.wifiReconnects, health.mqttReconnects);
+        commandPrintf(out, "  Reset Reason : %s\r\n", health.resetReason);
+    }
+    
+    // ─── 8. NTP TIME SYNC ───────────────────────────────────
+    commandPrintf(out, "\r\n─── 8. NTP TIME SYNC ──────────────────────\r\n");
+    {
+        struct tm timeinfo;
+        bool timeOk = getLocalTime(&timeinfo, 100);
+        if (timeOk) {
+            char timeStr[30];
+            strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", &timeinfo);
+            commandPrintf(out, "  Local Time   : %s ✅\r\n", timeStr);
+            commandPrintf(out, "  Timezone     : GMT+7 (ICT)\r\n");
+            pass++;
+        } else {
+            commandPrintf(out, "  Local Time   : ❌ UNSYNCED\r\n");
+            fail++;
+        }
+    }
+    
+    // ─── SUMMARY ────────────────────────────────────────────
+    int total = pass + fail;
+    int score = (total > 0) ? (pass * 100 / total) : 0;
+    
+    commandPrintf(out, "\r\n╔═══════════════════════════════════════════╗\r\n");
+    commandPrintf(out, "║  RESULT: %d/%d PASSED (%d%%)  ", pass, total, score);
+    if (warn > 0) commandPrintf(out, "⚠️ %d WARN  ", warn);
+    commandPrintf(out, "\r\n");
+    commandPrintf(out, "║  %s\r\n", score >= 80 ? "🟢 SYSTEM HEALTHY" : score >= 50 ? "🟡 NEEDS ATTENTION" : "🔴 CRITICAL ISSUES");
+    commandPrintf(out, "╚═══════════════════════════════════════════╝\r\n");
 }
 
 // ============================================================================
@@ -276,6 +467,43 @@ void commandProcess(char* cmd, CommandOutput_t output) {
         lightCtrlSetEnabled(1);  // Re-enable schedule
         commandPrintf(output, "[LIGHT] Auto mode (schedule enabled)\r\n");
     }
+    // === Automator Status ===
+    else if (strcmp(cleanCmd, "auto") == 0) {
+        AutomatorConfig cfg;
+        automatorGetConfig(&cfg);
+        commandPrintf(output, "\r\n========== AUTOMATOR ==========\r\n");
+        commandPrintf(output, "  Enabled    : %s\r\n", cfg.enabled ? "YES" : "NO");
+        commandPrintf(output, "  State      : %s\r\n", automatorGetStateString(automatorGetCurrentState()));
+        commandPrintf(output, "  Reason     : %s\r\n", automatorGetActionReason());
+        commandPrintf(output, "  Target TDS : %.1f ppm\r\n", cfg.targetTds);
+        commandPrintf(output, "  Target pH  : %.1f\r\n", cfg.targetPh);
+        commandPrintf(output, "  Time Left  : %d s\r\n", automatorGetTimeRemainingSec());
+        commandPrintf(output, "===============================\r\n");
+    }
+    // === Pump Test Commands ===
+    else if (strcmp(cleanCmd, "pump a") == 0) {
+        _pumpTestPin = PUMP_NUTRIENT_A_PIN;
+        _pumpTestStartMs = millis();
+        _pumpTestActive = true;
+        digitalWrite(PUMP_NUTRIENT_A_PIN, PUMP_ON);
+        commandPrintf(output, "[PUMP] Testing Nutrient A (GPIO %d) for 3 seconds...\r\n", PUMP_NUTRIENT_A_PIN);
+        LOG_INFO("[PUMP TEST] Nutrient A ON (GPIO %d)", PUMP_NUTRIENT_A_PIN);
+    }
+    else if (strcmp(cleanCmd, "pump b") == 0) {
+        _pumpTestPin = PUMP_NUTRIENT_B_PIN;
+        _pumpTestStartMs = millis();
+        _pumpTestActive = true;
+        digitalWrite(PUMP_NUTRIENT_B_PIN, PUMP_ON);
+        commandPrintf(output, "[PUMP] Testing Nutrient B (GPIO %d) for 3 seconds...\r\n", PUMP_NUTRIENT_B_PIN);
+        LOG_INFO("[PUMP TEST] Nutrient B ON (GPIO %d)", PUMP_NUTRIENT_B_PIN);
+    }
+    else if (strcmp(cleanCmd, "pump stop") == 0) {
+        digitalWrite(PUMP_NUTRIENT_A_PIN, PUMP_OFF);
+        digitalWrite(PUMP_NUTRIENT_B_PIN, PUMP_OFF);
+        _pumpTestActive = false;
+        commandPrintf(output, "[PUMP] All pumps STOPPED\r\n");
+        LOG_INFO("[PUMP TEST] All pumps OFF (manual stop)");
+    }
     else if (strcmp(cleanCmd, "version") == 0) {
         commandPrintf(output, "Firmware: %s\r\n", systemGetVersion());
         commandPrintf(output, "Build: %s %s\r\n", __DATE__, __TIME__);
@@ -318,5 +546,13 @@ void commandCheckSerial(void) {
         } else if (_cmdIndex < sizeof(_cmdBuffer) - 1) {
             _cmdBuffer[_cmdIndex++] = c;
         }
+    }
+}
+
+void commandPumpTestTick(void) {
+    if (_pumpTestActive && (millis() - _pumpTestStartMs >= PUMP_TEST_DURATION_MS)) {
+        digitalWrite(_pumpTestPin, PUMP_OFF);
+        _pumpTestActive = false;
+        LOG_INFO("[PUMP TEST] Auto-off (GPIO %d) after %d ms", _pumpTestPin, PUMP_TEST_DURATION_MS);
     }
 }

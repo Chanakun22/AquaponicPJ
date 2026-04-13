@@ -47,4 +47,9 @@ void commandCheckSerial(void);
  */
 void commandCheckTelnet(void);
 
+/**
+ * @brief Non-blocking pump test auto-off tick (call in loop)
+ */
+void commandPumpTestTick(void);
+
 #endif // COMMAND_HANDLER_H
