@@ -2,6 +2,33 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-04-13] - Future-Ready Water System Scaffold
+
+### Added
+
+- **feat: water system scaffold (`waterSystem.cpp`, `waterSystem.h`):**
+  - เพิ่มโมดูลคุมปั๊มน้ำวนหลักและปั๊มเติมน้ำแบบ future-ready
+  - รองรับสถานะ `DISABLED`, `CIRCULATION`, `REFILLING`, `BLOCKED`, `ALARM`
+  - รองรับ logic refill timeout, overflow alarm, และ sensor contradiction
+  - ใช้ค่า default แบบปลอดภัยเมื่อยังไม่กำหนด GPIO/เซ็นเซอร์จริง
+- **feat: CLI water commands (`commandHandler.cpp`):**
+  - เพิ่มคำสั่ง `water`, `circ on`, `circ off`, `refill on`, `refill off`, `water clear`
+- **feat: local MQTT water status/config (`localMqtt.cpp`, `config.h`):**
+  - เพิ่ม topic `aquaponics/config/water_system` และ `aquaponics/status/water_system`
+  - แนบสถานะระบบน้ำเข้า payload `aquaponics/sensors`
+- **docs: hardware shopping list (`HARDWARE_TO_BUY.md`):**
+  - สรุปรายการฮาร์ดแวร์ที่ควรซื้อเพิ่มจากสถานะปัจจุบันของระบบ
+
+### Changed
+
+- **fix: water alarm interlock (`automator.cpp`):**
+  - ให้ automator หยุดจ่ายปุ๋ยเมื่อระบบน้ำมี alarm หรือเมื่อปั๊มน้ำวนหลักไม่ทำงาน
+- **feat: Pi water system integration (`pi_server/app.py`, `pi_server/settings.html`):**
+  - เพิ่ม API และหน้า settings สำหรับตั้งค่า circulation, refill, manual refill, และ clear alarm
+  - เพิ่มการ sync สถานะ water system จาก MQTT เข้า Pi memory โดยไม่เขียนไฟล์ถี่เกินจำเป็น
+- **feat: periodic water status publish (`localMqtt.cpp`):**
+  - ส่ง `aquaponics/status/water_system` เป็นระยะเมื่อ local MQTT เชื่อมต่อ เพื่อให้ dashboard/backend เห็นสถานะล่าสุดต่อเนื่อง
+
 ## [2026-04-09] - Hardware Pin Rework & WiFi Direct Connect (v2.5.0)
 
 ### Changed

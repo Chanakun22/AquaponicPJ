@@ -10,6 +10,7 @@
 #include "TdsSensor.h"
 #include "tempSensor.h"
 #include "phSensor.h"
+#include "waterSystem.h"
 
 static AutomatorState _currentState = AUTO_STATE_IDLE;
 static unsigned long _stateStartTime = 0;
@@ -19,11 +20,17 @@ static char _actionReason[128] = "System Starting";
 static AutomatorConfig _config;
 static Preferences _prefs;
 
+static void _updateReason(const char* reason) {
+    if (strncmp(_actionReason, reason, sizeof(_actionReason)) != 0) {
+        snprintf(_actionReason, sizeof(_actionReason), "%s", reason);
+    }
+}
+
 // Private state transition
 static void _changeState(AutomatorState newState, const char* reason) {
     _currentState = newState;
     _stateStartTime = millis();
-    snprintf(_actionReason, sizeof(_actionReason), "%s", reason);
+    _updateReason(reason);
     
     // Safety: turn off all pumps when changing states
     digitalWrite(PUMP_NUTRIENT_A_PIN, PUMP_OFF);
@@ -155,6 +162,27 @@ void automatorResume(void) {
 void automatorLoop(void) {
     // Skip all automation while paused (HW Test mode)
     if (_paused) return;
+
+    WaterSystemStatus waterStatus;
+    waterSystemGetStatus(&waterStatus);
+
+    if (waterStatus.alarmActive) {
+        if (_currentState != AUTO_STATE_IDLE && _currentState != AUTO_STATE_DISABLED) {
+            _changeState(AUTO_STATE_IDLE, "Blocked by water system alarm");
+        } else {
+            _updateReason("Blocked by water system alarm");
+        }
+        return;
+    }
+
+    if (!waterStatus.circulationOutput) {
+        if (_currentState != AUTO_STATE_IDLE && _currentState != AUTO_STATE_DISABLED) {
+            _changeState(AUTO_STATE_IDLE, "Blocked: circulation pump is not running");
+        } else {
+            _updateReason("Blocked: circulation pump is not running");
+        }
+        return;
+    }
     
     if (!_config.enabled) {
         if (_currentState != AUTO_STATE_DISABLED) {

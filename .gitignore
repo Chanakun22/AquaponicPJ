@@ -16,3 +16,5 @@ pi_server/*.conf
 pi_server/auth_config.json
 .agent/skills
 webex
+HARDWARE_TO_BUY.md
+PROJECT_REFERENCE.md

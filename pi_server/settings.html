@@ -533,6 +533,53 @@
             </button>
         </div>
 
+        <div class="card">
+            <h2><i class="fas fa-water"></i> Water System</h2>
+
+            <div class="form-group">
+                <div class="toggle-container" style="justify-content: space-between; margin-bottom: 12px;">
+                    <span style="font-weight:600; color:var(--text-main)">Circulation Pump</span>
+                    <label class="toggle">
+                        <input type="checkbox" id="water_circulation_enabled">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="toggle-container" style="justify-content: space-between; margin-bottom: 20px;">
+                    <span style="font-weight:600; color:var(--text-main)">Auto Refill</span>
+                    <label class="toggle">
+                        <input type="checkbox" id="water_refill_enabled">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Max Refill Time (ms)</label>
+                <input type="number" id="water_refill_max_runtime_ms" step="1000" min="1000" placeholder="e.g. 120000">
+            </div>
+
+            <div class="form-group" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 18px;">
+                State: <strong id="water_state_text">UNKNOWN</strong><br>
+                Reason: <span id="water_reason_text">-</span>
+            </div>
+
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+                <button class="btn btn-primary" onclick="saveWaterSystemConfig()" style="flex:1; min-width:170px;">
+                    <i class="fas fa-save"></i> Apply Water Config
+                </button>
+                <button class="btn" onclick="manualRefill(true)" style="flex:1; min-width:140px;">
+                    <i class="fas fa-fill-drip"></i> Manual Refill On
+                </button>
+                <button class="btn" onclick="manualRefill(false)" style="flex:1; min-width:140px;">
+                    <i class="fas fa-stop"></i> Manual Refill Off
+                </button>
+                <button class="btn btn-danger" onclick="clearWaterAlarm()" style="flex:1; min-width:140px;">
+                    <i class="fas fa-shield-alt"></i> Clear Alarm
+                </button>
+            </div>
+        </div>
+
         <!-- Thresholds -->
         <div class="card">
             <h2><i class="fas fa-thermometer-half"></i> Sensor Thresholds</h2>
@@ -903,6 +950,13 @@
             document.getElementById('auto_tgt_tds').value = settings.automation?.target_tds ?? 800;
             document.getElementById('auto_tgt_ph').value = settings.automation?.target_ph ?? 6.5;
 
+            // Water System
+            document.getElementById('water_circulation_enabled').checked = settings.water_system?.circulation_enabled ?? true;
+            document.getElementById('water_refill_enabled').checked = settings.water_system?.refill_enabled ?? false;
+            document.getElementById('water_refill_max_runtime_ms').value = settings.water_system?.refill_max_runtime_ms ?? 120000;
+            document.getElementById('water_state_text').textContent = settings.water_system?.state ?? 'UNKNOWN';
+            document.getElementById('water_reason_text').textContent = settings.water_system?.reason ?? '-';
+
             // Thresholds
             document.getElementById('ph_min').value = settings.thresholds?.ph_min ?? 6.0;
             document.getElementById('ph_max').value = settings.thresholds?.ph_max ?? 7.5;
@@ -942,6 +996,23 @@
 
         function collectForm() {
             return {
+                automation: {
+                    enabled: document.getElementById('auto_enabled').checked,
+                    target_tds: parseFloat(document.getElementById('auto_tgt_tds').value || 800),
+                    target_ph: parseFloat(document.getElementById('auto_tgt_ph').value || 6.5)
+                },
+                water_system: {
+                    circulation_enabled: document.getElementById('water_circulation_enabled').checked,
+                    refill_enabled: document.getElementById('water_refill_enabled').checked,
+                    manual_refill: settings.water_system?.manual_refill ?? false,
+                    refill_max_runtime_ms: parseInt(document.getElementById('water_refill_max_runtime_ms').value || 120000),
+                    state: settings.water_system?.state ?? 'UNKNOWN',
+                    reason: settings.water_system?.reason ?? '-',
+                    alarm_active: settings.water_system?.alarm_active ?? false,
+                    sump_low: settings.water_system?.sump_low ?? false,
+                    sump_high: settings.water_system?.sump_high ?? false,
+                    overflow_alarm: settings.water_system?.overflow_alarm ?? false
+                },
                 thresholds: {
                     ph_min: parseFloat(document.getElementById('ph_min').value),
                     ph_max: parseFloat(document.getElementById('ph_max').value),
@@ -971,6 +1042,7 @@
                     graph_days: parseInt(document.getElementById('graph_days').value)
                 },
                 tds_calibration: settings.tds_calibration || {},
+                ph_calibration: settings.ph_calibration || {},
                 camera: (() => {
                     const [w, h] = document.getElementById('cam_resolution').value.split('x').map(Number);
                     return {
@@ -1024,6 +1096,44 @@
             } catch (e) {
                 showToast('Failed to connect to server', true);
             }
+        }
+
+        async function saveWaterSystemConfig(extra = {}) {
+            const data = {
+                circulation_enabled: document.getElementById('water_circulation_enabled').checked,
+                refill_enabled: document.getElementById('water_refill_enabled').checked,
+                refill_max_runtime_ms: parseInt(document.getElementById('water_refill_max_runtime_ms').value || 120000),
+                ...extra
+            };
+
+            try {
+                const res = await fetch('/api/water_system/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                if (result.status === 'ok') {
+                    settings.water_system = {
+                        ...(settings.water_system || {}),
+                        ...data
+                    };
+                    showToast('Water System Applied to ESP32! ✅');
+                    loadSettings();
+                } else {
+                    showToast('Error: ' + result.message, true);
+                }
+            } catch (e) {
+                showToast('Failed to connect to server', true);
+            }
+        }
+
+        function manualRefill(enabled) {
+            saveWaterSystemConfig({ manual_refill: enabled, clear_alarm: false });
+        }
+
+        function clearWaterAlarm() {
+            saveWaterSystemConfig({ clear_alarm: true, manual_refill: false });
         }
 
         function showToast(msg, isError = false) {

@@ -21,6 +21,7 @@
 #include "localMqtt.h"
 #include "commandHandler.h"
 #include "automator.h"
+#include "waterSystem.h"
 
 
 #if defined(ESP32) && WATCHDOG_ENABLED
@@ -238,6 +239,9 @@ void TaskControl(void *pvParameters) {
 
         // System Management (Button checks etc)
         systemLoop();
+
+        // Water circulation / refill controller
+        waterSystemLoop();
         
         // Light Controller Schedule
         lightCtrlLoop();
@@ -322,6 +326,7 @@ void setup() {
     
     // เริ่มต้นสมองกลอัตโนมัติ
     automatorSetup();
+    waterSystemSetup();
     
     // Command Handler
     commandSetup();

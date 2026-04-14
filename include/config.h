@@ -46,6 +46,27 @@
 #define PUMP_NUTRIENT_A_PIN 10      // ปั๊มปุ๋ย A
 #define PUMP_NUTRIENT_B_PIN 11      // ปั๊มปุ๋ย B
 
+// Water System (set GPIO when hardware wiring is finalized)
+#ifndef PUMP_CIRCULATION_PIN
+#define PUMP_CIRCULATION_PIN -1     // ปั๊มน้ำวนหลัก
+#endif
+
+#ifndef PUMP_REFILL_PIN
+#define PUMP_REFILL_PIN      -1     // ปั๊มย้ายน้ำจากถังน้ำสะอาดไปถังรวม
+#endif
+
+#ifndef SUMP_LEVEL_LOW_PIN
+#define SUMP_LEVEL_LOW_PIN   -1     // เซ็นเซอร์ระดับน้ำต่ำถังรวม
+#endif
+
+#ifndef SUMP_LEVEL_HIGH_PIN
+#define SUMP_LEVEL_HIGH_PIN  -1     // เซ็นเซอร์ระดับน้ำสูงถังรวม
+#endif
+
+#ifndef FISH_TANK_OVERFLOW_PIN
+#define FISH_TANK_OVERFLOW_PIN -1   // เซ็นเซอร์กันล้นตู้ปลา
+#endif
+
 
 // Relay Logic (Active Low: LOW = ON, HIGH = OFF)
 #define PUMP_ON   LOW
@@ -214,6 +235,9 @@
 #define LOCAL_MQTT_TOPIC_CONFIG_AUTOMATION "aquaponics/config/automation" // MQTT Topic สำหรับกำหนดเป้าหมาย TDS/pH
 #define LOCAL_MQTT_TOPIC_STATUS_AUTOMATION "aquaponics/status/automation" // MQTT Topic แจ้งสถานะเป้าหมายปัจจุบัน
 
+#define LOCAL_MQTT_TOPIC_CONFIG_WATER_SYSTEM "aquaponics/config/water_system" // MQTT Topic สำหรับระบบน้ำ (Pi -> ESP)
+#define LOCAL_MQTT_TOPIC_STATUS_WATER_SYSTEM "aquaponics/status/water_system" // MQTT Topic สถานะระบบน้ำ (ESP -> Pi)
+
 #define LOCAL_MQTT_TOPIC_HW_TEST_CMD    "aquaponics/test/command"  // Pi → ESP: สั่งทดสอบ Hardware
 #define LOCAL_MQTT_TOPIC_HW_TEST_RESULT "aquaponics/test/result"   // ESP → Pi: ผลลัพธ์การทดสอบ
 
@@ -247,6 +271,16 @@
 #define AUTOMATOR_COOLDOWN_MS       600000  // พักระบบ 10 นาที (600,000 ms) หลังจากการจ่ายปุ๋ย
 #define AUTOMATOR_DEFAULT_TDS       800.0f  // ค่า TDS พื้นฐาน
 #define AUTOMATOR_DEFAULT_PH        6.5f    // ค่า pH พื้นฐาน
+
+// ============================================================================
+// WATER SYSTEM CONFIGURATION
+// ============================================================================
+
+#define WATER_LEVEL_TRIGGER_STATE      LOW
+#define OVERFLOW_SENSOR_TRIGGER_STATE  LOW
+#define WATER_CIRCULATION_DEFAULT_ENABLED 1
+#define WATER_REFILL_DEFAULT_ENABLED      0
+#define WATER_REFILL_MAX_RUNTIME_MS       120000UL
 
 // ============================================================================
 // WATCHDOG TIMER CONFIGURATION

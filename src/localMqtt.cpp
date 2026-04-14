@@ -21,6 +21,7 @@
 #include "lightSensor.h" // For HW test sensor reads
 #include "lightController.h" // For HW test light control
 #include "commandHandler.h"  // For pump test tick
+#include "waterSystem.h"
 
 
 // ============================================================================
@@ -32,6 +33,7 @@ static PubSubClient _localMqtt(_localWifiClient);
 static QueueHandle_t _logQueue = NULL;
 static unsigned long _lastReconnectAttempt = 0;
 static unsigned long _lastPublishTime = 0;
+static unsigned long _lastWaterStatusPublishTime = 0;
 static IPAddress _brokerIp;
 static bool _isIpResolved = false;
 static uint8_t _connectionFailCount = 0;
@@ -81,6 +83,7 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length);
 static bool _reconnect(void);
 static void _publishSensorConfig(void);
 static void _publishPhCalibrationStatus(void);
+static void _publishWaterSystemStatus(void);
 
 // ============================================================================
 // PRIVATE FUNCTIONS
@@ -207,6 +210,29 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
         
         automatorSetConfig(enabled, tgtTds, tgtPh);
         LOG_INFO("Automation Config updated: En=%d, TDS=%.1f, pH=%.1f", enabled, tgtTds, tgtPh);
+    }
+
+    if (strcmp(topic, LOCAL_MQTT_TOPIC_CONFIG_WATER_SYSTEM) == 0) {
+        WaterSystemConfig cfg;
+        waterSystemGetConfig(&cfg);
+
+        bool circulationEnabled = doc.containsKey("circulation_enabled") ? doc["circulation_enabled"].as<bool>() : cfg.circulationEnabled;
+        bool refillEnabled = doc.containsKey("refill_enabled") ? doc["refill_enabled"].as<bool>() : cfg.refillEnabled;
+        unsigned long refillMaxRuntimeMs = doc.containsKey("refill_max_runtime_ms") ? doc["refill_max_runtime_ms"].as<unsigned long>() : cfg.refillMaxRuntimeMs;
+
+        waterSystemSetConfig(circulationEnabled, refillEnabled, refillMaxRuntimeMs);
+
+        if (doc.containsKey("manual_refill")) {
+            waterSystemSetManualRefill(doc["manual_refill"].as<bool>());
+        }
+
+        if (doc["clear_alarm"] | false) {
+            waterSystemClearAlarm();
+        }
+
+        LOG_INFO("Water System config updated: Circ=%d, Refill=%d, Max=%lu ms",
+                 circulationEnabled, refillEnabled, refillMaxRuntimeMs);
+        _publishWaterSystemStatus();
     }
     
     // Handle Hardware Test Commands (Pi Dashboard → ESP32)
@@ -359,8 +385,11 @@ static bool _reconnect() {
         _localMqtt.subscribe("aquaponics/config/ph_cal", 1);
         _localMqtt.subscribe(LOCAL_MQTT_TOPIC_CONFIG_SENSORS, 1);
         _localMqtt.subscribe(LOCAL_MQTT_TOPIC_CONFIG_AUTOMATION, 1);
+        _localMqtt.subscribe(LOCAL_MQTT_TOPIC_CONFIG_WATER_SYSTEM, 1);
         _localMqtt.subscribe(LOCAL_MQTT_TOPIC_HW_TEST_CMD, 1);
         LOG_INFO("Subscribed to MQTT topics (QoS 1)");
+
+        _publishWaterSystemStatus();
         
         return true;
     } else {
@@ -380,7 +409,7 @@ void localMqttSetup(void) {
     // Set TCP socket timeout to 5 seconds (default ~30s causes task stuck detection)
     _localWifiClient.setTimeout(5);  // seconds
     
-    _localMqtt.setBufferSize(512);
+    _localMqtt.setBufferSize(1024);
     _localMqtt.setSocketTimeout(5);  // PubSubClient keepalive timeout (seconds)
     
     // Create a queue for passing logs across tasks safely (20 items of 128 bytes)
@@ -405,6 +434,11 @@ void localMqttLoop(void) {
         }
     } else {
         _localMqtt.loop();
+
+        if (millis() - _lastWaterStatusPublishTime >= LOCAL_PUBLISH_INTERVAL) {
+            _lastWaterStatusPublishTime = millis();
+            _publishWaterSystemStatus();
+        }
         
         // Process cross-core log queue safely in the Networking Task
         if (_logQueue != NULL) {
@@ -456,7 +490,7 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
     
     _lastPublishTime = millis();
 
-    StaticJsonDocument<512> doc;
+    StaticJsonDocument<1024> doc;
     
     // Format same as Netpie for consistency, or simpler flat JSON
     if (!isnan(waterTemp)) doc["water_temp"] = round(waterTemp * 10) / 10.0;
@@ -501,7 +535,23 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
     doc["auto_reason"] = automatorGetActionReason();
     doc["auto_time_left"] = automatorGetTimeRemainingSec();
 
-    char payload[512];
+    WaterSystemConfig waterCfg;
+    WaterSystemStatus waterStatus;
+    waterSystemGetConfig(&waterCfg);
+    waterSystemGetStatus(&waterStatus);
+    doc["circ_enabled"] = waterCfg.circulationEnabled;
+    doc["circ_running"] = waterStatus.circulationOutput;
+    doc["refill_enabled"] = waterCfg.refillEnabled;
+    doc["refill_running"] = waterStatus.refillOutput;
+    doc["manual_refill"] = waterCfg.manualRefill;
+    doc["sump_low"] = waterStatus.levelLow;
+    doc["sump_high"] = waterStatus.levelHigh;
+    doc["fish_overflow"] = waterStatus.overflowAlarm;
+    doc["water_alarm"] = waterStatus.alarmActive;
+    doc["water_state"] = waterSystemGetStateString(waterStatus.state);
+    doc["water_reason"] = waterStatus.reason;
+
+    char payload[1024];
     serializeJson(doc, payload);
 
     if (_localMqtt.publish(LOCAL_MQTT_TOPIC_SENSORS, payload)) {
@@ -549,6 +599,37 @@ static void _publishPhCalibrationStatus(void) {
     serializeJson(doc, buffer);
     _localMqtt.publish("aquaponics/status/ph_cal", buffer);
     LOG_INFO("Sent pH Calibration Status: %s", buffer);
+}
+
+static void _publishWaterSystemStatus(void) {
+    if (!_localMqtt.connected()) return;
+
+    WaterSystemConfig cfg;
+    WaterSystemStatus status;
+    waterSystemGetConfig(&cfg);
+    waterSystemGetStatus(&status);
+
+    StaticJsonDocument<384> doc;
+    doc["circulation_enabled"] = cfg.circulationEnabled;
+    doc["refill_enabled"] = cfg.refillEnabled;
+    doc["manual_refill"] = cfg.manualRefill;
+    doc["refill_max_runtime_ms"] = cfg.refillMaxRuntimeMs;
+    doc["state"] = waterSystemGetStateString(status.state);
+    doc["reason"] = status.reason;
+    doc["circulation_output"] = status.circulationOutput;
+    doc["refill_output"] = status.refillOutput;
+    doc["sump_low"] = status.levelLow;
+    doc["sump_high"] = status.levelHigh;
+    doc["overflow_alarm"] = status.overflowAlarm;
+    doc["alarm_active"] = status.alarmActive;
+    doc["has_circulation_pump"] = status.hasCirculationPump;
+    doc["has_refill_pump"] = status.hasRefillPump;
+    doc["has_level_sensors"] = status.hasLevelSensors;
+    doc["has_overflow_sensor"] = status.hasOverflowSensor;
+
+    char buffer[384];
+    serializeJson(doc, buffer, sizeof(buffer));
+    _localMqtt.publish(LOCAL_MQTT_TOPIC_STATUS_WATER_SYSTEM, buffer);
 }
 
 

@@ -107,6 +107,18 @@ def load_settings():
             "air": True,
             "light": True
         },
+        "water_system": {
+            "circulation_enabled": True,
+            "refill_enabled": False,
+            "manual_refill": False,
+            "refill_max_runtime_ms": 120000,
+            "state": "DISABLED",
+            "reason": "Waiting for ESP32 status",
+            "alarm_active": False,
+            "sump_low": False,
+            "sump_high": False,
+            "overflow_alarm": False
+        },
         "tds_calibration": {
             "low_ppm": 500,
             "low_voltage": 0.0,
@@ -398,6 +410,7 @@ def on_connect(client, userdata, flags, rc):
     client.subscribe("aquaponics/logs")
     client.subscribe("aquaponics/status/sensors")
     client.subscribe("aquaponics/status/ph_cal")
+    client.subscribe("aquaponics/status/water_system")
     client.subscribe("aquaponics/test/result")
 
 
@@ -447,6 +460,23 @@ def on_message(client, userdata, msg):
                 save_log(f"pH Calibration updated: voltage={ph_status.get('ph_voltage')}mV, pH={ph_status.get('ph_value')}")
             except Exception as e:
                 print(f"❌ Error handling pH cal status: {e}")
+            return
+
+        if topic == "aquaponics/status/water_system":
+            try:
+                water_status = json.loads(payload)
+                previous_water = dict(app_settings.get("water_system", {}))
+                app_settings.setdefault("water_system", {})
+                app_settings["water_system"].update(water_status)
+                print(f"🔄 Water system status updated: {water_status}")
+
+                if water_status.get("alarm_active") and (
+                    not previous_water.get("alarm_active") or
+                    previous_water.get("reason") != water_status.get("reason")
+                ):
+                    save_log(f"🚨 Water system alarm: {water_status.get('reason', 'Unknown alarm')}")
+            except Exception as e:
+                print(f"❌ Error handling water system status: {e}")
             return
         
 
@@ -677,7 +707,7 @@ def post_settings():
     try:
         new_settings = request.get_json()
         if new_settings:
-            app_settings = new_settings
+            app_settings.update(new_settings)
             # Check if sensor config changed and publish to MQTT
             if "sensor_config" in new_settings:
                 try:
@@ -685,6 +715,30 @@ def post_settings():
                     if mqtt_client and mqtt_client.is_connected():
                          mqtt_client.publish("aquaponics/config/sensors", sensor_payload, qos=1, retain=True)
                          print(f"📤 Sensor Config sent to ESP32: {sensor_payload}")
+                except Exception as ex:
+                    print(f"MQTT Publish Error: {ex}")
+
+            if "automation" in new_settings:
+                try:
+                    automation_payload = json.dumps(new_settings["automation"])
+                    if mqtt_client and mqtt_client.is_connected():
+                        mqtt_client.publish("aquaponics/config/automation", automation_payload, qos=1)
+                        print(f"📤 Automation Config sent to ESP32: {automation_payload}")
+                except Exception as ex:
+                    print(f"MQTT Publish Error: {ex}")
+
+            if "water_system" in new_settings:
+                try:
+                    water_payload = {
+                        "circulation_enabled": new_settings["water_system"].get("circulation_enabled", True),
+                        "refill_enabled": new_settings["water_system"].get("refill_enabled", False),
+                        "manual_refill": new_settings["water_system"].get("manual_refill", False),
+                        "refill_max_runtime_ms": new_settings["water_system"].get("refill_max_runtime_ms", 120000),
+                        "clear_alarm": False
+                    }
+                    if mqtt_client and mqtt_client.is_connected():
+                        mqtt_client.publish("aquaponics/config/water_system", json.dumps(water_payload), qos=1)
+                        print(f"📤 Water System Config sent to ESP32: {water_payload}")
                 except Exception as ex:
                     print(f"MQTT Publish Error: {ex}")
 
@@ -976,6 +1030,48 @@ def automation_config():
         return jsonify({"status": "ok", "message": "Automation settings applied successfully"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 400
+
+@app.route('/api/water_system/config', methods=['POST'])
+@admin_required
+def water_system_config():
+    """Receive water system settings from Web Dashboard and publish to MQTT"""
+    global app_settings
+    try:
+        data = request.get_json()
+        circulation_enabled = data.get('circulation_enabled', True)
+        refill_enabled = data.get('refill_enabled', False)
+        manual_refill = data.get('manual_refill', False)
+        clear_alarm = data.get('clear_alarm', False)
+        refill_max_runtime_ms = int(data.get('refill_max_runtime_ms', 120000))
+
+        app_settings.setdefault('water_system', {})
+        app_settings['water_system'].update({
+            'circulation_enabled': circulation_enabled,
+            'refill_enabled': refill_enabled,
+            'manual_refill': manual_refill,
+            'refill_max_runtime_ms': refill_max_runtime_ms
+        })
+        save_settings(app_settings)
+
+        payload = {
+            'circulation_enabled': circulation_enabled,
+            'refill_enabled': refill_enabled,
+            'manual_refill': manual_refill,
+            'clear_alarm': clear_alarm,
+            'refill_max_runtime_ms': refill_max_runtime_ms
+        }
+
+        if mqtt_client and mqtt_client.is_connected():
+            mqtt_client.publish('aquaponics/config/water_system', json.dumps(payload), qos=1)
+
+        save_log(
+            f"💧 Water system config -> circ={circulation_enabled}, refill={refill_enabled}, "
+            f"manual={manual_refill}, clear_alarm={clear_alarm}, max={refill_max_runtime_ms}ms"
+        )
+        log_activity(session.get('username', '?'), 'water_system', 'Water system config updated', request.remote_addr)
+        return jsonify({'status': 'ok', 'message': 'Water system settings applied successfully'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
 
 # === Hardware Test API ===
 @app.route('/hwtest')

@@ -18,6 +18,7 @@
 #include "lightSensor.h"
 #include "lightController.h"
 #include "automator.h"
+#include "waterSystem.h"
 #include "telnetServer.h"
 #include <WiFi.h>
 #include <Wire.h>
@@ -34,6 +35,29 @@ static bool          _pumpTestActive  = false;
 
 static char _cmdBuffer[64];
 static size_t _cmdIndex = 0;
+
+static void _showWaterSystem(CommandOutput_t out) {
+    WaterSystemConfig cfg;
+    WaterSystemStatus status;
+    waterSystemGetConfig(&cfg);
+    waterSystemGetStatus(&status);
+
+    commandPrintf(out, "\r\n");
+    commandPrintf(out, "========== WATER SYSTEM ==========\r\n");
+    commandPrintf(out, "  State           : %s\r\n", waterSystemGetStateString(status.state));
+    commandPrintf(out, "  Reason          : %s\r\n", status.reason);
+    commandPrintf(out, "  Circulation En  : %s\r\n", cfg.circulationEnabled ? "YES" : "NO");
+    commandPrintf(out, "  Refill En       : %s\r\n", cfg.refillEnabled ? "YES" : "NO");
+    commandPrintf(out, "  Manual Refill   : %s\r\n", cfg.manualRefill ? "YES" : "NO");
+    commandPrintf(out, "  Circ Output     : %s\r\n", status.circulationOutput ? "ON" : "OFF");
+    commandPrintf(out, "  Refill Output   : %s\r\n", status.refillOutput ? "ON" : "OFF");
+    commandPrintf(out, "  Sump Low        : %s\r\n", status.levelLow ? "TRIGGERED" : "NORMAL");
+    commandPrintf(out, "  Sump High       : %s\r\n", status.levelHigh ? "TRIGGERED" : "NORMAL");
+    commandPrintf(out, "  Overflow Alarm  : %s\r\n", status.overflowAlarm ? "TRIGGERED" : "NORMAL");
+    commandPrintf(out, "  Alarm Active    : %s\r\n", status.alarmActive ? "YES" : "NO");
+    commandPrintf(out, "  Max Refill Time : %lu ms\r\n", cfg.refillMaxRuntimeMs);
+    commandPrintf(out, "===============================\r\n");
+}
 
 // ============================================================================
 // PRIVATE FUNCTIONS
@@ -77,6 +101,12 @@ static void _showHelp(CommandOutput_t out) {
     commandPrintf(out, "  light on - เปิดไฟปลูกพืช\r\n");
     commandPrintf(out, "  light off- ปิดไฟปลูกพืช\r\n");
     commandPrintf(out, "  auto     - สถานะ Automator\r\n");
+    commandPrintf(out, "  water    - สถานะระบบน้ำ\r\n");
+    commandPrintf(out, "  circ on  - เปิดปั๊มน้ำวนหลัก\r\n");
+    commandPrintf(out, "  circ off - ปิดปั๊มน้ำวนหลัก\r\n");
+    commandPrintf(out, "  refill on- เปิดเติมน้ำแบบ manual\r\n");
+    commandPrintf(out, "  refill off- ปิดเติมน้ำแบบ manual\r\n");
+    commandPrintf(out, "  water clear- ล้าง alarm ระบบน้ำ\r\n");
     commandPrintf(out, "  pump a   - ทดสอบปั๊ม A (3 วินาที)\r\n");
     commandPrintf(out, "  pump b   - ทดสอบปั๊ม B (3 วินาที)\r\n");
     commandPrintf(out, "  pump stop- หยุดปั๊มทั้งหมด\r\n");
@@ -466,6 +496,29 @@ void commandProcess(char* cmd, CommandOutput_t output) {
     else if (strcmp(cleanCmd, "light auto") == 0) {
         lightCtrlSetEnabled(1);  // Re-enable schedule
         commandPrintf(output, "[LIGHT] Auto mode (schedule enabled)\r\n");
+    }
+    else if (strcmp(cleanCmd, "water") == 0) {
+        _showWaterSystem(output);
+    }
+    else if (strcmp(cleanCmd, "circ on") == 0) {
+        waterSystemSetCirculationEnabled(true);
+        commandPrintf(output, "[WATER] Circulation enabled\r\n");
+    }
+    else if (strcmp(cleanCmd, "circ off") == 0) {
+        waterSystemSetCirculationEnabled(false);
+        commandPrintf(output, "[WATER] Circulation disabled\r\n");
+    }
+    else if (strcmp(cleanCmd, "refill on") == 0) {
+        waterSystemSetManualRefill(true);
+        commandPrintf(output, "[WATER] Manual refill requested\r\n");
+    }
+    else if (strcmp(cleanCmd, "refill off") == 0) {
+        waterSystemSetManualRefill(false);
+        commandPrintf(output, "[WATER] Manual refill stopped\r\n");
+    }
+    else if (strcmp(cleanCmd, "water clear") == 0) {
+        waterSystemClearAlarm();
+        commandPrintf(output, "[WATER] Alarm cleared\r\n");
     }
     // === Automator Status ===
     else if (strcmp(cleanCmd, "auto") == 0) {
