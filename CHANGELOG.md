@@ -2,6 +2,21 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-04-18] - Hardware Test Page Alignment
+
+### Changed
+
+- **refactor: hardware test page aligned with current firmware features (`pi_server/hardware_test.html`):**
+  - ตัด water pump test แบบเก่าที่ firmware ไม่รองรับแล้ว
+  - เพิ่ม live summary สำหรับ ESP, automation, water state, และ route
+  - เพิ่ม water system control/test สำหรับ circulation, auto refill, route, direct fallback, manual refill, และ clear alarm
+  - เปลี่ยน light test ให้ตรงกับ light relay และเพิ่ม safe stop สำหรับปั๊มโดส, light off, และ manual refill off
+  - แก้ให้ water status ใช้ MQTT realtime fields ที่ตรงกับ firmware (`circ_running`, `water_alarm`, `water_reason`) และให้ทุก action ดึง config ล่าสุดก่อนส่งเพื่อลดการทับค่าเก่า
+  - ปรับ safe stop ให้ปิด auto refill ด้วย เพื่อไม่ให้ปั๊มเติมกลับมาทำงานต่อเองเมื่อ low-level condition ยังอยู่
+  - เพิ่ม banner เตือนบนหน้า hw test หลัง Safe Stop เพื่อบอกผู้ใช้ว่า auto refill ถูกปิดไว้และต้องเปิดกลับเองเมื่อพร้อม
+- **docs: hardware test runbook (`docs/vault/05-testing/bringup-checklist.md`):**
+  - เพิ่ม checklist แยกสำหรับหน้า `/hwtest` ครอบคลุม sensor snapshot, dosing pumps, light relay, water system controls, และ safe stop verification
+
 ## [2026-04-14] - Water Refill Route Control
 
 ### Changed

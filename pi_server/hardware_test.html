@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🔧 HW Test - Smart Aquaponics</title>
+    <title>Hardware Test - Smart Aquaponics</title>
     <link rel="manifest" href="/pwa/manifest.json">
     <meta name="theme-color" content="#00f2aa">
     <link href="/static/fonts/fonts.css" rel="stylesheet">
@@ -14,121 +14,419 @@
         .brand i { color: #f59e0b; filter: drop-shadow(0 0 8px rgba(245,158,11,0.4)); }
         .brand h1 {
             background: linear-gradient(135deg, #fff 0%, #fbbf24 100%);
-            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
-        }
-        .container { max-width: 1100px; }
-
-        /* Flow Canvas */
-        .flow-canvas {
-            display: flex; flex-direction: column; gap: 20px;
-            padding: 24px; position: relative;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
-        /* Flow Row */
-        .flow-row {
-            display: flex; align-items: center; gap: 0;
-            position: relative;
+        .container { max-width: 1240px; }
+
+        .page-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            margin-top: 20px;
         }
 
-        /* Node Base */
-        .node {
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            min-width: 140px; min-height: 90px; padding: 14px 18px;
-            border-radius: 14px; border: 2px solid var(--glass-border);
-            background: var(--glass-bg); backdrop-filter: blur(12px);
-            cursor: pointer; transition: all 0.35s ease; position: relative;
-            user-select: none;
-        }
-        .node:hover { border-color: rgba(255,255,255,0.2); transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
-        .node-icon { font-size: 1.6rem; margin-bottom: 6px; transition: all 0.3s; }
-        .node-label { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-        .node-value { font-size: 0.85rem; color: var(--text-main); margin-top: 4px; min-height: 1.2em; }
-        .node-status { font-size: 0.7rem; margin-top: 4px; padding: 2px 8px; border-radius: 6px; font-weight: 600; }
-
-        /* Node States */
-        .node.idle { border-color: rgba(255,255,255,0.08); }
-        .node.idle .node-icon { color: var(--text-muted); }
-        .node.running { border-color: #3b82f6; background: rgba(59,130,246,0.08); animation: pulse-border 1.5s ease-in-out infinite; }
-        .node.running .node-icon { color: #3b82f6; }
-        .node.running .node-status { background: rgba(59,130,246,0.15); color: #60a5fa; }
-        .node.done { border-color: #10b981; background: rgba(16,185,129,0.06); }
-        .node.done .node-icon { color: #10b981; }
-        .node.done .node-status { background: rgba(16,185,129,0.15); color: #34d399; }
-        .node.error { border-color: #ef4444; background: rgba(239,68,68,0.06); }
-        .node.error .node-icon { color: #ef4444; }
-        .node.error .node-status { background: rgba(239,68,68,0.15); color: #f87171; }
-
-        @keyframes pulse-border {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.3); }
-            50% { box-shadow: 0 0 0 8px rgba(59,130,246,0); }
+        .intro {
+            padding: 18px 20px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, rgba(245,158,11,0.14), rgba(16,185,129,0.08));
+            border: 1px solid rgba(245,158,11,0.22);
+            color: var(--text-main);
+            line-height: 1.65;
         }
 
-        /* Connection Lines */
-        .conn {
-            width: 40px; height: 2px; background: var(--glass-border); position: relative; flex-shrink: 0;
-        }
-        .conn::after {
-            content: ''; position: absolute; right: -4px; top: -3px;
-            border: solid var(--glass-border); border-width: 0 2px 2px 0;
-            padding: 3px; transform: rotate(-45deg);
-        }
-        .conn.active { background: #3b82f6; }
-        .conn.active::after { border-color: #3b82f6; }
-        .conn.done { background: #10b981; }
-        .conn.done::after { border-color: #10b981; }
+        .intro strong { color: #fcd34d; }
 
-        /* Progress Bar inside node */
-        .node-progress {
-            width: 100%; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.1);
-            margin-top: 6px; overflow: hidden;
-        }
-        .node-progress-bar {
-            height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa);
-            border-radius: 2px; width: 0%; transition: width 0.1s linear;
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 14px;
         }
 
-        /* Emergency Stop */
-        .estop-container { display: flex; justify-content: center; margin-top: 16px; }
-        .estop-btn {
-            display: flex; align-items: center; gap: 10px; padding: 14px 36px;
-            background: linear-gradient(135deg, #dc2626, #b91c1c); color: #fff;
-            border: 2px solid #ef4444; border-radius: 14px; font-size: 1rem; font-weight: 700;
-            cursor: pointer; transition: all 0.3s; text-transform: uppercase; letter-spacing: 1px;
-            font-family: inherit;
+        .notice-banner {
+            display: none;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 14px 16px;
+            border-radius: 14px;
+            border: 1px solid rgba(245,158,11,0.35);
+            background: linear-gradient(135deg, rgba(245,158,11,0.16), rgba(180,83,9,0.1));
+            color: #fde68a;
+            line-height: 1.6;
         }
-        .estop-btn:hover { transform: scale(1.05); box-shadow: 0 0 30px rgba(239,68,68,0.4); }
-        .estop-btn:active { transform: scale(0.98); }
-        .estop-btn i { font-size: 1.2rem; }
 
-        /* Sensor Results Grid */
-        .sensor-results {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-            gap: 8px; margin-top: 8px; width: 100%;
+        .notice-banner.show {
+            display: flex;
         }
-        .sensor-item {
-            text-align: center; padding: 6px 4px; border-radius: 8px;
-            background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+
+        .notice-banner i {
+            margin-top: 2px;
+            color: #fbbf24;
         }
-        .sensor-item .si-label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; }
-        .sensor-item .si-val { font-size: 0.9rem; font-weight: 600; color: var(--text-main); }
 
-        /* Section Title */
-        .flow-section { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); padding: 4px 0; display: flex; align-items: center; gap: 8px; }
-        .flow-section::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--glass-border), transparent); }
+        .notice-banner strong {
+            color: #fef3c7;
+        }
 
-        /* Sensor node wider */
-        .node.sensor-node { min-width: 100%; flex-direction: column; }
+        .summary-card {
+            padding: 18px;
+            border-radius: 16px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+        }
 
-        /* Log area */
-        .test-log { margin-top: 20px; padding: 16px; border-radius: 14px; background: var(--glass-bg); border: 1px solid var(--glass-border); max-height: 200px; overflow-y: auto; }
-        .test-log-title { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); margin-bottom: 8px; }
-        .test-log-entry { font-size: 0.78rem; color: var(--text-muted); padding: 3px 0; font-family: 'Fira Code', monospace; }
-        .test-log-entry .time { color: #6b7280; margin-right: 8px; }
-        
-        @media (max-width: 600px) {
-            .flow-row { flex-wrap: wrap; gap: 10px; }
-            .conn { display: none; }
-            .node { min-width: 100px; min-height: 70px; padding: 10px 12px; }
+        .summary-label {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .summary-value {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 6px;
+        }
+
+        .summary-sub {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+            min-height: 2.4em;
+        }
+
+        .section-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .section-note {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+            margin-top: -6px;
+            margin-bottom: 14px;
+        }
+
+        .inline-actions,
+        .action-row,
+        .route-row,
+        .toggle-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .split-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 16px;
+        }
+
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+        }
+
+        .test-tile {
+            border-radius: 16px;
+            border: 1px solid var(--glass-border);
+            background: var(--glass-bg);
+            padding: 18px;
+            transition: border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+        }
+
+        .test-tile.running {
+            border-color: rgba(59,130,246,0.65);
+            box-shadow: 0 0 0 1px rgba(59,130,246,0.15), 0 12px 30px rgba(37,99,235,0.12);
+        }
+
+        .test-tile.done {
+            border-color: rgba(16,185,129,0.55);
+        }
+
+        .test-tile.error {
+            border-color: rgba(239,68,68,0.55);
+        }
+
+        .tile-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .tile-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .tile-title i { color: #7dd3fc; }
+
+        .tile-subtitle {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+
+        .state-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            border: 1px solid rgba(255,255,255,0.12);
+            color: var(--text-muted);
+            background: rgba(255,255,255,0.04);
+        }
+
+        .state-pill.running {
+            color: #93c5fd;
+            border-color: rgba(59,130,246,0.45);
+            background: rgba(59,130,246,0.14);
+        }
+
+        .state-pill.done {
+            color: #6ee7b7;
+            border-color: rgba(16,185,129,0.45);
+            background: rgba(16,185,129,0.14);
+        }
+
+        .state-pill.error {
+            color: #fca5a5;
+            border-color: rgba(239,68,68,0.45);
+            background: rgba(239,68,68,0.14);
+        }
+
+        .state-pill.warn {
+            color: #fde68a;
+            border-color: rgba(245,158,11,0.42);
+            background: rgba(245,158,11,0.14);
+        }
+
+        .progress-wrap {
+            margin: 12px 0 10px;
+        }
+
+        .progress-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .progress-bar {
+            height: 6px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.08);
+            overflow: hidden;
+        }
+
+        .progress-bar > span {
+            display: block;
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #38bdf8, #3b82f6);
+            transition: width 0.08s linear;
+        }
+
+        .result-line {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            min-height: 1.4em;
+        }
+
+        .sensor-grid,
+        .water-status-grid {
+            display: grid;
+            gap: 10px;
+        }
+
+        .sensor-grid {
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        }
+
+        .sensor-item,
+        .water-stat {
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.03);
+        }
+
+        .sensor-label,
+        .water-stat-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .sensor-value,
+        .water-stat-value {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .water-status-grid {
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            margin-bottom: 14px;
+        }
+
+        .water-stat.wide {
+            grid-column: span 2;
+        }
+
+        .action-group {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .group-label {
+            font-size: 0.76rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+
+        .test-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-height: 42px;
+            padding: 10px 14px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.04);
+            color: var(--text-main);
+            font: inherit;
+            cursor: pointer;
+            transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+        }
+
+        .test-btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            border-color: rgba(255,255,255,0.22);
+            background: rgba(255,255,255,0.07);
+        }
+
+        .test-btn:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        .test-btn.primary {
+            background: linear-gradient(135deg, #0ea5e9, #2563eb);
+            border: none;
+            color: #fff;
+        }
+
+        .test-btn.success {
+            background: linear-gradient(135deg, #10b981, #059669);
+            border: none;
+            color: #fff;
+        }
+
+        .test-btn.warn {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            border: none;
+            color: #fff;
+        }
+
+        .test-btn.danger {
+            background: linear-gradient(135deg, #ef4444, #b91c1c);
+            border: none;
+            color: #fff;
+        }
+
+        .test-btn.active {
+            box-shadow: 0 0 0 2px rgba(56,189,248,0.25);
+            border-color: rgba(56,189,248,0.55);
+        }
+
+        .footer-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .test-log {
+            padding: 16px;
+            border-radius: 16px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+        }
+
+        .test-log-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+
+        #logEntries {
+            max-height: 260px;
+            overflow-y: auto;
+        }
+
+        .test-log-entry {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            padding: 4px 0;
+            font-family: "Fira Code", monospace;
+            line-height: 1.55;
+        }
+
+        .test-log-entry .time {
+            color: #6b7280;
+            margin-right: 8px;
+        }
+
+        @media (max-width: 900px) {
+            .split-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .water-stat.wide {
+                grid-column: auto;
+            }
         }
     </style>
 </head>
@@ -140,351 +438,709 @@
     </div>
 
     <div class="container">
-        <div class="card" style="margin-top:20px;">
-            <div class="flow-canvas" id="flowCanvas">
-                
-                <!-- SENSORS -->
-                <div class="flow-section"><i class="fas fa-microchip"></i> Sensors</div>
-                <div class="flow-row" id="sensorRow">
-                    <div class="node idle sensor-node" id="nodeSensors" onclick="runTest('read_sensors')">
-                        <div class="node-icon"><i class="fas fa-wave-square"></i></div>
-                        <div class="node-label">Read All Sensors</div>
-                        <div class="node-status" id="sensorStatus">Tap to read</div>
-                        <div class="sensor-results" id="sensorResults" style="display:none;">
-                            <div class="sensor-item"><div class="si-label">Water °C</div><div class="si-val" id="srWater">—</div></div>
-                            <div class="sensor-item"><div class="si-label">Air °C</div><div class="si-val" id="srAir">—</div></div>
-                            <div class="sensor-item"><div class="si-label">Humidity</div><div class="si-val" id="srHumid">—</div></div>
-                            <div class="sensor-item"><div class="si-label">TDS ppm</div><div class="si-val" id="srTds">—</div></div>
-                            <div class="sensor-item"><div class="si-label">pH</div><div class="si-val" id="srPh">—</div></div>
-                            <div class="sensor-item"><div class="si-label">Light lux</div><div class="si-val" id="srLight">—</div></div>
+        <div class="page-stack">
+            <div class="intro">
+                ใช้หน้านี้สำหรับทดสอบ <strong>ของที่ firmware รองรับจริงตอนนี้</strong>: อ่านเซ็นเซอร์, ทดสอบปั๊มโดส A/B, เปิดปิดไฟผ่านรีเลย์, และทดสอบระบบน้ำตาม flow ปัจจุบันของ route, manual refill, circulation และ alarm.<br>
+                ระหว่างทดสอบปั๊มโดส ระบบ automation จะ pause ชั่วคราวและ resume เองหลัง test จบ.
+            </div>
+
+            <div class="summary-grid">
+                <div class="summary-card">
+                    <div class="summary-label">ESP Status</div>
+                    <div class="summary-value" id="sumEspStatus">Unknown</div>
+                    <div class="summary-sub" id="sumEspSub">Waiting for live dashboard data</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">Automation</div>
+                    <div class="summary-value" id="sumAutoState">Unknown</div>
+                    <div class="summary-sub" id="sumAutoSub">No automation state yet</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">Water System</div>
+                    <div class="summary-value" id="sumWaterState">Unknown</div>
+                    <div class="summary-sub" id="sumWaterSub">No water status yet</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">Active Route</div>
+                    <div class="summary-value" id="sumRouteState">None</div>
+                    <div class="summary-sub" id="sumRouteSub">Preferred route not loaded yet</div>
+                </div>
+            </div>
+
+            <div class="notice-banner" id="safeStopBanner" role="status" aria-live="polite">
+                <i class="fas fa-triangle-exclamation"></i>
+                <div>
+                    <strong>Safe Stop active:</strong> หน้า test นี้ได้ปิด <strong>auto refill</strong> ไว้เพื่อกันปั๊มเติมกลับมาทำงานเองหลัง stop.
+                    ถ้าจะกลับไปทดสอบ flow เติมน้ำต่อ ให้กด <strong>Enable Auto Refill</strong> อีกครั้งเมื่อพร้อม.
+                </div>
+            </div>
+
+            <div class="split-grid">
+                <div class="card">
+                    <div class="section-head">
+                        <div class="section-title"><i class="fas fa-wave-square"></i> Sensor Snapshot</div>
+                        <button class="test-btn primary" id="btnReadSensors" onclick="runSensorRead()"><i class="fas fa-rotate"></i> Read All Sensors</button>
+                    </div>
+                    <div class="section-note">สั่ง ESP32 อ่านค่า sensor ณ ตอนนั้นทันที และแสดง snapshot แยกจาก live dashboard ปกติ</div>
+                    <div class="sensor-grid" id="sensorResults">
+                        <div class="sensor-item"><div class="sensor-label">Water Temp</div><div class="sensor-value" id="srWater">-</div></div>
+                        <div class="sensor-item"><div class="sensor-label">Air Temp</div><div class="sensor-value" id="srAir">-</div></div>
+                        <div class="sensor-item"><div class="sensor-label">Humidity</div><div class="sensor-value" id="srHumid">-</div></div>
+                        <div class="sensor-item"><div class="sensor-label">TDS</div><div class="sensor-value" id="srTds">-</div></div>
+                        <div class="sensor-item"><div class="sensor-label">pH</div><div class="sensor-value" id="srPh">-</div></div>
+                        <div class="sensor-item"><div class="sensor-label">Light</div><div class="sensor-value" id="srLight">-</div></div>
+                    </div>
+                    <div class="action-group">
+                        <div class="group-label">Last Sensor Test</div>
+                        <div class="result-line" id="sensorStatusLine">Idle</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="section-head">
+                        <div class="section-title"><i class="fas fa-circle-info"></i> Test Safety</div>
+                    </div>
+                    <div class="section-note">หน้าทดสอบนี้ตั้งใจให้ตรงกับ feature ปัจจุบันของ firmware: ไม่มี water pump test แบบเก่าแล้ว เพราะ flow น้ำตอนนี้ควบคุมผ่าน water system state machine ไม่ใช่ command test แยกตัว</div>
+                    <div class="water-status-grid">
+                        <div class="water-stat"><div class="water-stat-label">Dosing Test</div><div class="water-stat-value">Pump A / B only</div></div>
+                        <div class="water-stat"><div class="water-stat-label">Light Test</div><div class="water-stat-value">Relay ON / OFF</div></div>
+                        <div class="water-stat"><div class="water-stat-label">Water Test</div><div class="water-stat-value">Config + Manual Actions</div></div>
+                        <div class="water-stat"><div class="water-stat-label">Safe Stop</div><div class="water-stat-value">Pump Stop + Light Off + Refill OFF</div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="test-grid">
+                <div class="test-tile" id="tilePumpA">
+                    <div class="tile-head">
+                        <div>
+                            <div class="tile-title"><i class="fas fa-flask"></i> Pump A Test</div>
+                            <div class="tile-subtitle">ทดสอบปั๊มโดส Nutrient A 3 วินาทีผ่าน GPIO 10</div>
+                        </div>
+                        <div class="state-pill" id="pumpAState">Idle</div>
+                    </div>
+                    <div class="progress-wrap">
+                        <div class="progress-meta"><span>Remaining</span><span id="pumpATime">3.0s</span></div>
+                        <div class="progress-bar"><span id="pumpABar"></span></div>
+                    </div>
+                    <div class="result-line" id="pumpAResult">Ready</div>
+                    <div class="action-group">
+                        <div class="action-row">
+                            <button class="test-btn primary" onclick="runPumpTest('pump_a')"><i class="fas fa-play"></i> Run Pump A</button>
                         </div>
                     </div>
                 </div>
 
-                <!-- PUMPS -->
-                <div class="flow-section"><i class="fas fa-pump-medical"></i> Dosing Pumps</div>
-                
-                <div class="flow-row">
-                    <div class="node idle" id="nodePumpA" onclick="runPump('pump_a')">
-                        <div class="node-icon"><i class="fas fa-flask"></i></div>
-                        <div class="node-label">Pump A</div>
-                        <div class="node-value">Nutrient A</div>
-                        <div class="node-status" id="pumpAStatus">GPIO 10</div>
-                        <div class="node-progress"><div class="node-progress-bar" id="pumpABar"></div></div>
+                <div class="test-tile" id="tilePumpB">
+                    <div class="tile-head">
+                        <div>
+                            <div class="tile-title"><i class="fas fa-flask"></i> Pump B Test</div>
+                            <div class="tile-subtitle">ทดสอบปั๊มโดส Nutrient B 3 วินาทีผ่าน GPIO 11</div>
+                        </div>
+                        <div class="state-pill" id="pumpBState">Idle</div>
                     </div>
-                    <div class="conn" id="connA1"></div>
-                    <div class="node idle" id="nodePumpATimer">
-                        <div class="node-icon"><i class="fas fa-hourglass-half"></i></div>
-                        <div class="node-label">Timer</div>
-                        <div class="node-value" id="pumpATime">3.0s</div>
+                    <div class="progress-wrap">
+                        <div class="progress-meta"><span>Remaining</span><span id="pumpBTime">3.0s</span></div>
+                        <div class="progress-bar"><span id="pumpBBar"></span></div>
                     </div>
-                    <div class="conn" id="connA2"></div>
-                    <div class="node idle" id="nodePumpAResult">
-                        <div class="node-icon"><i class="fas fa-check-circle"></i></div>
-                        <div class="node-label">Result</div>
-                        <div class="node-value" id="pumpAResult">—</div>
+                    <div class="result-line" id="pumpBResult">Ready</div>
+                    <div class="action-group">
+                        <div class="action-row">
+                            <button class="test-btn primary" onclick="runPumpTest('pump_b')"><i class="fas fa-play"></i> Run Pump B</button>
+                        </div>
                     </div>
                 </div>
 
-                <div class="flow-row">
-                    <div class="node idle" id="nodePumpB" onclick="runPump('pump_b')">
-                        <div class="node-icon"><i class="fas fa-flask"></i></div>
-                        <div class="node-label">Pump B</div>
-                        <div class="node-value">Nutrient B</div>
-                        <div class="node-status" id="pumpBStatus">GPIO 11</div>
-                        <div class="node-progress"><div class="node-progress-bar" id="pumpBBar"></div></div>
+                <div class="test-tile" id="tileLight">
+                    <div class="tile-head">
+                        <div>
+                            <div class="tile-title"><i class="fas fa-lightbulb"></i> Light Relay Test</div>
+                            <div class="tile-subtitle">ทดสอบเปิดปิดรีเลย์ไฟปลูกผ่าน light controller</div>
+                        </div>
+                        <div class="state-pill" id="lightState">Unknown</div>
                     </div>
-                    <div class="conn" id="connB1"></div>
-                    <div class="node idle" id="nodePumpBTimer">
-                        <div class="node-icon"><i class="fas fa-hourglass-half"></i></div>
-                        <div class="node-label">Timer</div>
-                        <div class="node-value" id="pumpBTime">3.0s</div>
+                    <div class="result-line" id="lightResult">Waiting for command</div>
+                    <div class="action-group">
+                        <div class="action-row">
+                            <button class="test-btn warn" onclick="runLightTest('light_on')"><i class="fas fa-sun"></i> Light ON</button>
+                            <button class="test-btn" onclick="runLightTest('light_off')"><i class="fas fa-moon"></i> Light OFF</button>
+                        </div>
                     </div>
-                    <div class="conn" id="connB2"></div>
-                    <div class="node idle" id="nodePumpBResult">
-                        <div class="node-icon"><i class="fas fa-check-circle"></i></div>
-                        <div class="node-label">Result</div>
-                        <div class="node-value" id="pumpBResult">—</div>
-                    </div>
-                </div>
-
-                <div class="flow-row">
-                    <div class="node idle" id="nodePumpW" onclick="runPump('pump_w')">
-                        <div class="node-icon"><i class="fas fa-faucet"></i></div>
-                        <div class="node-label">Water</div>
-                        <div class="node-value">Water Pump</div>
-                        <div class="node-status" id="pumpWStatus">GPIO 12</div>
-                        <div class="node-progress"><div class="node-progress-bar" id="pumpWBar"></div></div>
-                    </div>
-                    <div class="conn" id="connW1"></div>
-                    <div class="node idle" id="nodePumpWTimer">
-                        <div class="node-icon"><i class="fas fa-hourglass-half"></i></div>
-                        <div class="node-label">Timer</div>
-                        <div class="node-value" id="pumpWTime">3.0s</div>
-                    </div>
-                    <div class="conn" id="connW2"></div>
-                    <div class="node idle" id="nodePumpWResult">
-                        <div class="node-icon"><i class="fas fa-check-circle"></i></div>
-                        <div class="node-label">Result</div>
-                        <div class="node-value" id="pumpWResult">—</div>
-                    </div>
-                </div>
-
-                <!-- LIGHT -->
-                <div class="flow-section"><i class="fas fa-lightbulb"></i> Light Control</div>
-                <div class="flow-row">
-                    <div class="node idle" id="nodeLightOn" onclick="runTest('light_on')">
-                        <div class="node-icon"><i class="fas fa-sun"></i></div>
-                        <div class="node-label">Light ON</div>
-                        <div class="node-status" id="lightOnStatus">NeoPixel</div>
-                    </div>
-                    <div class="conn" id="connL"></div>
-                    <div class="node idle" id="nodeLightOff" onclick="runTest('light_off')">
-                        <div class="node-icon"><i class="fas fa-moon"></i></div>
-                        <div class="node-label">Light OFF</div>
-                        <div class="node-status" id="lightOffStatus">NeoPixel</div>
-                    </div>
-                </div>
-
-                <!-- EMERGENCY STOP -->
-                <div class="estop-container">
-                    <button class="estop-btn" onclick="emergencyStop()">
-                        <i class="fas fa-hand-paper"></i> Emergency Stop All
-                    </button>
                 </div>
             </div>
-        </div>
 
-        <!-- Test Log -->
-        <div class="test-log" id="testLog">
-            <div class="test-log-title"><i class="fas fa-scroll"></i> Test Log</div>
-            <div id="logEntries"></div>
+            <div class="card">
+                <div class="section-head">
+                    <div class="section-title"><i class="fas fa-water"></i> Water System Test</div>
+                    <button class="test-btn" onclick="refreshWaterConfig()"><i class="fas fa-arrows-rotate"></i> Refresh Water Config</button>
+                </div>
+                <div class="section-note">ส่วนนี้ใช้ route/control เดียวกับหน้า settings: ปรับ config แล้วส่งไป ESP32, ดู state สด, และสั่ง manual refill หรือ clear alarm ได้ตรงจากหน้า test</div>
+
+                <div class="water-status-grid">
+                    <div class="water-stat"><div class="water-stat-label">State</div><div class="water-stat-value" id="waterState">Unknown</div></div>
+                    <div class="water-stat"><div class="water-stat-label">Active Route</div><div class="water-stat-value" id="waterRoute">None</div></div>
+                    <div class="water-stat"><div class="water-stat-label">Alarm</div><div class="water-stat-value" id="waterAlarm">Unknown</div></div>
+                    <div class="water-stat"><div class="water-stat-label">Route Blocked</div><div class="water-stat-value" id="waterBlocked">Unknown</div></div>
+                    <div class="water-stat"><div class="water-stat-label">Circulation Output</div><div class="water-stat-value" id="waterCircOutput">Unknown</div></div>
+                    <div class="water-stat"><div class="water-stat-label">Refill Output</div><div class="water-stat-value" id="waterRefillOutput">Unknown</div></div>
+                    <div class="water-stat"><div class="water-stat-label">Sump Low</div><div class="water-stat-value" id="waterLow">Unknown</div></div>
+                    <div class="water-stat"><div class="water-stat-label">Sump High</div><div class="water-stat-value" id="waterHigh">Unknown</div></div>
+                    <div class="water-stat"><div class="water-stat-label">Overflow Alarm</div><div class="water-stat-value" id="waterOverflow">Unknown</div></div>
+                    <div class="water-stat"><div class="water-stat-label">Route Valve</div><div class="water-stat-value" id="waterValve">Unknown</div></div>
+                    <div class="water-stat wide"><div class="water-stat-label">Reason</div><div class="water-stat-value" id="waterReason">Waiting for water status</div></div>
+                </div>
+
+                <div class="action-group">
+                    <div class="group-label">Circulation</div>
+                    <div class="toggle-row">
+                        <button class="test-btn" id="btnCircOn" onclick="setCirculation(true)"><i class="fas fa-circle-play"></i> Circulation ON</button>
+                        <button class="test-btn" id="btnCircOff" onclick="setCirculation(false)"><i class="fas fa-circle-stop"></i> Circulation OFF</button>
+                    </div>
+                </div>
+
+                <div class="action-group">
+                    <div class="group-label">Auto Refill</div>
+                    <div class="toggle-row">
+                        <button class="test-btn" id="btnRefillAutoOn" onclick="setAutoRefill(true)"><i class="fas fa-droplet"></i> Enable Auto Refill</button>
+                        <button class="test-btn" id="btnRefillAutoOff" onclick="setAutoRefill(false)"><i class="fas fa-ban"></i> Disable Auto Refill</button>
+                    </div>
+                </div>
+
+                <div class="action-group">
+                    <div class="group-label">Preferred Route</div>
+                    <div class="route-row">
+                        <button class="test-btn" id="btnRouteAuto" onclick="setPreferredRoute('AUTO')"><i class="fas fa-wand-magic-sparkles"></i> AUTO</button>
+                        <button class="test-btn" id="btnRouteFish" onclick="setPreferredRoute('FISH_TANK')"><i class="fas fa-fish"></i> FISH TANK</button>
+                        <button class="test-btn" id="btnRouteSump" onclick="setPreferredRoute('SUMP_DIRECT')"><i class="fas fa-arrow-down-short-wide"></i> DIRECT SUMP</button>
+                    </div>
+                </div>
+
+                <div class="action-group">
+                    <div class="group-label">Direct Sump Fallback</div>
+                    <div class="toggle-row">
+                        <button class="test-btn" id="btnDirectOn" onclick="setDirectFallback(true)"><i class="fas fa-check"></i> Allow Direct Fallback</button>
+                        <button class="test-btn" id="btnDirectOff" onclick="setDirectFallback(false)"><i class="fas fa-xmark"></i> Disable Direct Fallback</button>
+                    </div>
+                </div>
+
+                <div class="action-group">
+                    <div class="group-label">Manual Actions</div>
+                    <div class="action-row">
+                        <button class="test-btn success" onclick="setManualRefill(true)"><i class="fas fa-fill-drip"></i> Manual Refill ON</button>
+                        <button class="test-btn" onclick="setManualRefill(false)"><i class="fas fa-hand"></i> Manual Refill OFF</button>
+                        <button class="test-btn danger" onclick="clearWaterAlarm()"><i class="fas fa-shield"></i> Clear Alarm</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="section-head">
+                    <div class="section-title"><i class="fas fa-hand"></i> Safe Stop</div>
+                </div>
+                <div class="section-note">ใช้หยุด output ที่ทดสอบจากหน้า hw test โดยให้ฝั่งน้ำหยุดจริง: หยุดปั๊มโดส, ปิดไฟ, ปิด manual refill, และปิด auto refill เพื่อไม่ให้ปั๊มเติมกลับมาทำงานเอง</div>
+                <div class="footer-actions">
+                    <button class="test-btn danger" onclick="safeStopAll()"><i class="fas fa-octagon-exclamation"></i> Stop Test Outputs</button>
+                </div>
+            </div>
+
+            <div class="test-log">
+                <div class="test-log-title"><i class="fas fa-scroll"></i> Test Log</div>
+                <div id="logEntries"></div>
+            </div>
         </div>
     </div>
 
     <script src="/static/js/socket.io.min.js"></script>
     <script>
-        const socket = io();
+        const socket = io({ transports: ['websocket', 'polling'] });
         const PUMP_DURATION = 3000;
-        let pumpTimers = {};
+        const DEFAULT_WATER_CONFIG = {
+            circulation_enabled: true,
+            refill_enabled: false,
+            manual_refill: false,
+            refill_max_runtime_ms: 120000,
+            preferred_route: 'AUTO',
+            allow_direct_sump_refill: true
+        };
+
+        const pumpTimers = { a: null, b: null };
+        let waterConfig = { ...DEFAULT_WATER_CONFIG };
+        let liveSensors = {};
+        let waterStatus = {};
+        let safeStopNoticeActive = false;
 
         function timeStr() {
-            return new Date().toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+            return new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         }
 
-        function addLog(msg) {
-            const el = document.getElementById('logEntries');
+        function addLog(message) {
+            const container = document.getElementById('logEntries');
             const div = document.createElement('div');
             div.className = 'test-log-entry';
-            div.innerHTML = `<span class="time">${timeStr()}</span>${msg}`;
-            el.prepend(div);
-            // Keep max 50 entries
-            while (el.children.length > 50) el.removeChild(el.lastChild);
-        }
-
-        // Generic test command
-        async function runTest(cmd) {
-            // Prevent duplicate clicks if node is already running
-            if (cmd === 'read_sensors' && document.getElementById('nodeSensors').className.includes('running')) return;
-            if (cmd === 'light_on' && document.getElementById('nodeLightOn').className.includes('running')) return;
-            if (cmd === 'light_off' && document.getElementById('nodeLightOff').className.includes('running')) return;
-
-            addLog(`▶️ Sending: ${cmd}`);
-            try {
-                const r = await fetch('/api/hwtest/command', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({cmd, duration: PUMP_DURATION})
-                });
-                const d = await r.json();
-                if (d.status === 'ok') {
-                    addLog(`📡 Command sent: ${cmd}`);
-                    if (cmd === 'read_sensors') {
-                        setNodeState('nodeSensors', 'running');
-                        document.getElementById('sensorStatus').textContent = 'Reading...';
-                    }
-                    if (cmd === 'light_on') setNodeState('nodeLightOn', 'running');
-                    if (cmd === 'light_off') setNodeState('nodeLightOff', 'running');
-                } else {
-                    addLog(`❌ Error: ${d.message}`);
-                }
-            } catch(e) {
-                addLog(`❌ Network error: ${e.message}`);
+            div.innerHTML = `<span class="time">${timeStr()}</span>${message}`;
+            container.prepend(div);
+            while (container.children.length > 60) {
+                container.removeChild(container.lastChild);
             }
         }
 
-        // Pump test with visual countdown
-        async function runPump(cmd) {
+        function setButtonActive(id, active) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.classList.toggle('active', active);
+        }
+
+        function renderSafeStopBanner() {
+            const banner = document.getElementById('safeStopBanner');
+            if (!banner) return;
+            banner.classList.toggle('show', safeStopNoticeActive === true);
+        }
+
+        function setTileState(tileId, pillId, state, label) {
+            const tile = document.getElementById(tileId);
+            const pill = document.getElementById(pillId);
+            if (!tile || !pill) return;
+            tile.classList.remove('running', 'done', 'error');
+            pill.className = 'state-pill';
+
+            if (state === 'running') {
+                tile.classList.add('running');
+                pill.classList.add('running');
+            } else if (state === 'done') {
+                tile.classList.add('done');
+                pill.classList.add('done');
+            } else if (state === 'error') {
+                tile.classList.add('error');
+                pill.classList.add('error');
+            } else if (state === 'warn') {
+                pill.classList.add('warn');
+            }
+
+            pill.textContent = label;
+        }
+
+        function setPumpDisplay(key, state, result, timeText, progressWidth) {
+            const upper = key.toUpperCase();
+            setTileState(`tilePump${upper}`, `pump${upper}State`, state, state === 'running' ? 'Running' : state === 'done' ? 'Done' : state === 'error' ? 'Error' : 'Idle');
+            document.getElementById(`pump${upper}Result`).textContent = result;
+            document.getElementById(`pump${upper}Time`).textContent = timeText;
+            document.getElementById(`pump${upper}Bar`).style.width = progressWidth;
+        }
+
+        function formatBool(value) {
+            return value ? 'YES' : 'NO';
+        }
+
+        function formatValue(value, suffix = '') {
+            if (value === null || value === undefined || value === '' || Number.isNaN(value)) return '-';
+            return `${value}${suffix}`;
+        }
+
+        async function sendHwCommand(cmd, duration = PUMP_DURATION) {
+            const response = await fetch('/api/hwtest/command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cmd, duration })
+            });
+            return response.json();
+        }
+
+        async function fetchSettings() {
+            const response = await fetch('/api/settings', { cache: 'no-store' });
+            if (!response.ok) {
+                throw new Error(`settings HTTP ${response.status}`);
+            }
+            return response.json();
+        }
+
+        function applyWaterConfigFromSettings(settings) {
+            const ws = settings.water_system || {};
+            waterConfig = {
+                ...DEFAULT_WATER_CONFIG,
+                ...waterConfig,
+                circulation_enabled: ws.circulation_enabled ?? waterConfig.circulation_enabled,
+                refill_enabled: ws.refill_enabled ?? waterConfig.refill_enabled,
+                manual_refill: ws.manual_refill ?? waterConfig.manual_refill,
+                refill_max_runtime_ms: ws.refill_max_runtime_ms ?? waterConfig.refill_max_runtime_ms,
+                preferred_route: ws.preferred_route ?? waterConfig.preferred_route,
+                allow_direct_sump_refill: ws.allow_direct_sump_refill ?? waterConfig.allow_direct_sump_refill
+            };
+            waterStatus = { ...waterStatus, ...ws };
+            renderWaterControls();
+            renderWaterStatus();
+        }
+
+        function getLiveWaterState() {
+            return {
+                state: liveSensors.water_state,
+                active_route: liveSensors.active_route,
+                water_alarm: liveSensors.water_alarm,
+                route_blocked: liveSensors.route_blocked,
+                circ_running: liveSensors.circ_running,
+                refill_running: liveSensors.refill_running,
+                sump_low: liveSensors.sump_low,
+                sump_high: liveSensors.sump_high,
+                fish_overflow: liveSensors.fish_overflow,
+                reason: liveSensors.water_reason,
+                preferred_route: liveSensors.preferred_route,
+                allow_direct_sump_refill: liveSensors.allow_direct_sump_refill,
+                manual_refill: liveSensors.manual_refill
+            };
+        }
+
+        async function refreshWaterConfig(silent = false) {
+            try {
+                const settings = await fetchSettings();
+                applyWaterConfigFromSettings(settings);
+                if (!silent) {
+                    addLog('🔄 Refreshed water config from Pi settings');
+                }
+            } catch (error) {
+                if (!silent) {
+                    addLog(`❌ Failed to load water config: ${error.message}`);
+                }
+            }
+        }
+
+        function renderWaterControls() {
+            setButtonActive('btnCircOn', waterConfig.circulation_enabled === true);
+            setButtonActive('btnCircOff', waterConfig.circulation_enabled === false);
+            setButtonActive('btnRefillAutoOn', waterConfig.refill_enabled === true);
+            setButtonActive('btnRefillAutoOff', waterConfig.refill_enabled === false);
+            setButtonActive('btnRouteAuto', waterConfig.preferred_route === 'AUTO');
+            setButtonActive('btnRouteFish', waterConfig.preferred_route === 'FISH_TANK');
+            setButtonActive('btnRouteSump', waterConfig.preferred_route === 'SUMP_DIRECT');
+            setButtonActive('btnDirectOn', waterConfig.allow_direct_sump_refill === true);
+            setButtonActive('btnDirectOff', waterConfig.allow_direct_sump_refill === false);
+
+            if (waterConfig.refill_enabled === true) {
+                safeStopNoticeActive = false;
+            }
+            renderSafeStopBanner();
+        }
+
+        function renderWaterStatus() {
+            const liveWater = getLiveWaterState();
+            const status = { ...waterConfig, ...waterStatus };
+
+            const stateText = liveWater.state || status.state || 'Unknown';
+            const activeRoute = liveWater.active_route || status.active_route || liveWater.preferred_route || status.preferred_route || 'NONE';
+            const alarmActive = liveWater.water_alarm ?? status.alarm_active;
+            const routeBlocked = liveWater.route_blocked ?? status.route_blocked;
+            const circOutput = liveWater.circ_running ?? status.circulation_output;
+            const refillOutput = liveWater.refill_running ?? status.refill_output;
+            const sumpLow = liveWater.sump_low ?? status.sump_low;
+            const sumpHigh = liveWater.sump_high ?? status.sump_high;
+            const overflowAlarm = liveWater.fish_overflow ?? status.overflow_alarm;
+            const reasonText = liveWater.reason || status.reason || 'Waiting for water status';
+            const preferredRoute = liveWater.preferred_route || status.preferred_route || waterConfig.preferred_route || 'UNKNOWN';
+            const directFallback = liveWater.allow_direct_sump_refill ?? status.allow_direct_sump_refill ?? waterConfig.allow_direct_sump_refill;
+
+            document.getElementById('waterState').textContent = stateText;
+            document.getElementById('waterRoute').textContent = activeRoute;
+            document.getElementById('waterAlarm').textContent = formatBool(Boolean(alarmActive));
+            document.getElementById('waterBlocked').textContent = formatBool(Boolean(routeBlocked));
+            document.getElementById('waterCircOutput').textContent = formatBool(Boolean(circOutput));
+            document.getElementById('waterRefillOutput').textContent = formatBool(Boolean(refillOutput));
+            document.getElementById('waterLow').textContent = formatBool(Boolean(sumpLow));
+            document.getElementById('waterHigh').textContent = formatBool(Boolean(sumpHigh));
+            document.getElementById('waterOverflow').textContent = formatBool(Boolean(overflowAlarm));
+            document.getElementById('waterValve').textContent = status.has_route_valve ? (status.route_valve_output ? 'DIRECT SUMP' : 'FISH TANK') : 'NO VALVE';
+            document.getElementById('waterReason').textContent = reasonText;
+
+            document.getElementById('sumWaterState').textContent = stateText;
+            document.getElementById('sumWaterSub').textContent = reasonText;
+            document.getElementById('sumRouteState').textContent = activeRoute;
+            document.getElementById('sumRouteSub').textContent = `Preferred: ${preferredRoute} | Direct fallback: ${directFallback ? 'ON' : 'OFF'}`;
+        }
+
+        async function getLatestWaterSettings() {
+            const settings = await fetchSettings();
+            applyWaterConfigFromSettings(settings);
+            return settings.water_system || {};
+        }
+
+        async function saveWaterConfig(extra = {}, logLabel = 'Water config updated') {
+            const latest = await getLatestWaterSettings();
+            const payload = {
+                circulation_enabled: latest.circulation_enabled ?? waterConfig.circulation_enabled,
+                refill_enabled: latest.refill_enabled ?? waterConfig.refill_enabled,
+                manual_refill: latest.manual_refill ?? false,
+                clear_alarm: false,
+                refill_max_runtime_ms: latest.refill_max_runtime_ms ?? waterConfig.refill_max_runtime_ms,
+                preferred_route: latest.preferred_route ?? waterConfig.preferred_route,
+                allow_direct_sump_refill: latest.allow_direct_sump_refill ?? waterConfig.allow_direct_sump_refill,
+                ...extra
+            };
+
+            const response = await fetch('/api/water_system/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+            if (result.status !== 'ok') {
+                throw new Error(result.message || 'Water config failed');
+            }
+
+            waterConfig = {
+                ...waterConfig,
+                circulation_enabled: payload.circulation_enabled,
+                refill_enabled: payload.refill_enabled,
+                manual_refill: payload.manual_refill,
+                refill_max_runtime_ms: payload.refill_max_runtime_ms,
+                preferred_route: payload.preferred_route,
+                allow_direct_sump_refill: payload.allow_direct_sump_refill
+            };
+
+            renderWaterControls();
+            addLog(`💧 ${logLabel}`);
+            await refreshWaterConfig();
+        }
+
+        async function setCirculation(enabled) {
+            try {
+                await saveWaterConfig({ circulation_enabled: enabled }, `Circulation ${enabled ? 'enabled' : 'disabled'}`);
+            } catch (error) {
+                addLog(`❌ Failed to change circulation: ${error.message}`);
+            }
+        }
+
+        async function setAutoRefill(enabled) {
+            try {
+                await saveWaterConfig({ refill_enabled: enabled }, `Auto refill ${enabled ? 'enabled' : 'disabled'}`);
+                if (enabled) {
+                    safeStopNoticeActive = false;
+                    renderSafeStopBanner();
+                }
+            } catch (error) {
+                addLog(`❌ Failed to change auto refill: ${error.message}`);
+            }
+        }
+
+        async function setPreferredRoute(route) {
+            try {
+                await saveWaterConfig({ preferred_route: route }, `Preferred route set to ${route}`);
+            } catch (error) {
+                addLog(`❌ Failed to change route: ${error.message}`);
+            }
+        }
+
+        async function setDirectFallback(enabled) {
+            try {
+                await saveWaterConfig({ allow_direct_sump_refill: enabled }, `Direct sump fallback ${enabled ? 'enabled' : 'disabled'}`);
+            } catch (error) {
+                addLog(`❌ Failed to change direct fallback: ${error.message}`);
+            }
+        }
+
+        async function setManualRefill(enabled) {
+            try {
+                await saveWaterConfig({ manual_refill: enabled }, `Manual refill ${enabled ? 'started' : 'stopped'}`);
+            } catch (error) {
+                addLog(`❌ Failed to change manual refill: ${error.message}`);
+            }
+        }
+
+        async function clearWaterAlarm() {
+            try {
+                await saveWaterConfig({ manual_refill: false, clear_alarm: true }, 'Clear water alarm sent');
+            } catch (error) {
+                addLog(`❌ Failed to clear water alarm: ${error.message}`);
+            }
+        }
+
+        async function runSensorRead() {
+            const button = document.getElementById('btnReadSensors');
+            button.disabled = true;
+            document.getElementById('sensorStatusLine').textContent = 'Reading sensors...';
+            addLog('📡 Requesting sensor snapshot');
+
+            try {
+                const result = await sendHwCommand('read_sensors');
+                if (result.status !== 'ok') {
+                    throw new Error(result.message || 'read_sensors failed');
+                }
+            } catch (error) {
+                document.getElementById('sensorStatusLine').textContent = `Error: ${error.message}`;
+                addLog(`❌ Sensor read request failed: ${error.message}`);
+                button.disabled = false;
+            }
+        }
+
+        async function runLightTest(cmd) {
+            setTileState('tileLight', 'lightState', 'running', 'Sending');
+            document.getElementById('lightResult').textContent = `Sending ${cmd}...`;
+            addLog(`💡 Sending ${cmd}`);
+
+            try {
+                const result = await sendHwCommand(cmd);
+                if (result.status !== 'ok') {
+                    throw new Error(result.message || `${cmd} failed`);
+                }
+            } catch (error) {
+                setTileState('tileLight', 'lightState', 'error', 'Error');
+                document.getElementById('lightResult').textContent = error.message;
+                addLog(`❌ Light command failed: ${error.message}`);
+            }
+        }
+
+        async function runPumpTest(cmd) {
             const key = cmd.replace('pump_', '');
-            const prefix = key.toUpperCase();
-            
-            // Prevent multiple clicks while pump is running
-            if (document.getElementById('pump' + prefix + 'Status').textContent === 'RUNNING') {
-                addLog(`⚠️ Pump ${prefix} is already running!`);
+            if (pumpTimers[key]) {
+                addLog(`⚠️ Pump ${key.toUpperCase()} test already running`);
                 return;
             }
-            
-            // Send command
-            addLog(`▶️ Starting Pump ${prefix} test (${PUMP_DURATION/1000}s)...`);
+
+            const upper = key.toUpperCase();
+            setPumpDisplay(key, 'running', 'Pump running...', `${(PUMP_DURATION / 1000).toFixed(1)}s`, '0%');
+            addLog(`🧪 Starting Pump ${upper} test for ${PUMP_DURATION / 1000}s`);
+
             try {
-                const r = await fetch('/api/hwtest/command', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({cmd, duration: PUMP_DURATION})
-                });
-                const d = await r.json();
-                if (d.status !== 'ok') {
-                    addLog(`❌ Error: ${d.message}`);
-                    return;
+                const result = await sendHwCommand(cmd, PUMP_DURATION);
+                if (result.status !== 'ok') {
+                    throw new Error(result.message || `${cmd} failed`);
                 }
-            } catch(e) {
-                addLog(`❌ Network error: ${e.message}`);
+            } catch (error) {
+                setPumpDisplay(key, 'error', error.message, `${(PUMP_DURATION / 1000).toFixed(1)}s`, '0%');
+                addLog(`❌ Pump ${upper} request failed: ${error.message}`);
                 return;
             }
-            
-            // Visual: set running state
-            const nodeId = 'nodePump' + prefix;
-            const timerId = 'nodePump' + prefix + 'Timer';
-            const barId = 'pump' + prefix + 'Bar';
-            const timeId = 'pump' + prefix + 'Time';
-            const statusId = 'pump' + prefix + 'Status';
-            const connId1 = 'conn' + prefix + '1';
-            
-            setNodeState(nodeId, 'running');
-            setNodeState(timerId, 'running');
-            document.getElementById(statusId).textContent = 'RUNNING';
-            document.getElementById(connId1).className = 'conn active';
-            
-            // Countdown animation
-            const start = Date.now();
-            if (pumpTimers[key]) clearInterval(pumpTimers[key]);
-            
-            pumpTimers[key] = setInterval(() => {
-                const elapsed = Date.now() - start;
+
+            const startedAt = Date.now();
+            pumpTimers[key] = window.setInterval(() => {
+                const elapsed = Date.now() - startedAt;
+                const remaining = Math.max(0, (PUMP_DURATION - elapsed) / 1000);
                 const pct = Math.min(100, (elapsed / PUMP_DURATION) * 100);
-                const remain = Math.max(0, (PUMP_DURATION - elapsed) / 1000);
-                
-                document.getElementById(barId).style.width = pct + '%';
-                document.getElementById(timeId).textContent = remain.toFixed(1) + 's';
-                
+                document.getElementById(`pump${upper}Time`).textContent = `${remaining.toFixed(1)}s`;
+                document.getElementById(`pump${upper}Bar`).style.width = `${pct}%`;
+
                 if (elapsed >= PUMP_DURATION) {
                     clearInterval(pumpTimers[key]);
-                    
-                    // Send pump_stop command — same path as Emergency Stop (proven to work!)
-                    addLog(`⏱️ Timer expired — sending stop command for Pump ${prefix}`);
-                    fetch('/api/hwtest', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({cmd: 'pump_stop'})
-                    }).then(() => {
-                        addLog(`✅ Stop command sent for Pump ${prefix}`);
-                    }).catch(e => {
-                        addLog(`❌ Failed to send stop: ${e.message}`);
-                    });
-                    
-                    // Update UI to done
-                    setNodeState(nodeId, 'done');
-                    setNodeState(timerId, 'done');
-                    setNodeState('nodePump' + prefix + 'Result', 'done');
-                    document.getElementById('pump' + prefix + 'Result').textContent = '✅ Done';
-                    document.getElementById(statusId).textContent = 'COMPLETED';
-                    document.getElementById(barId).style.width = '100%';
-                    document.getElementById(connId1).className = 'conn done';
-                    document.getElementById('conn' + prefix + '2').className = 'conn done';
+                    pumpTimers[key] = null;
                 }
-            }, 50);
+            }, 80);
         }
 
-        function emergencyStop() {
-            addLog('🛑 EMERGENCY STOP — All pumps');
-            runTest('pump_stop');
-            // Reset all pump nodes
-            ['A','B','W'].forEach(k => {
-                const nodeId = 'nodePump' + k;
-                const timerId = 'nodePump' + k + 'Timer';
-                const resultId = 'nodePump' + k + 'Result';
-                setNodeState(nodeId, 'error');
-                setNodeState(timerId, 'idle');
-                setNodeState(resultId, 'error');
-                document.getElementById('pump' + k + 'Result').textContent = 'STOPPED';
-                document.getElementById('pump' + k + 'Status').textContent = 'STOPPED';
-                document.getElementById('pump' + k + 'Bar').style.width = '0%';
-                document.getElementById('conn' + k + '1').className = 'conn';
-                document.getElementById('conn' + k + '2').className = 'conn';
-                if (pumpTimers[k.toLowerCase()]) clearInterval(pumpTimers[k.toLowerCase()]);
+        async function stopDosingTests() {
+            try {
+                const result = await sendHwCommand('pump_stop');
+                if (result.status !== 'ok') {
+                    throw new Error(result.message || 'pump_stop failed');
+                }
+                addLog('🛑 Dosing pumps stop requested');
+            } catch (error) {
+                addLog(`❌ Failed to stop pumps: ${error.message}`);
+            }
+
+            ['a', 'b'].forEach((key) => {
+                if (pumpTimers[key]) {
+                    clearInterval(pumpTimers[key]);
+                    pumpTimers[key] = null;
+                }
+                setPumpDisplay(key, 'error', 'Stopped by safe stop', `${(PUMP_DURATION / 1000).toFixed(1)}s`, '0%');
             });
         }
 
-        function setNodeState(nodeId, state) {
-            const el = document.getElementById(nodeId);
-            if (!el) return;
-            el.className = el.className.replace(/idle|running|done|error/g, '').trim() + ' ' + state;
+        async function safeStopAll() {
+            addLog('🛑 Safe stop requested');
+            await stopDosingTests();
+            await runLightTest('light_off');
+            try {
+                await saveWaterConfig({
+                    manual_refill: false,
+                    refill_enabled: false
+                }, 'Safe stop applied: manual refill OFF and auto refill disabled');
+                safeStopNoticeActive = true;
+                renderSafeStopBanner();
+            } catch (error) {
+                addLog(`❌ Failed to stop water outputs: ${error.message}`);
+            }
         }
 
-        // WebSocket: receive results from ESP32
-        socket.on('hwtest_result', function(data) {
+        function updateLiveSummary(sensors) {
+            liveSensors = sensors || {};
+
+            const espStatus = sensors.esp_status || 'UNKNOWN';
+            document.getElementById('sumEspStatus').textContent = espStatus;
+            if (espStatus === 'ONLINE') {
+                document.getElementById('sumEspSub').textContent = `Last seen ${sensors.last_seen_sec ?? 0}s ago`;
+            } else {
+                document.getElementById('sumEspSub').textContent = 'No recent sensor payload from ESP32';
+            }
+
+            document.getElementById('sumAutoState').textContent = sensors.auto_state || 'UNKNOWN';
+            document.getElementById('sumAutoSub').textContent = sensors.auto_reason || 'No automation reason';
+
+            renderWaterStatus();
+        }
+
+        function handleHwTestResult(data) {
             const cmd = data.cmd;
             const status = data.status;
-            addLog(`📩 Result: ${cmd} → ${status}`);
-            
-            // Sensor results
+            addLog(`📩 ${cmd} -> ${status}`);
+
             if (cmd === 'read_sensors' && status === 'ok') {
-                setNodeState('nodeSensors', 'done');
-                document.getElementById('sensorStatus').textContent = '✅ Done';
-                document.getElementById('sensorResults').style.display = 'grid';
-                if (data.water_temp) document.getElementById('srWater').textContent = data.water_temp;
-                if (data.air_temp) document.getElementById('srAir').textContent = data.air_temp;
-                if (data.humidity) document.getElementById('srHumid').textContent = data.humidity + '%';
-                if (data.tds) document.getElementById('srTds').textContent = data.tds;
-                if (data.ph) document.getElementById('srPh').textContent = data.ph;
-                if (data.light) document.getElementById('srLight').textContent = data.light;
+                document.getElementById('btnReadSensors').disabled = false;
+                document.getElementById('sensorStatusLine').textContent = 'Snapshot updated';
+                document.getElementById('srWater').textContent = formatValue(data.water_temp, ' C');
+                document.getElementById('srAir').textContent = formatValue(data.air_temp, ' C');
+                document.getElementById('srHumid').textContent = formatValue(data.humidity, '%');
+                document.getElementById('srTds').textContent = formatValue(data.tds, ' ppm');
+                document.getElementById('srPh').textContent = formatValue(data.ph);
+                document.getElementById('srLight').textContent = formatValue(data.light, ' lux');
+                return;
             }
-            
-            // Pump completed
-            if (cmd.startsWith('pump_') && cmd !== 'pump_stop') {
-                const key = cmd.replace('pump_', '').toUpperCase();
-                
-                if (status === 'running') {
-                    // Already handled by runPump()
-                }
-                if (status === 'completed') {
-                    const resultId = 'nodePump' + key + 'Result';
-                    const timerId = 'nodePump' + key + 'Timer';
-                    const connId2 = 'conn' + key + '2';
-                    
-                    setNodeState('nodePump' + key, 'done');
-                    setNodeState(timerId, 'done');
-                    setNodeState(resultId, 'done');
-                    document.getElementById('pump' + key + 'Result').textContent = '✅ Done';
-                    document.getElementById('pump' + key + 'Status').textContent = 'COMPLETED';
-                    document.getElementById('pump' + key + 'Bar').style.width = '100%';
-                    document.getElementById('pump' + key + 'Time').textContent = '0.0s';
-                    document.getElementById(connId2).className = 'conn done';
-                    document.getElementById('conn' + key + '1').className = 'conn done';
-                }
-            }
-            
-            // Pump stop
+
             if (cmd === 'pump_stop') {
-                addLog('🛑 All pumps stopped');
+                ['a', 'b'].forEach((key) => {
+                    if (pumpTimers[key]) {
+                        clearInterval(pumpTimers[key]);
+                        pumpTimers[key] = null;
+                    }
+                    setPumpDisplay(key, 'error', 'Stopped', `${(PUMP_DURATION / 1000).toFixed(1)}s`, '0%');
+                });
+                return;
             }
-            
-            // Light
+
             if (cmd === 'light_on' && status === 'on') {
-                setNodeState('nodeLightOn', 'done');
-                document.getElementById('lightOnStatus').textContent = '✅ ON';
-                setNodeState('nodeLightOff', 'idle');
-                document.getElementById('lightOffStatus').textContent = 'NeoPixel';
+                setTileState('tileLight', 'lightState', 'done', 'On');
+                document.getElementById('lightResult').textContent = 'Relay turned ON';
+                return;
             }
+
             if (cmd === 'light_off' && status === 'off') {
-                setNodeState('nodeLightOff', 'done');
-                document.getElementById('lightOffStatus').textContent = '✅ OFF';
-                setNodeState('nodeLightOn', 'idle');
-                document.getElementById('lightOnStatus').textContent = 'NeoPixel';
+                setTileState('tileLight', 'lightState', 'done', 'Off');
+                document.getElementById('lightResult').textContent = 'Relay turned OFF';
+                return;
             }
+
+            if (cmd === 'pump_a' || cmd === 'pump_b') {
+                const key = cmd.replace('pump_', '');
+                if (status === 'completed') {
+                    if (pumpTimers[key]) {
+                        clearInterval(pumpTimers[key]);
+                        pumpTimers[key] = null;
+                    }
+                    setPumpDisplay(key, 'done', 'Completed normally', '0.0s', '100%');
+                } else if (status === 'running') {
+                    const upper = key.toUpperCase();
+                    document.getElementById(`pump${upper}Result`).textContent = `Running on GPIO ${data.gpio ?? '?'}`;
+                }
+            }
+        }
+
+        socket.on('dashboard_update', (data) => {
+            updateLiveSummary(data.sensors || {});
         });
 
-        addLog('🔧 Hardware Test Panel ready');
+        socket.on('hwtest_result', (data) => {
+            handleHwTestResult(data);
+        });
+
+        addLog('🔧 Hardware Test page loaded');
+        refreshWaterConfig(true);
+        window.setInterval(() => refreshWaterConfig(true), 10000);
     </script>
 </body>
 </html>
