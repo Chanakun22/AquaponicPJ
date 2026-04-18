@@ -49,11 +49,16 @@ static void _showWaterSystem(CommandOutput_t out) {
     commandPrintf(out, "  Circulation En  : %s\r\n", cfg.circulationEnabled ? "YES" : "NO");
     commandPrintf(out, "  Refill En       : %s\r\n", cfg.refillEnabled ? "YES" : "NO");
     commandPrintf(out, "  Manual Refill   : %s\r\n", cfg.manualRefill ? "YES" : "NO");
+    commandPrintf(out, "  Preferred Route : %s\r\n", waterSystemGetRouteString(cfg.preferredRoute));
+    commandPrintf(out, "  Allow Direct    : %s\r\n", cfg.allowDirectSumpRefill ? "YES" : "NO");
+    commandPrintf(out, "  Active Route    : %s\r\n", waterSystemGetRouteString(status.activeRoute));
     commandPrintf(out, "  Circ Output     : %s\r\n", status.circulationOutput ? "ON" : "OFF");
     commandPrintf(out, "  Refill Output   : %s\r\n", status.refillOutput ? "ON" : "OFF");
+    commandPrintf(out, "  Route Valve Out : %s\r\n", status.routeValveOutput ? "DIRECT SUMP" : "FISH TANK");
     commandPrintf(out, "  Sump Low        : %s\r\n", status.levelLow ? "TRIGGERED" : "NORMAL");
     commandPrintf(out, "  Sump High       : %s\r\n", status.levelHigh ? "TRIGGERED" : "NORMAL");
     commandPrintf(out, "  Overflow Alarm  : %s\r\n", status.overflowAlarm ? "TRIGGERED" : "NORMAL");
+    commandPrintf(out, "  Route Blocked   : %s\r\n", status.routeBlocked ? "YES" : "NO");
     commandPrintf(out, "  Alarm Active    : %s\r\n", status.alarmActive ? "YES" : "NO");
     commandPrintf(out, "  Max Refill Time : %lu ms\r\n", cfg.refillMaxRuntimeMs);
     commandPrintf(out, "===============================\r\n");
@@ -106,6 +111,9 @@ static void _showHelp(CommandOutput_t out) {
     commandPrintf(out, "  circ off - ปิดปั๊มน้ำวนหลัก\r\n");
     commandPrintf(out, "  refill on- เปิดเติมน้ำแบบ manual\r\n");
     commandPrintf(out, "  refill off- ปิดเติมน้ำแบบ manual\r\n");
+    commandPrintf(out, "  route auto- refill route แบบ auto\r\n");
+    commandPrintf(out, "  route fish- บังคับเติมผ่านตู้ปลา\r\n");
+    commandPrintf(out, "  route sump- บังคับเติมเข้าถังรวมตรง\r\n");
     commandPrintf(out, "  water clear- ล้าง alarm ระบบน้ำ\r\n");
     commandPrintf(out, "  pump a   - ทดสอบปั๊ม A (3 วินาที)\r\n");
     commandPrintf(out, "  pump b   - ทดสอบปั๊ม B (3 วินาที)\r\n");
@@ -515,6 +523,18 @@ void commandProcess(char* cmd, CommandOutput_t output) {
     else if (strcmp(cleanCmd, "refill off") == 0) {
         waterSystemSetManualRefill(false);
         commandPrintf(output, "[WATER] Manual refill stopped\r\n");
+    }
+    else if (strcmp(cleanCmd, "route auto") == 0) {
+        waterSystemSetPreferredRoute(WATER_REFILL_ROUTE_AUTO);
+        commandPrintf(output, "[WATER] Preferred refill route set to AUTO\r\n");
+    }
+    else if (strcmp(cleanCmd, "route fish") == 0) {
+        waterSystemSetPreferredRoute(WATER_REFILL_ROUTE_FISH_TANK);
+        commandPrintf(output, "[WATER] Preferred refill route set to FISH_TANK\r\n");
+    }
+    else if (strcmp(cleanCmd, "route sump") == 0) {
+        waterSystemSetPreferredRoute(WATER_REFILL_ROUTE_SUMP_DIRECT);
+        commandPrintf(output, "[WATER] Preferred refill route set to SUMP_DIRECT\r\n");
     }
     else if (strcmp(cleanCmd, "water clear") == 0) {
         waterSystemClearAlarm();

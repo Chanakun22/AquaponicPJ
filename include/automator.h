@@ -40,6 +40,7 @@ void automatorGetConfig(AutomatorConfig* config);
 AutomatorState automatorGetCurrentState(void);
 const char* automatorGetStateString(AutomatorState state);
 const char* automatorGetActionReason(void);
+const char* automatorGetNextStateString(void);
 int automatorGetTimeRemainingSec(void);
 
 // HW Test: pause/resume automator to prevent interference 

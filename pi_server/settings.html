@@ -107,6 +107,51 @@
             color: var(--accent);
         }
 
+        .card-mode {
+            margin-left: auto;
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            border: 1px solid rgba(255,255,255,0.12);
+        }
+
+        .card-mode.apply-now {
+            color: #0f172a;
+            background: linear-gradient(135deg, #67e8f9, #22c55e);
+            border: none;
+        }
+
+        .card-mode.save-all {
+            color: var(--text-muted);
+            background: rgba(255,255,255,0.05);
+        }
+
+        .section-hint {
+            margin: -6px 4px 18px;
+            color: var(--text-muted);
+            font-size: 0.82rem;
+        }
+
+        .card-hint {
+            margin: -10px 0 16px;
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            line-height: 1.5;
+        }
+
+        .field-tip {
+            display: block;
+            margin-top: 6px;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            line-height: 1.5;
+        }
+
         /* === Forms === */
         .form-group {
             margin-bottom: 16px;
@@ -501,11 +546,13 @@
 
     <!-- General Settings Section -->
     <div class="section-title">📊 General Settings</div>
+    <div class="section-hint">Cards marked <strong>Apply Now</strong> send changes immediately. Cards marked <strong>Save All</strong> are stored together with the footer button.</div>
 
     <div class="settings-grid">
         <!-- Automation Targets -->
         <div class="card">
-            <h2><i class="fas fa-robot"></i> Automation Targets</h2>
+            <h2><i class="fas fa-robot"></i> Automation Targets <span class="card-mode apply-now">Apply Now</span></h2>
+            <div class="card-hint">Applies target values to the ESP32 immediately.</div>
             
             <div class="form-group">
                 <div class="toggle-container" style="justify-content: space-between; margin-bottom: 20px;">
@@ -534,7 +581,8 @@
         </div>
 
         <div class="card">
-            <h2><i class="fas fa-water"></i> Water System</h2>
+            <h2><i class="fas fa-water"></i> Water System <span class="card-mode apply-now">Apply Now</span></h2>
+            <div class="card-hint">ใช้ตั้งค่าระบบน้ำของบ่อ ทั้งการหมุนน้ำ, การเติมน้ำ, เส้นทางเติมน้ำ, และการล้าง alarm โดยค่าที่กด Apply จะส่งไป ESP32 ทันที</div>
 
             <div class="form-group">
                 <div class="toggle-container" style="justify-content: space-between; margin-bottom: 12px;">
@@ -544,6 +592,7 @@
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
+                <span class="field-tip">เปิดหรือปิดปั๊มน้ำวนหลักของระบบ ใช้สำหรับให้น้ำไหลเวียนตาม loop ปกติของบ่อและรางปลูก</span>
 
                 <div class="toggle-container" style="justify-content: space-between; margin-bottom: 20px;">
                     <span style="font-weight:600; color:var(--text-main)">Auto Refill</span>
@@ -552,16 +601,43 @@
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
+                <span class="field-tip">เปิดให้ระบบตรวจลูกลอย/เซ็นเซอร์ระดับน้ำแล้วสั่งเติมน้ำอัตโนมัติเมื่อ sump ต่ำกว่าระดับที่กำหนด</span>
             </div>
 
             <div class="form-group">
                 <label>Max Refill Time (ms)</label>
                 <input type="number" id="water_refill_max_runtime_ms" step="1000" min="1000" placeholder="e.g. 120000">
+                <span class="field-tip">เวลาสูงสุดที่อนุญาตให้ปั๊มเติมน้ำทำงานต่อเนื่อง ถ้าเกินค่านี้แล้วยังไม่ถึงระดับที่ควรได้ ระบบจะมองว่าเติมผิดปกติและเข้า alarm</span>
+            </div>
+
+            <div class="form-group">
+                <label>Preferred Refill Route</label>
+                <select id="water_preferred_route">
+                    <option value="AUTO">Auto</option>
+                    <option value="FISH_TANK">Fish Tank</option>
+                    <option value="SUMP_DIRECT">Direct Sump</option>
+                </select>
+                <span class="field-tip"><strong>Auto</strong> ให้ระบบเลือก route เอง, <strong>Fish Tank</strong> คือเติมผ่านตู้ปลา/ทาง overflow, <strong>Direct Sump</strong> คือเติมเข้าถังรวมตรง</span>
+            </div>
+
+            <div class="form-group">
+                <div class="toggle-container" style="justify-content: space-between; margin-bottom: 8px;">
+                    <span style="font-weight:600; color:var(--text-main)">Allow Direct Sump Fallback</span>
+                    <label class="toggle">
+                        <input type="checkbox" id="water_allow_direct_sump_refill">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <span class="field-tip">ถ้าเปิดไว้ ระบบสามารถสลับไปเติมเข้าถังรวมตรงได้เมื่อ route ปกติใช้เวลานานเกินไปหรือ logic auto เห็นว่าควร fallback</span>
             </div>
 
             <div class="form-group" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 18px;">
                 State: <strong id="water_state_text">UNKNOWN</strong><br>
+                Route: <strong id="water_active_route_text">NONE</strong><br>
+                Route Blocked: <strong id="water_route_blocked_text">NO</strong><br>
+                Valve Output: <strong id="water_route_valve_text">FISH TANK</strong><br>
                 Reason: <span id="water_reason_text">-</span>
+                <span class="field-tip">ส่วนนี้คือสถานะจริงที่ ESP32 รายงานกลับมา ใช้ดูว่าตอนนี้ระบบกำลังทำอะไร, ใช้ route ไหน, route ถูก block หรือไม่, และ block เพราะอะไร</span>
             </div>
 
             <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
@@ -578,11 +654,13 @@
                     <i class="fas fa-shield-alt"></i> Clear Alarm
                 </button>
             </div>
+            <span class="field-tip">`Apply Water Config` ใช้ส่งค่าที่ตั้งไว้ด้านบนไปยัง ESP32, `Manual Refill On/Off` ใช้สั่งเติมน้ำด้วยมือชั่วคราว, และ `Clear Alarm` ใช้ล้างสถานะ alarm หลังแก้สาเหตุแล้ว</span>
         </div>
 
         <!-- Thresholds -->
         <div class="card">
-            <h2><i class="fas fa-thermometer-half"></i> Sensor Thresholds</h2>
+            <h2><i class="fas fa-thermometer-half"></i> Sensor Thresholds <span class="card-mode apply-now">Apply Now</span></h2>
+            <div class="card-hint">Saves only threshold values without touching other general settings cards.</div>
             
             <div class="form-group">
                 <label>pH Range</label>
@@ -628,13 +706,18 @@
                     <input type="number" id="tds_max" step="10">
                 </div>
             </div>
+
+            <button class="btn btn-primary" onclick="saveThresholdsConfig()" style="width: 100%; margin-top: 10px;">
+                <i class="fas fa-save"></i> Apply Thresholds
+            </button>
         </div>
 
 
 
         <!-- Sensor Management -->
         <div class="card">
-            <h2><i class="fas fa-microchip"></i> Sensor Management</h2>
+            <h2><i class="fas fa-microchip"></i> Sensor Management <span class="card-mode save-all">Save All</span></h2>
+            <div class="card-hint">Stored with the footer save button.</div>
             <div class="form-group">
                 <label>Active Sensors</label>
                 
@@ -682,7 +765,8 @@
 
         <!-- Notifications -->
         <div class="card">
-            <h2><i class="fas fa-bell"></i> Notifications</h2>
+            <h2><i class="fas fa-bell"></i> Notifications <span class="card-mode save-all">Save All</span></h2>
+            <div class="card-hint">Stored with the footer save button.</div>
 
             <div class="form-group">
                 <label>Enable Alerts</label>
@@ -708,7 +792,8 @@
 
         <!-- Display -->
         <div class="card">
-            <h2><i class="fas fa-desktop"></i> Display</h2>
+            <h2><i class="fas fa-desktop"></i> Display <span class="card-mode save-all">Save All</span></h2>
+            <div class="card-hint">Stored with the footer save button.</div>
 
             <div class="form-group">
                 <label>Device Name</label>
@@ -727,7 +812,8 @@
 
         <!-- Camera -->
         <div class="card">
-            <h2><i class="fas fa-camera"></i> Camera</h2>
+            <h2><i class="fas fa-camera"></i> Camera <span class="card-mode apply-now">Apply Now</span></h2>
+            <div class="card-hint">Applies camera settings immediately and waits for the stream to come back.</div>
             
             <div class="form-group">
                 <label>Resolution</label>
@@ -920,7 +1006,7 @@
 
     <div class="footer-actions">
         <button class="btn btn-success" onclick="saveSettings()">
-            <i class="fas fa-save"></i> Save Settings
+            <i class="fas fa-save"></i> Save General Settings
         </button>
         <button class="btn" onclick="loadSettings()">
             <i class="fas fa-undo"></i> Reset
@@ -954,7 +1040,12 @@
             document.getElementById('water_circulation_enabled').checked = settings.water_system?.circulation_enabled ?? true;
             document.getElementById('water_refill_enabled').checked = settings.water_system?.refill_enabled ?? false;
             document.getElementById('water_refill_max_runtime_ms').value = settings.water_system?.refill_max_runtime_ms ?? 120000;
+            document.getElementById('water_preferred_route').value = settings.water_system?.preferred_route ?? 'AUTO';
+            document.getElementById('water_allow_direct_sump_refill').checked = settings.water_system?.allow_direct_sump_refill ?? true;
             document.getElementById('water_state_text').textContent = settings.water_system?.state ?? 'UNKNOWN';
+            document.getElementById('water_active_route_text').textContent = settings.water_system?.active_route ?? 'NONE';
+            document.getElementById('water_route_blocked_text').textContent = settings.water_system?.route_blocked ? 'YES' : 'NO';
+            document.getElementById('water_route_valve_text').textContent = settings.water_system?.route_valve_output ? 'DIRECT SUMP' : 'FISH TANK';
             document.getElementById('water_reason_text').textContent = settings.water_system?.reason ?? '-';
 
             // Thresholds
@@ -1006,9 +1097,15 @@
                     refill_enabled: document.getElementById('water_refill_enabled').checked,
                     manual_refill: settings.water_system?.manual_refill ?? false,
                     refill_max_runtime_ms: parseInt(document.getElementById('water_refill_max_runtime_ms').value || 120000),
+                    preferred_route: document.getElementById('water_preferred_route').value,
+                    allow_direct_sump_refill: document.getElementById('water_allow_direct_sump_refill').checked,
                     state: settings.water_system?.state ?? 'UNKNOWN',
+                    active_route: settings.water_system?.active_route ?? 'NONE',
                     reason: settings.water_system?.reason ?? '-',
                     alarm_active: settings.water_system?.alarm_active ?? false,
+                    route_blocked: settings.water_system?.route_blocked ?? false,
+                    route_valve_output: settings.water_system?.route_valve_output ?? false,
+                    has_route_valve: settings.water_system?.has_route_valve ?? false,
                     sump_low: settings.water_system?.sump_low ?? false,
                     sump_high: settings.water_system?.sump_high ?? false,
                     overflow_alarm: settings.water_system?.overflow_alarm ?? false
@@ -1098,11 +1195,48 @@
             }
         }
 
+        function collectThresholds() {
+            return {
+                ph_min: parseFloat(document.getElementById('ph_min').value),
+                ph_max: parseFloat(document.getElementById('ph_max').value),
+                water_temp_min: parseInt(document.getElementById('water_temp_min').value),
+                water_temp_max: parseInt(document.getElementById('water_temp_max').value),
+                air_temp_min: parseInt(document.getElementById('air_temp_min').value),
+                air_temp_max: parseInt(document.getElementById('air_temp_max').value),
+                humidity_min: parseInt(document.getElementById('humidity_min').value),
+                humidity_max: parseInt(document.getElementById('humidity_max').value),
+                tds_min: parseInt(document.getElementById('tds_min').value),
+                tds_max: parseInt(document.getElementById('tds_max').value)
+            };
+        }
+
+        async function saveThresholdsConfig() {
+            const data = { thresholds: collectThresholds() };
+            try {
+                const res = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                if (result.status === 'ok') {
+                    settings.thresholds = data.thresholds;
+                    showToast('Thresholds saved! ✅');
+                } else {
+                    showToast('Error: ' + result.message, true);
+                }
+            } catch (e) {
+                showToast('Failed to save thresholds', true);
+            }
+        }
+
         async function saveWaterSystemConfig(extra = {}) {
             const data = {
                 circulation_enabled: document.getElementById('water_circulation_enabled').checked,
                 refill_enabled: document.getElementById('water_refill_enabled').checked,
                 refill_max_runtime_ms: parseInt(document.getElementById('water_refill_max_runtime_ms').value || 120000),
+                preferred_route: document.getElementById('water_preferred_route').value,
+                allow_direct_sump_refill: document.getElementById('water_allow_direct_sump_refill').checked,
                 ...extra
             };
 
@@ -1336,6 +1470,27 @@
         }
 
         // === Camera Settings ===
+        async function waitForCameraReady(timeoutMs = 15000) {
+            const startedAt = Date.now();
+
+            while (Date.now() - startedAt < timeoutMs) {
+                try {
+                    const res = await fetch('/api/camera_status', { cache: 'no-store' });
+                    if (res.ok) {
+                        const result = await res.json();
+                        if (result.ready) {
+                            return true;
+                        }
+                    }
+                } catch (e) {
+                }
+
+                await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+
+            return false;
+        }
+
         async function applyCameraSettings() {
             const [w, h] = document.getElementById('cam_resolution').value.split('x').map(Number);
             const fps = parseInt(document.getElementById('cam_fps').value);
@@ -1352,10 +1507,20 @@
                 });
                 const result = await res.json();
                 if (result.status === 'ok') {
-                    showToast(`Camera: ${w}×${h} @ ${fps}fps q=${quality}% ✅`);
-                    statusEl.textContent = 'Restarted ✅';
-                    statusEl.style.color = '#10b981';
                     settings.camera = { width: w, height: h, framerate: fps, quality: quality };
+                    statusEl.textContent = 'Waiting for camera...';
+                    statusEl.style.color = '#f59e0b';
+
+                    const ready = await waitForCameraReady();
+                    if (ready) {
+                        showToast(`Camera: ${w}×${h} @ ${fps}fps q=${quality}% ✅`);
+                        statusEl.textContent = 'Restarted ✅';
+                        statusEl.style.color = '#10b981';
+                    } else {
+                        showToast('Camera settings saved, but stream is not ready yet', true);
+                        statusEl.textContent = 'Restart timeout ⚠️';
+                        statusEl.style.color = '#f59e0b';
+                    }
                 } else {
                     showToast('Error: ' + result.message, true);
                     statusEl.textContent = 'Failed ❌';

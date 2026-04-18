@@ -108,6 +108,16 @@
             animation: pulse 2s infinite;
         }
 
+        .dot.connecting {
+            background-color: #f59e0b;
+            box-shadow: 0 0 8px #f59e0b;
+        }
+
+        .dot.paused {
+            background-color: #94a3b8;
+            box-shadow: 0 0 6px #94a3b8;
+        }
+
         @keyframes pulse {
             0% { box-shadow: 0 0 0 0 rgba(0, 242, 170, 0.7); }
             70% { box-shadow: 0 0 0 6px rgba(0, 242, 170, 0); }
@@ -175,9 +185,9 @@
 
     <!-- Video Feed -->
     <div class="video-container">
-        <div class="placeholder">
+        <div class="placeholder" id="placeholder">
             <i class="fas fa-video-slash fa-3x"></i>
-            <span>Connecting to camera...</span>
+            <span id="placeholderText">Connecting to camera...</span>
         </div>
         
         <div class="status-badge">
@@ -211,36 +221,79 @@
         const img = document.getElementById("camStream");
         const dot = document.getElementById("statusDot");
         const text = document.getElementById("statusText");
+        const placeholder = document.getElementById("placeholder");
+        const placeholderText = document.getElementById("placeholderText");
         let retryTimer = null;
+        let intentionalStop = false;
+
+        function setStatus(state, message = '') {
+            dot.classList.remove("online", "connecting", "paused", "offline");
+
+            if (state === "live") {
+                dot.classList.add("online");
+                text.textContent = "Live";
+                text.style.color = "#00f2aa";
+                placeholder.style.display = "none";
+                return;
+            }
+
+            if (state === "connecting") {
+                dot.classList.add("connecting");
+                text.textContent = "Connecting";
+                text.style.color = "#f59e0b";
+                placeholder.style.display = "flex";
+                placeholderText.textContent = message || "Connecting to camera...";
+                return;
+            }
+
+            if (state === "paused") {
+                dot.classList.add("paused");
+                text.textContent = "Paused";
+                text.style.color = "#94a3b8";
+                placeholder.style.display = "flex";
+                placeholderText.textContent = message || "Camera paused while this tab is hidden";
+                return;
+            }
+
+            text.textContent = "Offline";
+            text.style.color = "#ff4d4d";
+            placeholder.style.display = "flex";
+            placeholderText.textContent = message || "Camera stream is unavailable";
+        }
+
+        function stopStream(paused = false) {
+            intentionalStop = true;
+            if (retryTimer) {
+                clearTimeout(retryTimer);
+                retryTimer = null;
+            }
+            img.removeAttribute("src");
+            img.style.display = "none";
+            setStatus(paused ? "paused" : "offline");
+        }
 
         function startStream() {
+            if (document.hidden) {
+                stopStream(true);
+                return;
+            }
+            intentionalStop = false;
             if (retryTimer) clearTimeout(retryTimer);
             // Add timestamp to prevent browser caching
+            setStatus("connecting");
+            img.style.display = "none";
             img.src = streamUrl + "?t=" + Date.now();
-            img.style.display = "block";
-            setOnline(true);
         }
 
         function handleError() {
+            if (intentionalStop) {
+                return;
+            }
             console.log("Stream Error/Offline - retrying in 5s...");
             img.style.display = "none";
-            setOnline(false);
+            setStatus("offline", "Camera offline - retrying in 5s...");
             // Auto-retry (rpicam-vid restarts via loop in start_cam.sh)
             retryTimer = setTimeout(startStream, 5000);
-        }
-
-        function setOnline(isOnline) {
-            if(isOnline) {
-                dot.classList.add("online");
-                dot.classList.remove("offline");
-                text.textContent = "Live";
-                text.style.color = "#00f2aa";
-            } else {
-                dot.classList.remove("online");
-                dot.classList.add("offline");
-                text.textContent = "Offline";
-                text.style.color = "#ff4d4d";
-            }
         }
 
         function reloadStream() {
@@ -252,6 +305,25 @@
             isMirrored = !isMirrored;
             img.style.transform = isMirrored ? "scaleX(-1)" : "none";
         }
+
+        img.onload = function() {
+            if (!intentionalStop) {
+                img.style.display = "block";
+                setStatus("live");
+            }
+        };
+
+        document.addEventListener("visibilitychange", function() {
+            if (document.hidden) {
+                stopStream(true);
+            } else {
+                startStream();
+            }
+        });
+
+        window.addEventListener("beforeunload", function() {
+            stopStream(true);
+        });
 
         // Auto start
         window.onload = startStream;

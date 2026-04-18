@@ -18,3 +18,7 @@ pi_server/auth_config.json
 webex
 HARDWARE_TO_BUY.md
 PROJECT_REFERENCE.md
+docs/vault/.obsidian/
+docs/vault/.trash/
+docs/vault/.DS_Store
+docs

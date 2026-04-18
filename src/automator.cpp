@@ -16,6 +16,7 @@ static AutomatorState _currentState = AUTO_STATE_IDLE;
 static unsigned long _stateStartTime = 0;
 static unsigned long _lastCheckTime = 0;
 static char _actionReason[128] = "System Starting";
+static volatile bool _paused = false;  // HW Test pause flag (volatile for cross-core!)
 
 static AutomatorConfig _config;
 static Preferences _prefs;
@@ -111,6 +112,65 @@ const char* automatorGetActionReason(void) {
     return _actionReason;
 }
 
+const char* automatorGetNextStateString(void) {
+    if (_paused) {
+        return "WAIT_HW_TEST_END";
+    }
+
+    WaterSystemStatus waterStatus;
+    waterSystemGetStatus(&waterStatus);
+
+    if (!_config.enabled) {
+        return "ENABLE_AUTOMATION";
+    }
+
+    if (waterStatus.alarmActive) {
+        return "WAIT_CLEAR_CONDITION";
+    }
+
+    if (!waterStatus.circulationOutput) {
+        return "WAIT_CIRCULATION";
+    }
+
+    if (waterStatus.refillOutput && waterStatus.activeRoute == WATER_REFILL_ROUTE_SUMP_DIRECT) {
+        return "WAIT_REFILL_COMPLETE";
+    }
+
+    switch (_currentState) {
+        case AUTO_STATE_DISABLED:
+            return "IDLE";
+
+        case AUTO_STATE_IDLE:
+            return "EVALUATING";
+
+        case AUTO_STATE_EVALUATING: {
+            float waterTemp = tempRead();
+            float tds = tdsRead(waterTemp);
+
+            if (isnan(tds) || tds <= 5.0f) {
+                return "IDLE";
+            }
+
+            return (tds < _config.targetTds) ? "DOSING_A" : "IDLE";
+        }
+
+        case AUTO_STATE_DOSING_A:
+            return "DOSING_B";
+
+        case AUTO_STATE_DOSING_B:
+            return "COOLDOWN";
+
+        case AUTO_STATE_WATER_FILL:
+            return "IDLE";
+
+        case AUTO_STATE_COOLDOWN:
+            return "IDLE";
+
+        default:
+            return "UNKNOWN";
+    }
+}
+
 int automatorGetTimeRemainingSec(void) {
     unsigned long now = millis();
     unsigned long elapsed = now - _stateStartTime;
@@ -137,8 +197,6 @@ int automatorGetTimeRemainingSec(void) {
     }
     return 0;
 }
-
-static volatile bool _paused = false;  // HW Test pause flag (volatile for cross-core!)
 
 void automatorPause(void) {
     if (!_paused) {
@@ -180,6 +238,15 @@ void automatorLoop(void) {
             _changeState(AUTO_STATE_IDLE, "Blocked: circulation pump is not running");
         } else {
             _updateReason("Blocked: circulation pump is not running");
+        }
+        return;
+    }
+
+    if (waterStatus.refillOutput && waterStatus.activeRoute == WATER_REFILL_ROUTE_SUMP_DIRECT) {
+        if (_currentState != AUTO_STATE_IDLE && _currentState != AUTO_STATE_DISABLED) {
+            _changeState(AUTO_STATE_IDLE, "Blocked: direct sump refill is active");
+        } else {
+            _updateReason("Blocked: direct sump refill is active");
         }
         return;
     }

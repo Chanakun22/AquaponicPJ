@@ -55,6 +55,10 @@
 #define PUMP_REFILL_PIN      -1     // ปั๊มย้ายน้ำจากถังน้ำสะอาดไปถังรวม
 #endif
 
+#ifndef REFILL_ROUTE_VALVE_PIN
+#define REFILL_ROUTE_VALVE_PIN -1   // วาล์วสลับทางเติมน้ำ: OFF=ผ่านตู้ปลา, ON=เข้าถังรวมตรง
+#endif
+
 #ifndef SUMP_LEVEL_LOW_PIN
 #define SUMP_LEVEL_LOW_PIN   -1     // เซ็นเซอร์ระดับน้ำต่ำถังรวม
 #endif
@@ -71,6 +75,8 @@
 // Relay Logic (Active Low: LOW = ON, HIGH = OFF)
 #define PUMP_ON   LOW
 #define PUMP_OFF  HIGH
+#define REFILL_ROUTE_TO_FISH_STATE PUMP_OFF
+#define REFILL_ROUTE_TO_SUMP_STATE PUMP_ON
 
 // ============================================================================
 // SENSOR CONFIGURATION
@@ -281,6 +287,9 @@
 #define WATER_CIRCULATION_DEFAULT_ENABLED 1
 #define WATER_REFILL_DEFAULT_ENABLED      0
 #define WATER_REFILL_MAX_RUNTIME_MS       120000UL
+#define WATER_REFILL_ROUTE_DEFAULT        0
+#define WATER_ALLOW_DIRECT_SUMP_REFILL_DEFAULT 1
+#define WATER_DIRECT_SUMP_FALLBACK_DELAY_MS    30000UL
 
 // ============================================================================
 // WATCHDOG TIMER CONFIGURATION

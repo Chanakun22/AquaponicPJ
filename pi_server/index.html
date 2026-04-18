@@ -474,6 +474,43 @@
       
       .ws-disabled { background: rgba(255,255,255,0.1); color: var(--text-muted); }
       .ws-active { background: rgba(139, 92, 246, 0.2); color: #c4b5fd; border: 1px solid rgba(139, 92, 246, 0.5); }
+      .ws-blocked { background: rgba(251, 191, 36, 0.18); color: #fde68a; border: 1px solid rgba(251, 191, 36, 0.4); }
+      .ws-idle { background: rgba(56, 189, 248, 0.14); color: #7dd3fc; border: 1px solid rgba(56, 189, 248, 0.35); }
+
+      .workflow-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .workflow-stat {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-sm);
+        padding: 14px 16px;
+      }
+
+      .workflow-stat-label {
+        font-size: 0.72rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 6px;
+      }
+
+      .workflow-stat-value {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--text-main);
+      }
+
+      .workflow-stat-sub {
+        margin-top: 5px;
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        line-height: 1.45;
+      }
       
       .workflow-steps {
         display: flex;
@@ -620,8 +657,31 @@
           </div>
           <i class="fa-solid fa-chevron-up" id="wfToggleIcon" style="color: var(--text-muted); transition: transform 0.3s;"></i>
         </div>
+
+        <div class="workflow-summary">
+          <div class="workflow-stat">
+            <div class="workflow-stat-label">Current</div>
+            <div class="workflow-stat-value" id="wfCurrentState">Disabled</div>
+            <div class="workflow-stat-sub" id="wfCurrentSub">Automation is turned off</div>
+          </div>
+          <div class="workflow-stat">
+            <div class="workflow-stat-label">Next</div>
+            <div class="workflow-stat-value" id="wfNextState">Enable Automation</div>
+            <div class="workflow-stat-sub" id="wfNextSub">Turn on automation from Settings to start monitoring</div>
+          </div>
+          <div class="workflow-stat">
+            <div class="workflow-stat-label">ETA</div>
+            <div class="workflow-stat-value" id="wfEta">--</div>
+            <div class="workflow-stat-sub" id="wfEtaSub">Time remaining before the next transition</div>
+          </div>
+        </div>
         
         <div class="workflow-steps" id="workflowSteps">
+          <div class="step-node" id="step-id-idle">
+            <div class="step-icon"><i class="fa-regular fa-eye"></i></div>
+            <div class="step-label">IDLE</div>
+          </div>
+
           <!-- Step 1: Evaluating -->
           <div class="step-node" id="step-id-eval">
             <div class="step-icon"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
@@ -643,7 +703,7 @@
           <!-- Step 4: Water Dosing (if needed) -->
           <div class="step-node" id="step-id-water">
             <div class="step-icon"><i class="fa-solid fa-faucet-drip"></i></div>
-            <div class="step-label">WATER</div>
+            <div class="step-label">WATER FILL</div>
           </div>
           
           <!-- Step 5: Cooldown -->
@@ -879,6 +939,33 @@
         return `${d}d ${h}h ${m}m ${s}s`;
       }
 
+      function formatEta(seconds) {
+        if (seconds === null || seconds === undefined || seconds <= 0) return '--';
+        if (seconds < 60) return `${seconds}s`;
+        const minutes = Math.floor(seconds / 60);
+        const remaining = seconds % 60;
+        return remaining > 0 ? `${minutes}m ${remaining}s` : `${minutes}m`;
+      }
+
+      function prettifyWorkflowState(state) {
+        const labels = {
+          DISABLED: "Disabled",
+          IDLE: "Idle / Monitoring",
+          EVALUATING: "Evaluating",
+          DOSING_A: "Dosing Nutrient A",
+          DOSING_B: "Dosing Nutrient B",
+          WATER_FILL: "Water Fill",
+          COOLDOWN: "Cooldown",
+          ENABLE_AUTOMATION: "Enable Automation",
+          WAIT_CLEAR_CONDITION: "Wait for Clear Condition",
+          WAIT_CIRCULATION: "Wait for Circulation",
+          WAIT_REFILL_COMPLETE: "Wait for Refill Complete",
+          WAIT_HW_TEST_END: "Wait for HW Test End",
+          UNKNOWN: "Unknown"
+        };
+        return labels[state] || state || "Unknown";
+      }
+
       function addLog(type, message) {
         const container = document.getElementById("logContainer");
         const entry = document.createElement("div");
@@ -1001,21 +1088,68 @@
         
         const enabled = data.auto_enabled;
         const state = data.auto_state || "IDLE";
+        const nextState = data.auto_next_state || "UNKNOWN";
         const reason = data.auto_reason || "";
         const timeLeft = data.auto_time_left || 0;
+        const isBlocked = enabled && state === "IDLE" && reason.startsWith("Blocked");
         
         const badge = document.getElementById("autoStatusBadge");
+        const currentStateEl = document.getElementById("wfCurrentState");
+        const currentSubEl = document.getElementById("wfCurrentSub");
+        const nextStateEl = document.getElementById("wfNextState");
+        const nextSubEl = document.getElementById("wfNextSub");
+        const etaEl = document.getElementById("wfEta");
+        const etaSubEl = document.getElementById("wfEtaSub");
+        const reasonEl = document.getElementById("workflowReason");
+
+        const stepMap = {
+          IDLE: "step-id-idle",
+          EVALUATING: "step-id-eval",
+          DOSING_A: "step-id-dose-a",
+          DOSING_B: "step-id-dose-b",
+          WATER_FILL: "step-id-water",
+          COOLDOWN: "step-id-cooldown"
+        };
+
+        const allSteps = ["step-id-idle", "step-id-eval", "step-id-dose-a", "step-id-dose-b", "step-id-water", "step-id-cooldown"];
+        allSteps.forEach(id => {
+          const node = document.getElementById(id);
+          if (node) node.className = "step-node";
+        });
+
+        function markSteps(completedIds, activeId) {
+          completedIds.forEach(id => {
+            const node = document.getElementById(id);
+            if (node) node.className = "step-node done";
+          });
+          if (activeId) {
+            const node = document.getElementById(activeId);
+            if (node) node.className = "step-node active";
+          }
+        }
+
+        function setSummary(current, currentSub, next, nextSub, etaValue, etaSub) {
+          currentStateEl.textContent = current;
+          currentSubEl.textContent = currentSub;
+          nextStateEl.textContent = next;
+          nextSubEl.textContent = nextSub;
+          etaEl.textContent = etaValue;
+          etaSubEl.textContent = etaSub;
+        }
         
         if (!enabled) {
           badge.className = "workflow-status-badge ws-disabled";
           badge.textContent = "DISABLED";
-          document.getElementById("workflowReason").textContent = "Automation is currently turned off in Settings.";
-          document.getElementById("workflowReason").style.color = "var(--text-muted)";
-          
-          // Reset all steps
-          ["eval", "dose-a", "dose-b", "water", "cooldown"].forEach(s => {
-             document.getElementById(`step-id-${s}`).className = "step-node";
-          });
+          reasonEl.textContent = "Automation is currently turned off in Settings.";
+          reasonEl.style.color = "var(--text-muted)";
+          setSummary(
+            "Disabled",
+            "Automation will not evaluate or dose anything",
+            prettifyWorkflowState(nextState),
+            "Turn on automation from Settings to start monitoring TDS",
+            "--",
+            "No active transition while disabled"
+          );
           document.getElementById("wfCooldownTime").textContent = "--";
           // Collapse by default if disabled
           if (!document.getElementById("workflowSteps").classList.contains("collapsed")) {
@@ -1028,60 +1162,117 @@
         if (state !== "IDLE" && document.getElementById("workflowSteps").classList.contains("collapsed")) {
             toggleWorkflow();
         }
-        
+
+        document.getElementById("wfCooldownTime").textContent = "--";
+        reasonEl.textContent = reason;
+        reasonEl.style.color = reason ? "var(--warning)" : "transparent";
+
+        if (isBlocked) {
+          badge.className = "workflow-status-badge ws-blocked";
+          badge.textContent = "BLOCKED";
+          markSteps([], stepMap.IDLE);
+          setSummary(
+            "Idle (Blocked)",
+            "Automation is paused by a safety interlock",
+            prettifyWorkflowState(nextState),
+            "The system will resume automatically after the blocking condition clears",
+            "--",
+            "No countdown while blocked"
+          );
+          return;
+        }
+
+        if (state === "IDLE") {
+          badge.className = "workflow-status-badge ws-idle";
+          badge.textContent = "MONITORING";
+          markSteps([], stepMap.IDLE);
+          setSummary(
+            "Idle / Monitoring",
+            "Watching sensor values and waiting for the next evaluation cycle",
+            prettifyWorkflowState(nextState),
+            "The controller will check whether nutrient dosing is needed",
+            formatEta(timeLeft),
+            "Time until the next automatic sensor evaluation"
+          );
+          return;
+        }
+
         badge.className = "workflow-status-badge ws-active";
         badge.textContent = "ACTIVE";
-        
-        // Reset all
-        const allSteps = ["eval", "dose-a", "dose-b", "water", "cooldown"];
-        allSteps.forEach(s => {
-           document.getElementById(`step-id-${s}`).className = "step-node";
-        });
-        document.getElementById("wfCooldownTime").textContent = "--";
-        
-        document.getElementById("workflowReason").textContent = reason;
-        document.getElementById("workflowReason").style.color = reason ? "var(--warning)" : "transparent";
 
-        // State Machine logic
-        if (state === "EVALUATING" || state === "IDLE") {
-            document.getElementById("step-id-eval").className = "step-node active";
-        } 
-        else if (state === "EXECUTING") {
-            document.getElementById("step-id-eval").className = "step-node done"; // eval done
-            
-            if (reason.includes("A")) {
-               document.getElementById("step-id-dose-a").className = "step-node active";
-            } else if (reason.includes("B")) {
-               document.getElementById("step-id-dose-a").className = "step-node done";
-               document.getElementById("step-id-dose-b").className = "step-node active";
-            } else if (reason.includes("Water")) {
-               document.getElementById("step-id-dose-a").className = "step-node done";
-               document.getElementById("step-id-dose-b").className = "step-node done";
-               document.getElementById("step-id-water").className = "step-node active";
-            }
-        }
-        else if (state === "COOLDOWN") {
-            document.getElementById("step-id-eval").className = "step-node done";
-            
-            // Just mark executed ones as done depending on reason
-            if (reason.includes("A") || reason.includes("A")) {
-                document.getElementById("step-id-dose-a").className = "step-node done";
-            }
-            if (reason.includes("B")) {
-                document.getElementById("step-id-dose-a").className = "step-node done";
-                document.getElementById("step-id-dose-b").className = "step-node done";
-            }
-            if (reason.includes("Water")) {
-                document.getElementById("step-id-water").className = "step-node done";
-            }
-            
-            document.getElementById("step-id-cooldown").className = "step-node active";
-            // Convert ms to minutes/seconds
-            if (timeLeft > 0) {
-               const m = Math.floor(timeLeft / 60000);
-               const s = Math.floor((timeLeft % 60000) / 1000);
-               document.getElementById("wfCooldownTime").textContent = `${m}m ${s}s`;
-            }
+        switch (state) {
+          case "EVALUATING":
+            markSteps([stepMap.IDLE], stepMap.EVALUATING);
+            setSummary(
+              "Evaluating",
+              "Checking the latest readings against the configured automation target",
+              prettifyWorkflowState(nextState),
+              "If TDS is low the next step is Nutrient A, otherwise the system returns to monitoring",
+              "--",
+              "Evaluation happens immediately in this state"
+            );
+            break;
+
+          case "DOSING_A":
+            markSteps([stepMap.IDLE, stepMap.EVALUATING], stepMap.DOSING_A);
+            setSummary(
+              "Dosing Nutrient A",
+              "Pump A is running to raise TDS toward the target",
+              prettifyWorkflowState(nextState),
+              "After Nutrient A finishes, the system continues with Nutrient B",
+              formatEta(timeLeft),
+              "Time remaining before switching to Nutrient B"
+            );
+            break;
+
+          case "DOSING_B":
+            markSteps([stepMap.IDLE, stepMap.EVALUATING, stepMap.DOSING_A], stepMap.DOSING_B);
+            setSummary(
+              "Dosing Nutrient B",
+              "Pump B is running to complete the nutrient dosing cycle",
+              prettifyWorkflowState(nextState),
+              "After this dose finishes the system waits for nutrients to mix",
+              formatEta(timeLeft),
+              "Time remaining before entering cooldown"
+            );
+            break;
+
+          case "WATER_FILL":
+            markSteps([stepMap.IDLE, stepMap.EVALUATING], stepMap.WATER_FILL);
+            setSummary(
+              "Water Fill",
+              "Automation is currently in the water fill phase",
+              prettifyWorkflowState(nextState),
+              "After water fill completes the system should either stabilize or return to monitoring",
+              formatEta(timeLeft),
+              "Time remaining for this phase if available"
+            );
+            break;
+
+          case "COOLDOWN":
+            markSteps([stepMap.IDLE, stepMap.EVALUATING, stepMap.DOSING_A, stepMap.DOSING_B], stepMap.COOLDOWN);
+            setSummary(
+              "Cooldown",
+              "Waiting for nutrients to disperse before the next evaluation",
+              prettifyWorkflowState(nextState),
+              "When cooldown finishes the controller resumes normal monitoring",
+              formatEta(timeLeft),
+              "Time remaining before monitoring resumes"
+            );
+            document.getElementById("wfCooldownTime").textContent = formatEta(timeLeft);
+            break;
+
+          default:
+            markSteps([], null);
+            setSummary(
+              state,
+              "Received an unknown automation state from the controller",
+              "Unknown",
+              "Check firmware and dashboard mapping for this state",
+              formatEta(timeLeft),
+              "No transition estimate available"
+            );
+            break;
         }
       }
 

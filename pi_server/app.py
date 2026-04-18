@@ -112,12 +112,18 @@ def load_settings():
             "refill_enabled": False,
             "manual_refill": False,
             "refill_max_runtime_ms": 120000,
+            "preferred_route": "AUTO",
+            "active_route": "NONE",
+            "allow_direct_sump_refill": True,
             "state": "DISABLED",
             "reason": "Waiting for ESP32 status",
             "alarm_active": False,
             "sump_low": False,
             "sump_high": False,
-            "overflow_alarm": False
+            "overflow_alarm": False,
+            "route_blocked": False,
+            "route_valve_output": False,
+            "has_route_valve": False
         },
         "tds_calibration": {
             "low_ppm": 500,
@@ -694,6 +700,27 @@ def cam_stream():
         print(f"❌ Camera Proxy Error: {e}")
         return "Camera stream not available locally (port 8081)", 502
 
+@app.route('/api/camera_status')
+@admin_required
+def camera_status():
+    """Check whether the local camera server is returning a valid JPEG frame."""
+    try:
+        resp = requests.get('http://127.0.0.1:8081/snapshot', timeout=4)
+        content_type = resp.headers.get('Content-Type', '')
+        is_ready = resp.status_code == 200 and 'image/jpeg' in content_type and len(resp.content) > 0
+        return jsonify({
+            'status': 'ok',
+            'ready': is_ready,
+            'http_status': resp.status_code,
+            'content_type': content_type
+        }), 200 if is_ready else 503
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'ready': False,
+            'message': str(e)
+        }), 503
+
 @app.route('/api/settings', methods=['GET'])
 @admin_required
 def get_settings():
@@ -734,6 +761,8 @@ def post_settings():
                         "refill_enabled": new_settings["water_system"].get("refill_enabled", False),
                         "manual_refill": new_settings["water_system"].get("manual_refill", False),
                         "refill_max_runtime_ms": new_settings["water_system"].get("refill_max_runtime_ms", 120000),
+                        "preferred_route": new_settings["water_system"].get("preferred_route", "AUTO"),
+                        "allow_direct_sump_refill": new_settings["water_system"].get("allow_direct_sump_refill", True),
                         "clear_alarm": False
                     }
                     if mqtt_client and mqtt_client.is_connected():
@@ -1043,13 +1072,20 @@ def water_system_config():
         manual_refill = data.get('manual_refill', False)
         clear_alarm = data.get('clear_alarm', False)
         refill_max_runtime_ms = int(data.get('refill_max_runtime_ms', 120000))
+        preferred_route = str(data.get('preferred_route', 'AUTO')).upper()
+        allow_direct_sump_refill = bool(data.get('allow_direct_sump_refill', True))
+
+        if preferred_route not in ['AUTO', 'FISH_TANK', 'SUMP_DIRECT']:
+            return jsonify({'status': 'error', 'message': 'Invalid preferred_route'}), 400
 
         app_settings.setdefault('water_system', {})
         app_settings['water_system'].update({
             'circulation_enabled': circulation_enabled,
             'refill_enabled': refill_enabled,
             'manual_refill': manual_refill,
-            'refill_max_runtime_ms': refill_max_runtime_ms
+            'refill_max_runtime_ms': refill_max_runtime_ms,
+            'preferred_route': preferred_route,
+            'allow_direct_sump_refill': allow_direct_sump_refill
         })
         save_settings(app_settings)
 
@@ -1058,7 +1094,9 @@ def water_system_config():
             'refill_enabled': refill_enabled,
             'manual_refill': manual_refill,
             'clear_alarm': clear_alarm,
-            'refill_max_runtime_ms': refill_max_runtime_ms
+            'refill_max_runtime_ms': refill_max_runtime_ms,
+            'preferred_route': preferred_route,
+            'allow_direct_sump_refill': allow_direct_sump_refill
         }
 
         if mqtt_client and mqtt_client.is_connected():
@@ -1066,7 +1104,8 @@ def water_system_config():
 
         save_log(
             f"💧 Water system config -> circ={circulation_enabled}, refill={refill_enabled}, "
-            f"manual={manual_refill}, clear_alarm={clear_alarm}, max={refill_max_runtime_ms}ms"
+            f"manual={manual_refill}, route={preferred_route}, direct={allow_direct_sump_refill}, "
+            f"clear_alarm={clear_alarm}, max={refill_max_runtime_ms}ms"
         )
         log_activity(session.get('username', '?'), 'water_system', 'Water system config updated', request.remote_addr)
         return jsonify({'status': 'ok', 'message': 'Water system settings applied successfully'})

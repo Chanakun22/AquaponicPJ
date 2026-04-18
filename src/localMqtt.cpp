@@ -85,6 +85,24 @@ static void _publishSensorConfig(void);
 static void _publishPhCalibrationStatus(void);
 static void _publishWaterSystemStatus(void);
 
+static WaterRefillRoute _parseWaterRoute(const char* routeValue, WaterRefillRoute fallback) {
+    if (routeValue == NULL || routeValue[0] == '\0') {
+        return fallback;
+    }
+
+    if (strcmp(routeValue, "auto") == 0 || strcmp(routeValue, "AUTO") == 0) {
+        return WATER_REFILL_ROUTE_AUTO;
+    }
+    if (strcmp(routeValue, "fish_tank") == 0 || strcmp(routeValue, "FISH_TANK") == 0 || strcmp(routeValue, "fish") == 0) {
+        return WATER_REFILL_ROUTE_FISH_TANK;
+    }
+    if (strcmp(routeValue, "sump_direct") == 0 || strcmp(routeValue, "SUMP_DIRECT") == 0 || strcmp(routeValue, "sump") == 0) {
+        return WATER_REFILL_ROUTE_SUMP_DIRECT;
+    }
+
+    return fallback;
+}
+
 // ============================================================================
 // PRIVATE FUNCTIONS
 // ============================================================================
@@ -219,8 +237,14 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
         bool circulationEnabled = doc.containsKey("circulation_enabled") ? doc["circulation_enabled"].as<bool>() : cfg.circulationEnabled;
         bool refillEnabled = doc.containsKey("refill_enabled") ? doc["refill_enabled"].as<bool>() : cfg.refillEnabled;
         unsigned long refillMaxRuntimeMs = doc.containsKey("refill_max_runtime_ms") ? doc["refill_max_runtime_ms"].as<unsigned long>() : cfg.refillMaxRuntimeMs;
+        WaterRefillRoute preferredRoute = cfg.preferredRoute;
+        bool allowDirectSumpRefill = doc.containsKey("allow_direct_sump_refill") ? doc["allow_direct_sump_refill"].as<bool>() : cfg.allowDirectSumpRefill;
 
-        waterSystemSetConfig(circulationEnabled, refillEnabled, refillMaxRuntimeMs);
+        if (doc.containsKey("preferred_route")) {
+            preferredRoute = _parseWaterRoute(doc["preferred_route"] | "", cfg.preferredRoute);
+        }
+
+        waterSystemSetConfig(circulationEnabled, refillEnabled, refillMaxRuntimeMs, preferredRoute, allowDirectSumpRefill);
 
         if (doc.containsKey("manual_refill")) {
             waterSystemSetManualRefill(doc["manual_refill"].as<bool>());
@@ -230,8 +254,12 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
             waterSystemClearAlarm();
         }
 
-        LOG_INFO("Water System config updated: Circ=%d, Refill=%d, Max=%lu ms",
-                 circulationEnabled, refillEnabled, refillMaxRuntimeMs);
+        LOG_INFO("Water System config updated: Circ=%d, Refill=%d, Route=%s, Direct=%d, Max=%lu ms",
+                 circulationEnabled,
+                 refillEnabled,
+                 waterSystemGetRouteString(preferredRoute),
+                 allowDirectSumpRefill,
+                 refillMaxRuntimeMs);
         _publishWaterSystemStatus();
     }
     
@@ -532,6 +560,7 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
     doc["auto_tgt_tds"] = authCfg.targetTds;
     doc["auto_tgt_ph"] = authCfg.targetPh;
     doc["auto_state"] = automatorGetStateString(automatorGetCurrentState());
+    doc["auto_next_state"] = automatorGetNextStateString();
     doc["auto_reason"] = automatorGetActionReason();
     doc["auto_time_left"] = automatorGetTimeRemainingSec();
 
@@ -544,6 +573,10 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
     doc["refill_enabled"] = waterCfg.refillEnabled;
     doc["refill_running"] = waterStatus.refillOutput;
     doc["manual_refill"] = waterCfg.manualRefill;
+    doc["preferred_route"] = waterSystemGetRouteString(waterCfg.preferredRoute);
+    doc["active_route"] = waterSystemGetRouteString(waterStatus.activeRoute);
+    doc["allow_direct_sump_refill"] = waterCfg.allowDirectSumpRefill;
+    doc["route_blocked"] = waterStatus.routeBlocked;
     doc["sump_low"] = waterStatus.levelLow;
     doc["sump_high"] = waterStatus.levelHigh;
     doc["fish_overflow"] = waterStatus.overflowAlarm;
@@ -614,10 +647,14 @@ static void _publishWaterSystemStatus(void) {
     doc["refill_enabled"] = cfg.refillEnabled;
     doc["manual_refill"] = cfg.manualRefill;
     doc["refill_max_runtime_ms"] = cfg.refillMaxRuntimeMs;
+    doc["preferred_route"] = waterSystemGetRouteString(cfg.preferredRoute);
+    doc["allow_direct_sump_refill"] = cfg.allowDirectSumpRefill;
     doc["state"] = waterSystemGetStateString(status.state);
     doc["reason"] = status.reason;
     doc["circulation_output"] = status.circulationOutput;
     doc["refill_output"] = status.refillOutput;
+    doc["active_route"] = waterSystemGetRouteString(status.activeRoute);
+    doc["route_valve_output"] = status.routeValveOutput;
     doc["sump_low"] = status.levelLow;
     doc["sump_high"] = status.levelHigh;
     doc["overflow_alarm"] = status.overflowAlarm;
@@ -626,6 +663,8 @@ static void _publishWaterSystemStatus(void) {
     doc["has_refill_pump"] = status.hasRefillPump;
     doc["has_level_sensors"] = status.hasLevelSensors;
     doc["has_overflow_sensor"] = status.hasOverflowSensor;
+    doc["has_route_valve"] = status.hasRouteValve;
+    doc["route_blocked"] = status.routeBlocked;
 
     char buffer[384];
     serializeJson(doc, buffer, sizeof(buffer));

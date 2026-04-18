@@ -2,6 +2,54 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-04-14] - Water Refill Route Control
+
+### Changed
+
+- **feat: refill route selection scaffold (`config.h`, `waterSystem.h`, `waterSystem.cpp`):**
+  - เพิ่มแนวคิด refill route แบบ `AUTO`, `FISH_TANK`, `SUMP_DIRECT`
+  - เพิ่ม optional route valve pin สำหรับระบบ one-pump + diverter valve
+  - เพิ่ม auto fallback จากเติมผ่านตู้ปลาไป direct sump เมื่อเติมนานเกิน threshold ที่กำหนด
+- **feat: route-aware MQTT status/config (`localMqtt.cpp`):**
+  - เพิ่ม field `preferred_route`, `active_route`, `allow_direct_sump_refill`, และ `route_blocked`
+  - ให้ local MQTT config สั่ง route logic ใหม่ได้โดยไม่กระทบ safe default เดิม
+- **feat: route debug commands (`commandHandler.cpp`):**
+  - เพิ่มคำสั่ง `route auto`, `route fish`, `route sump`
+  - ขยายคำสั่ง `water` ให้แสดง route ที่ตั้งไว้และ route ที่กำลังทำงานจริง
+- **feat: Pi route controls + direct-refill interlock (`pi_server/app.py`, `pi_server/settings.html`, `automator.cpp`):**
+  - เพิ่มการตั้งค่า `preferred_route` และ `allow_direct_sump_refill` จากหน้า settings และ API ฝั่ง Pi
+  - แสดง active route, route blocked, และ valve output บนหน้า settings
+  - ให้ automator หยุด dosing ระหว่างที่ระบบกำลัง refill แบบ direct sump
+- **docs: hardware route test checklist (`docs/vault/05-testing/bringup-checklist.md`):**
+  - ขยาย bring-up checklist ให้มีขั้นตอนทดสอบ `route fish`, `route sump`, `auto fallback`, alarm, และ Pi dashboard แบบหน้างาน
+- **fix: camera web UX (`live.html`, `settings.html`, `app.py`):**
+  - เพิ่มสถานะ `Connecting` และ `Paused` บนหน้า live พร้อมหยุด stream ตอนซ่อนแท็บหรือปิดหน้า
+  - เพิ่ม camera readiness probe ที่ Pi backend เพื่อให้หน้า settings ยืนยัน restart สำเร็จจริงก่อนขึ้น `Restarted`
+- **refactor: hybrid settings UX (`settings.html`):**
+  - เพิ่มป้าย `Apply Now` และ `Save All` ให้แต่ละ card เพื่อสื่อ model การบันทึกให้ชัดขึ้น
+  - แยก `Sensor Thresholds` ออกเป็นการบันทึกเฉพาะ card ผ่านปุ่ม `Apply Thresholds`
+- **docs: Thai water-system field tips (`settings.html`):**
+  - เพิ่มคำอธิบายภาษาไทยใน Water System card สำหรับ toggle, route, timeout, status, และ action buttons เพื่อให้อ่านหน้า settings แล้วเข้าใจหน้าที่ของแต่ละค่าได้ทันที
+  - เปลี่ยนปุ่มล่างเป็น `Save General Settings` เพื่อให้สื่อหน้าที่ตรงกับการใช้งานจริง
+- **refactor: automation engine dashboard (`index.html`):**
+  - เปลี่ยน workflow widget ให้แสดง `Current`, `Next`, `ETA`, และ `Reason` เป็นข้อมูลหลัก
+  - แก้ stepper ให้ map กับ state จริงของ firmware (`IDLE`, `EVALUATING`, `DOSING_A`, `DOSING_B`, `WATER_FILL`, `COOLDOWN`) แทนการเดาจากข้อความ reason แบบเดิม
+- **feat: firmware-driven automation next state (`automator.cpp`, `automator.h`, `localMqtt.cpp`, `index.html`):**
+  - เพิ่ม field `auto_next_state` จากฝั่ง firmware เพื่อให้ dashboard แสดง `Next` จาก logic จริงของ controller แทนการคาดเดาใน frontend
+
+## [2026-04-14] - Obsidian Vault Scaffold
+
+### Added
+
+- **docs: Obsidian starter vault (`docs/vault/`):**
+  - เพิ่มโครงโฟลเดอร์ vault สำหรับใช้ร่วมกันระหว่าง Obsidian และ VS Code
+  - เพิ่มไฟล์ตั้งต้นสำหรับ system overview, water flow, hardware, firmware, Pi, testing, และ decision log
+
+### Changed
+
+- **chore: Obsidian-friendly gitignore (`.gitignore`):**
+  - เพิ่ม ignore สำหรับ `docs/vault/.obsidian/`, `docs/vault/.trash/`, และไฟล์ metadata ที่ไม่ควรเข้า repo
+
 ## [2026-04-13] - Future-Ready Water System Scaffold
 
 ### Added
