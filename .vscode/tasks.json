@@ -1,0 +1,71 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build production firmware",
+			"type": "shell",
+			"command": "pio",
+			"args": [
+				"run",
+				"-e",
+				"production"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "Build production firmware after pump spec update",
+			"type": "shell",
+			"command": "pio",
+			"args": [
+				"run",
+				"-e",
+				"production"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "Build production firmware after conservative dose update",
+			"type": "shell",
+			"command": "pio",
+			"args": [
+				"run",
+				"-e",
+				"production"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "Build production firmware after fan controller update",
+			"type": "shell",
+			"command": "pio",
+			"args": [
+				"run",
+				"-e",
+				"production"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "Build production firmware after local MQTT buffer fix",
+			"type": "shell",
+			"command": "pio",
+			"args": [
+				"run",
+				"-e",
+				"production"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "Build production firmware after board config fix",
+			"type": "shell",
+			"command": "pio",
+			"args": [
+				"run",
+				"-e",
+				"production"
+			],
+			"isBackground": false
+		}
+	]
+}

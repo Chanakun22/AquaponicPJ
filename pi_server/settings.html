@@ -63,6 +63,22 @@
             transition: all 0.3s ease;
         }
 
+        .form-row select {
+            flex: 1 1 0;
+            min-width: 0;
+        }
+        .form-row input[type="time"] {
+            flex: 0 0 132px;
+            width: 132px;
+            min-width: 132px;
+            padding-right: 10px;
+            color-scheme: dark;
+        }
+        input[type="time"]::-webkit-calendar-picker-indicator {
+            cursor: pointer;
+            filter: invert(0.82) sepia(0.11) saturate(0.65) hue-rotate(169deg) brightness(1.12);
+            opacity: 0.9;
+        }
         .card::before {
             content: '';
             position: absolute;
@@ -71,6 +87,13 @@
             right: 0;
             height: 3px;
             background: linear-gradient(90deg, var(--primary), var(--secondary));
+            .form-row {
+                flex-wrap: wrap;
+            }
+            .form-row input[type="time"] {
+                flex: 1 1 140px;
+                width: 100%;
+            }
             opacity: 0;
             transition: opacity 0.3s ease;
         }
@@ -581,6 +604,145 @@
         </div>
 
         <div class="card">
+            <h2><i class="fas fa-lightbulb"></i> Light Control <span class="card-mode apply-now">Apply Now</span></h2>
+            <div class="card-hint">เลือกว่าจะให้คำสั่งไฟมาจาก NETPIE หรือจากเว็บนี้ แล้วตั้ง schedule/manual ตาม source ที่เลือก</div>
+
+            <div class="form-group">
+                <label>Command Source</label>
+                <select id="light_command_source">
+                    <option value="netpie">NETPIE</option>
+                    <option value="local_web">Local Web</option>
+                </select>
+                <span class="field-tip">ถ้าเลือก <strong>NETPIE</strong> คำสั่งจาก shadow/@msg จะมีผล ส่วนถ้าเลือก <strong>Local Web</strong> หน้าเว็บนี้จะเป็นคนคุมจริง</span>
+            </div>
+
+            <div class="form-group">
+                <div class="toggle-container" style="justify-content: space-between; margin-bottom: 20px;">
+                    <span style="font-weight:600; color:var(--text-main)">Enable Schedule</span>
+                    <label class="toggle">
+                        <input type="checkbox" id="light_enabled">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <span class="field-tip">ปิดไว้ถ้าต้องการคุมแบบ manual จากเว็บหรือ NETPIE โดยไม่ให้ schedule เข้ามาทับ</span>
+            </div>
+
+            <div class="form-group">
+                <label>Light ON Schedule</label>
+                <div class="form-row">
+                    <select id="light_on_day">
+                        <option value="7">Everyday</option>
+                        <option value="0">Sunday</option>
+                        <option value="1">Monday</option>
+                        <option value="2">Tuesday</option>
+                        <option value="3">Wednesday</option>
+                        <option value="4">Thursday</option>
+                        <option value="5">Friday</option>
+                        <option value="6">Saturday</option>
+                    </select>
+                    <input type="time" id="light_on_time">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Light OFF Schedule</label>
+                <div class="form-row">
+                    <select id="light_off_day">
+                        <option value="7">Everyday</option>
+                        <option value="0">Sunday</option>
+                        <option value="1">Monday</option>
+                        <option value="2">Tuesday</option>
+                        <option value="3">Wednesday</option>
+                        <option value="4">Thursday</option>
+                        <option value="5">Friday</option>
+                        <option value="6">Saturday</option>
+                    </select>
+                    <input type="time" id="light_off_time">
+                </div>
+            </div>
+
+            <div class="form-group" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 18px;">
+                Running: <strong id="light_running_text">NO</strong><br>
+                NTP Synced: <strong id="light_ntp_text">NO</strong><br>
+                Reason: <span id="light_reason_text">-</span>
+            </div>
+
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+                <button class="btn btn-primary" onclick="saveLightConfig()" style="flex:1; min-width:170px;">
+                    <i class="fas fa-save"></i> Apply Light Config
+                </button>
+                <button class="btn" onclick="setLightManual(true)" style="flex:1; min-width:140px;">
+                    <i class="fas fa-sun"></i> Manual ON
+                </button>
+                <button class="btn" onclick="setLightManual(false)" style="flex:1; min-width:140px;">
+                    <i class="fas fa-moon"></i> Manual OFF
+                </button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2><i class="fas fa-fish"></i> Fish Feeder <span class="card-mode apply-now">Apply Now</span></h2>
+            <div class="card-hint">ตั้ง schedule ให้อาหารปลา หรือเลือกให้ NETPIE เป็นคนคุม ถ้าจะกด Feed Now จากเว็บต้องใช้ source เป็น Local Web</div>
+
+            <div class="form-group">
+                <label>Command Source</label>
+                <select id="feeder_command_source">
+                    <option value="local_web">Local Web</option>
+                    <option value="netpie">NETPIE</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <div class="toggle-container" style="justify-content: space-between; margin-bottom: 20px;">
+                    <span style="font-weight:600; color:var(--text-main)">Enable Feed Schedule</span>
+                    <label class="toggle">
+                        <input type="checkbox" id="feeder_enabled">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Feed Schedule</label>
+                <div class="form-row">
+                    <select id="feeder_day">
+                        <option value="7">Everyday</option>
+                        <option value="0">Sunday</option>
+                        <option value="1">Monday</option>
+                        <option value="2">Tuesday</option>
+                        <option value="3">Wednesday</option>
+                        <option value="4">Thursday</option>
+                        <option value="5">Friday</option>
+                        <option value="6">Saturday</option>
+                    </select>
+                    <input type="time" id="feeder_time">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Feed Duration (ms)</label>
+                <input type="number" id="feeder_duration_ms" step="100" min="250" max="10000" placeholder="e.g. 2000">
+                <span class="field-tip">เวลาที่จะเปิด output ของ feeder ต่อครั้ง ใช้ให้ตรงกับอุปกรณ์จริงเพื่อลดการให้อาหารเกิน</span>
+            </div>
+
+            <div class="form-group" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 18px;">
+                State: <strong id="feeder_state_text">UNKNOWN</strong><br>
+                Running: <strong id="feeder_running_text">NO</strong><br>
+                Last Feed: <strong id="feeder_last_feed_text">Never</strong><br>
+                Reason: <span id="feeder_reason_text">-</span>
+            </div>
+
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+                <button class="btn btn-primary" onclick="saveFishFeederConfig()" style="flex:1; min-width:170px;">
+                    <i class="fas fa-save"></i> Apply Feeder Config
+                </button>
+                <button class="btn" onclick="triggerFeedNow()" style="flex:1; min-width:140px;">
+                    <i class="fas fa-bowl-food"></i> Feed Now
+                </button>
+            </div>
+        </div>
+
+        <div class="card">
             <h2><i class="fas fa-water"></i> Water System <span class="card-mode apply-now">Apply Now</span></h2>
             <div class="card-hint">ใช้ตั้งค่าระบบน้ำของบ่อ ทั้งการหมุนน้ำ, การเติมน้ำ, เส้นทางเติมน้ำ, และการล้าง alarm โดยค่าที่กด Apply จะส่งไป ESP32 ทันที</div>
 
@@ -655,6 +817,75 @@
                 </button>
             </div>
             <span class="field-tip">`Apply Water Config` ใช้ส่งค่าที่ตั้งไว้ด้านบนไปยัง ESP32, `Manual Refill On/Off` ใช้สั่งเติมน้ำด้วยมือชั่วคราว, และ `Clear Alarm` ใช้ล้างสถานะ alarm หลังแก้สาเหตุแล้ว</span>
+        </div>
+
+        <div class="card">
+            <h2><i class="fas fa-fan"></i> Exhaust Fan <span class="card-mode apply-now">Apply Now</span></h2>
+            <div class="card-hint">คุมพัดลมระบายอากาศจากอุณหภูมิและความชื้นของ DHT หรือสั่ง manual ได้ทันทีจากหน้าเว็บ</div>
+
+            <div class="form-group">
+                <div class="toggle-container" style="justify-content: space-between; margin-bottom: 12px;">
+                    <span style="font-weight:600; color:var(--text-main)">Enable Fan Controller</span>
+                    <label class="toggle">
+                        <input type="checkbox" id="fan_enabled">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <span class="field-tip">ปิดไว้ถ้า relay/pin พัดลมยังไม่ได้ต่อจริง หรือยังไม่ต้องการให้ระบบคุมพัดลม</span>
+
+                <div class="toggle-container" style="justify-content: space-between; margin-bottom: 20px;">
+                    <span style="font-weight:600; color:var(--text-main)">Auto Mode</span>
+                    <label class="toggle">
+                        <input type="checkbox" id="fan_auto_mode">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <span class="field-tip">ถ้าเปิดไว้ พัดลมจะตัดสินใจจากค่าอุณหภูมิ/ความชื้นอากาศ ถ้าปิดจะใช้ manual state ที่สั่งไว้แทน</span>
+            </div>
+
+            <div class="form-group">
+                <label>Air Temp ON / OFF (°C)</label>
+                <div class="form-row">
+                    <input type="number" id="fan_temp_on_c" step="0.1" placeholder="e.g. 32">
+                    <span>to</span>
+                    <input type="number" id="fan_temp_off_c" step="0.1" placeholder="e.g. 30">
+                </div>
+                <span class="field-tip">พัดลมจะเริ่มทำงานเมื่ออุณหภูมิถึงค่า ON และจะยอมปิดเมื่อเย็นลงต่ำกว่าค่า OFF เพื่อทำ hysteresis</span>
+            </div>
+
+            <div class="form-group">
+                <label>Humidity ON / OFF (%)</label>
+                <div class="form-row">
+                    <input type="number" id="fan_humidity_on_pct" step="1" placeholder="e.g. 80">
+                    <span>to</span>
+                    <input type="number" id="fan_humidity_off_pct" step="1" placeholder="e.g. 75">
+                </div>
+                <span class="field-tip">ถ้าความชื้นสูงเกินกว่าค่า ON ระบบจะเปิดพัดลม และจะค่อยปิดเมื่อความชื้นลดต่ำกว่าค่า OFF</span>
+            </div>
+
+            <div class="form-group" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 18px;">
+                State: <strong id="fan_state_text">UNKNOWN</strong><br>
+                Mode: <strong id="fan_mode_text">AUTO</strong><br>
+                Running: <strong id="fan_running_text">NO</strong><br>
+                Reason: <span id="fan_reason_text">-</span>
+                <span class="field-tip">สถานะนี้มาจาก ESP32 โดยตรง ใช้ดูว่าพัดลมกำลังหมุนอยู่ไหม, อยู่ในโหมด auto/manual, และเปิดเพราะอะไร</span>
+            </div>
+
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+                <button class="btn btn-primary" onclick="saveFanConfig()" style="flex:1; min-width:170px;">
+                    <i class="fas fa-save"></i> Apply Fan Config
+                </button>
+                <button class="btn" onclick="setFanManual(true)" style="flex:1; min-width:140px;">
+                    <i class="fas fa-wind"></i> Fan Manual On
+                </button>
+                <button class="btn" onclick="setFanManual(false)" style="flex:1; min-width:140px;">
+                    <i class="fas fa-stop"></i> Fan Manual Off
+                </button>
+                <button class="btn" onclick="setFanAutoMode()" style="flex:1; min-width:140px;">
+                    <i class="fas fa-rotate"></i> Return Auto
+                </button>
+            </div>
+            <span class="field-tip">Manual On/Off จะบังคับโหมดเป็น manual ทันที ส่วน Return Auto จะให้ระบบกลับไปคุมตาม threshold อีกครั้ง</span>
         </div>
 
         <!-- Thresholds -->
@@ -1036,6 +1267,40 @@
             document.getElementById('auto_tgt_tds').value = settings.automation?.target_tds ?? 800;
             document.getElementById('auto_tgt_ph').value = settings.automation?.target_ph ?? 6.5;
 
+            // Light Control
+            document.getElementById('light_command_source').value = settings.light_control?.command_source ?? 'netpie';
+            document.getElementById('light_enabled').checked = settings.light_control?.enabled ?? false;
+            document.getElementById('light_on_day').value = String(settings.light_control?.on_day ?? 0);
+            document.getElementById('light_on_time').value = settings.light_control?.on_time ?? '06:00';
+            document.getElementById('light_off_day').value = String(settings.light_control?.off_day ?? 0);
+            document.getElementById('light_off_time').value = settings.light_control?.off_time ?? '18:00';
+            document.getElementById('light_running_text').textContent = settings.light_control?.running ? 'YES' : 'NO';
+            document.getElementById('light_ntp_text').textContent = settings.light_control?.ntp_synced ? 'YES' : 'NO';
+            document.getElementById('light_reason_text').textContent = settings.light_control?.reason ?? '-';
+
+            // Fish Feeder
+            document.getElementById('feeder_command_source').value = settings.fish_feeder?.command_source ?? 'local_web';
+            document.getElementById('feeder_enabled').checked = settings.fish_feeder?.enabled ?? false;
+            document.getElementById('feeder_day').value = String(settings.fish_feeder?.feed_day ?? 7);
+            document.getElementById('feeder_time').value = settings.fish_feeder?.feed_time ?? '08:00';
+            document.getElementById('feeder_duration_ms').value = settings.fish_feeder?.duration_ms ?? 2000;
+            document.getElementById('feeder_state_text').textContent = settings.fish_feeder?.state ?? 'UNKNOWN';
+            document.getElementById('feeder_running_text').textContent = settings.fish_feeder?.running ? 'YES' : 'NO';
+            document.getElementById('feeder_last_feed_text').textContent = settings.fish_feeder?.last_feed_at ?? 'Never';
+            document.getElementById('feeder_reason_text').textContent = settings.fish_feeder?.reason ?? '-';
+
+            // Fan Control
+            document.getElementById('fan_enabled').checked = settings.fan_control?.enabled ?? false;
+            document.getElementById('fan_auto_mode').checked = settings.fan_control?.auto_mode ?? true;
+            document.getElementById('fan_temp_on_c').value = settings.fan_control?.temp_on_c ?? 32.0;
+            document.getElementById('fan_temp_off_c').value = settings.fan_control?.temp_off_c ?? 30.0;
+            document.getElementById('fan_humidity_on_pct').value = settings.fan_control?.humidity_on_pct ?? 80.0;
+            document.getElementById('fan_humidity_off_pct').value = settings.fan_control?.humidity_off_pct ?? 75.0;
+            document.getElementById('fan_state_text').textContent = settings.fan_control?.state ?? 'UNKNOWN';
+            document.getElementById('fan_mode_text').textContent = (settings.fan_control?.auto_mode ?? true) ? 'AUTO' : 'MANUAL';
+            document.getElementById('fan_running_text').textContent = settings.fan_control?.running ? 'YES' : 'NO';
+            document.getElementById('fan_reason_text').textContent = settings.fan_control?.reason ?? '-';
+
             // Water System
             document.getElementById('water_circulation_enabled').checked = settings.water_system?.circulation_enabled ?? true;
             document.getElementById('water_refill_enabled').checked = settings.water_system?.refill_enabled ?? false;
@@ -1091,6 +1356,44 @@
                     enabled: document.getElementById('auto_enabled').checked,
                     target_tds: parseFloat(document.getElementById('auto_tgt_tds').value || 800),
                     target_ph: parseFloat(document.getElementById('auto_tgt_ph').value || 6.5)
+                },
+                light_control: {
+                    command_source: document.getElementById('light_command_source').value,
+                    enabled: document.getElementById('light_enabled').checked,
+                    manual_state: settings.light_control?.manual_state ?? false,
+                    on_day: parseInt(document.getElementById('light_on_day').value || 0),
+                    on_time: document.getElementById('light_on_time').value || '06:00',
+                    off_day: parseInt(document.getElementById('light_off_day').value || 0),
+                    off_time: document.getElementById('light_off_time').value || '18:00',
+                    running: settings.light_control?.running ?? false,
+                    ntp_synced: settings.light_control?.ntp_synced ?? false,
+                    has_output: settings.light_control?.has_output ?? true,
+                    reason: settings.light_control?.reason ?? '-'
+                },
+                fish_feeder: {
+                    command_source: document.getElementById('feeder_command_source').value,
+                    enabled: document.getElementById('feeder_enabled').checked,
+                    feed_day: parseInt(document.getElementById('feeder_day').value || 7),
+                    feed_time: document.getElementById('feeder_time').value || '08:00',
+                    duration_ms: parseInt(document.getElementById('feeder_duration_ms').value || 2000),
+                    state: settings.fish_feeder?.state ?? 'UNKNOWN',
+                    running: settings.fish_feeder?.running ?? false,
+                    has_output: settings.fish_feeder?.has_output ?? false,
+                    last_feed_at: settings.fish_feeder?.last_feed_at ?? 'Never',
+                    reason: settings.fish_feeder?.reason ?? '-'
+                },
+                fan_control: {
+                    enabled: document.getElementById('fan_enabled').checked,
+                    auto_mode: document.getElementById('fan_auto_mode').checked,
+                    manual_state: settings.fan_control?.manual_state ?? false,
+                    temp_on_c: parseFloat(document.getElementById('fan_temp_on_c').value || 32.0),
+                    temp_off_c: parseFloat(document.getElementById('fan_temp_off_c').value || 30.0),
+                    humidity_on_pct: parseFloat(document.getElementById('fan_humidity_on_pct').value || 80.0),
+                    humidity_off_pct: parseFloat(document.getElementById('fan_humidity_off_pct').value || 75.0),
+                    state: settings.fan_control?.state ?? 'UNKNOWN',
+                    running: settings.fan_control?.running ?? false,
+                    has_output: settings.fan_control?.has_output ?? false,
+                    reason: settings.fan_control?.reason ?? '-'
                 },
                 water_system: {
                     circulation_enabled: document.getElementById('water_circulation_enabled').checked,
@@ -1193,6 +1496,139 @@
             } catch (e) {
                 showToast('Failed to connect to server', true);
             }
+        }
+
+        function collectLightConfig(overrides = {}) {
+            return {
+                command_source: document.getElementById('light_command_source').value,
+                enabled: document.getElementById('light_enabled').checked,
+                manual_state: settings.light_control?.manual_state ?? false,
+                on_day: parseInt(document.getElementById('light_on_day').value || 0),
+                on_time: document.getElementById('light_on_time').value || '06:00',
+                off_day: parseInt(document.getElementById('light_off_day').value || 0),
+                off_time: document.getElementById('light_off_time').value || '18:00',
+                ...overrides
+            };
+        }
+
+        async function saveLightConfig(overrides = {}) {
+            const data = collectLightConfig(overrides);
+            try {
+                const res = await fetch('/api/light_control/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                if (result.status === 'ok') {
+                    settings.light_control = {
+                        ...(settings.light_control || {}),
+                        ...data
+                    };
+                    showToast('Light Control Applied to ESP32! ✅');
+                    loadSettings();
+                } else {
+                    showToast('Error: ' + result.message, true);
+                }
+            } catch (e) {
+                showToast('Failed to connect to server', true);
+            }
+        }
+
+        function setLightManual(enabled) {
+            if (document.getElementById('light_command_source').value !== 'local_web') {
+                showToast('Switch Light Command Source to Local Web first', true);
+                return;
+            }
+            saveLightConfig({ enabled: false, manual_state: enabled });
+        }
+
+        function collectFishFeederConfig(overrides = {}) {
+            return {
+                command_source: document.getElementById('feeder_command_source').value,
+                enabled: document.getElementById('feeder_enabled').checked,
+                feed_day: parseInt(document.getElementById('feeder_day').value || 7),
+                feed_time: document.getElementById('feeder_time').value || '08:00',
+                duration_ms: parseInt(document.getElementById('feeder_duration_ms').value || 2000),
+                ...overrides
+            };
+        }
+
+        async function saveFishFeederConfig(overrides = {}) {
+            const data = collectFishFeederConfig(overrides);
+            try {
+                const res = await fetch('/api/fish_feeder/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                if (result.status === 'ok') {
+                    settings.fish_feeder = {
+                        ...(settings.fish_feeder || {}),
+                        ...data
+                    };
+                    showToast('Fish Feeder Applied to ESP32! ✅');
+                    loadSettings();
+                } else {
+                    showToast('Error: ' + result.message, true);
+                }
+            } catch (e) {
+                showToast('Failed to connect to server', true);
+            }
+        }
+
+        function triggerFeedNow() {
+            if (document.getElementById('feeder_command_source').value !== 'local_web') {
+                showToast('Switch Fish Feeder Command Source to Local Web first', true);
+                return;
+            }
+            saveFishFeederConfig({ trigger_feed: true });
+        }
+
+        function collectFanConfig(overrides = {}) {
+            return {
+                enabled: document.getElementById('fan_enabled').checked,
+                auto_mode: document.getElementById('fan_auto_mode').checked,
+                manual_state: settings.fan_control?.manual_state ?? false,
+                temp_on_c: parseFloat(document.getElementById('fan_temp_on_c').value || 32.0),
+                temp_off_c: parseFloat(document.getElementById('fan_temp_off_c').value || 30.0),
+                humidity_on_pct: parseFloat(document.getElementById('fan_humidity_on_pct').value || 80.0),
+                humidity_off_pct: parseFloat(document.getElementById('fan_humidity_off_pct').value || 75.0),
+                ...overrides
+            };
+        }
+
+        async function saveFanConfig(overrides = {}) {
+            const data = collectFanConfig(overrides);
+            try {
+                const res = await fetch('/api/fan_control/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                if (result.status === 'ok') {
+                    settings.fan_control = {
+                        ...(settings.fan_control || {}),
+                        ...data
+                    };
+                    showToast('Fan Control Applied to ESP32! ✅');
+                    loadSettings();
+                } else {
+                    showToast('Error: ' + result.message, true);
+                }
+            } catch (e) {
+                showToast('Failed to connect to server', true);
+            }
+        }
+
+        function setFanManual(enabled) {
+            saveFanConfig({ enabled: true, auto_mode: false, manual_state: enabled });
+        }
+
+        function setFanAutoMode() {
+            saveFanConfig({ enabled: true, auto_mode: true, manual_state: false });
         }
 
         function collectThresholds() {

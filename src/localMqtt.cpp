@@ -20,6 +20,8 @@
 #include "dhtSensor.h"  // For HW test sensor reads
 #include "lightSensor.h" // For HW test sensor reads
 #include "lightController.h" // For HW test light control
+#include "fishFeeder.h"
+#include "fanController.h"
 #include "commandHandler.h"  // For pump test tick
 #include "waterSystem.h"
 
@@ -34,12 +36,16 @@ static QueueHandle_t _logQueue = NULL;
 static unsigned long _lastReconnectAttempt = 0;
 static unsigned long _lastPublishTime = 0;
 static unsigned long _lastWaterStatusPublishTime = 0;
+static unsigned long _lastFanStatusPublishTime = 0;
+static unsigned long _lastLightStatusPublishTime = 0;
+static unsigned long _lastFeederStatusPublishTime = 0;
 static IPAddress _brokerIp;
 static bool _isIpResolved = false;
 static uint8_t _connectionFailCount = 0;
 static const uint8_t MAX_FAIL_BEFORE_RERESOLUTION = 3; // Re-resolve mDNS หลังล้มเหลว 3 ครั้ง
 static unsigned long _reconnectInterval = 5000;          // Backoff interval (เริ่ม 5s, เพิ่มถึง 60s)
 static const unsigned long MAX_RECONNECT_INTERVAL = 60000; // สูงสุด 60 วินาที
+static const uint16_t LOCAL_MQTT_PACKET_BUFFER_SIZE = 2048;
 
 // HW Test: one-shot FreeRTOS task for guaranteed pump auto-off
 static TaskHandle_t _hwTestTaskHandle = NULL;
@@ -84,6 +90,40 @@ static bool _reconnect(void);
 static void _publishSensorConfig(void);
 static void _publishPhCalibrationStatus(void);
 static void _publishWaterSystemStatus(void);
+static void _publishFanStatus(void);
+static void _publishLightStatus(void);
+static void _publishFishFeederStatus(void);
+
+static CommandSource _parseCommandSource(const char* sourceValue, CommandSource fallback) {
+    if (sourceValue == NULL || sourceValue[0] == '\0') {
+        return fallback;
+    }
+
+    if (strcmp(sourceValue, "netpie") == 0 || strcmp(sourceValue, "NETPIE") == 0) {
+        return COMMAND_SOURCE_NETPIE;
+    }
+    if (strcmp(sourceValue, "local_web") == 0 || strcmp(sourceValue, "LOCAL_WEB") == 0 ||
+        strcmp(sourceValue, "web") == 0 || strcmp(sourceValue, "WEB") == 0 ||
+        strcmp(sourceValue, "local") == 0 || strcmp(sourceValue, "LOCAL") == 0) {
+        return COMMAND_SOURCE_LOCAL_WEB;
+    }
+
+    return fallback;
+}
+
+static void _stopHwTestPumpOutputs(bool resumeAutomator) {
+    digitalWrite(PUMP_NUTRIENT_A_PIN, PUMP_OFF);
+    digitalWrite(PUMP_NUTRIENT_B_PIN, PUMP_OFF);
+
+    if (_hwTestTaskHandle != NULL) {
+        vTaskDelete(_hwTestTaskHandle);
+        _hwTestTaskHandle = NULL;
+    }
+
+    if (resumeAutomator) {
+        automatorResume();
+    }
+}
 
 static WaterRefillRoute _parseWaterRoute(const char* routeValue, WaterRefillRoute fallback) {
     if (routeValue == NULL || routeValue[0] == '\0') {
@@ -230,6 +270,98 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
         LOG_INFO("Automation Config updated: En=%d, TDS=%.1f, pH=%.1f", enabled, tgtTds, tgtPh);
     }
 
+    if (strcmp(topic, LOCAL_MQTT_TOPIC_CONFIG_LIGHT_CONTROL) == 0) {
+        LightControlConfig cfg;
+        lightCtrlGetConfig(&cfg);
+        CommandSource previousSource = cfg.commandSource;
+        bool switchedToNetpie = false;
+
+        if (doc.containsKey("command_source")) {
+            lightCtrlSetCommandSource(_parseCommandSource(doc["command_source"] | "", cfg.commandSource));
+            lightCtrlGetConfig(&cfg);
+            switchedToNetpie = (previousSource != cfg.commandSource && cfg.commandSource == COMMAND_SOURCE_NETPIE);
+        }
+
+        if (lightCtrlAllowsLocalControl()) {
+            bool enabled = doc.containsKey("enabled") ? doc["enabled"].as<bool>() : cfg.enabled;
+            bool manualState = doc.containsKey("manual_state") ? doc["manual_state"].as<bool>() : cfg.manualState;
+            int onDay = doc.containsKey("on_day") ? doc["on_day"].as<int>() : cfg.onDay;
+            int offDay = doc.containsKey("off_day") ? doc["off_day"].as<int>() : cfg.offDay;
+            const char* onTime = doc.containsKey("on_time") ? doc["on_time"] | cfg.onTime : cfg.onTime;
+            const char* offTime = doc.containsKey("off_time") ? doc["off_time"] | cfg.offTime : cfg.offTime;
+
+            lightCtrlSetEnabled(enabled ? 1 : 0);
+            lightCtrlSetManualState(manualState);
+            lightCtrlSetOnDay(onDay);
+            lightCtrlSetOnTime(onTime);
+            lightCtrlSetOffDay(offDay);
+            lightCtrlSetOffTime(offTime);
+            LOG_INFO("Light config updated from Local Web: Enabled=%d, Manual=%d, On=%d %s, Off=%d %s",
+                     enabled, manualState, onDay, onTime, offDay, offTime);
+        } else {
+            LOG_WARN("Local Web light config ignored because control source is not local_web");
+        }
+
+        if (switchedToNetpie) {
+            if (!netpieRequestShadowSync()) {
+                LOG_WARN("Switched light source to NETPIE but could not request shadow refresh yet");
+            }
+        }
+
+        _publishLightStatus();
+    }
+
+    if (strcmp(topic, LOCAL_MQTT_TOPIC_CONFIG_FISH_FEEDER) == 0) {
+        FishFeederConfig cfg;
+        fishFeederGetConfig(&cfg);
+
+        if (doc.containsKey("command_source")) {
+            fishFeederSetCommandSource(_parseCommandSource(doc["command_source"] | "", cfg.commandSource));
+            fishFeederGetConfig(&cfg);
+        }
+
+        if (fishFeederAllowsLocalControl()) {
+            bool enabled = doc.containsKey("enabled") ? doc["enabled"].as<bool>() : cfg.enabled;
+            int feedDay = doc.containsKey("feed_day") ? doc["feed_day"].as<int>() : cfg.feedDay;
+            const char* feedTime = doc.containsKey("feed_time") ? doc["feed_time"] | cfg.feedTime : cfg.feedTime;
+            unsigned long durationMs = doc.containsKey("duration_ms") ? doc["duration_ms"].as<unsigned long>() : cfg.durationMs;
+
+            fishFeederSetEnabled(enabled);
+            fishFeederSetFeedDay(feedDay);
+            fishFeederSetFeedTime(feedTime);
+            fishFeederSetDurationMs(durationMs);
+
+            if (doc["trigger_feed"] | false) {
+                fishFeederStartManualFeed("Manual feed triggered from Local Web");
+            }
+
+            LOG_INFO("Fish feeder config updated from Local Web: Enabled=%d, Day=%d, Time=%s, Duration=%lu",
+                     enabled, feedDay, feedTime, durationMs);
+        } else {
+            LOG_WARN("Local Web fish feeder config ignored because control source is not local_web");
+        }
+
+        _publishFishFeederStatus();
+    }
+
+    if (strcmp(topic, LOCAL_MQTT_TOPIC_CONFIG_FAN_CONTROL) == 0) {
+        FanControlConfig cfg;
+        fanCtrlGetConfig(&cfg);
+
+        bool enabled = doc.containsKey("enabled") ? doc["enabled"].as<bool>() : cfg.enabled;
+        bool autoMode = doc.containsKey("auto_mode") ? doc["auto_mode"].as<bool>() : cfg.autoMode;
+        bool manualState = doc.containsKey("manual_state") ? doc["manual_state"].as<bool>() : cfg.manualState;
+        float tempOnC = doc.containsKey("temp_on_c") ? doc["temp_on_c"].as<float>() : cfg.tempOnC;
+        float tempOffC = doc.containsKey("temp_off_c") ? doc["temp_off_c"].as<float>() : cfg.tempOffC;
+        float humidityOnPct = doc.containsKey("humidity_on_pct") ? doc["humidity_on_pct"].as<float>() : cfg.humidityOnPct;
+        float humidityOffPct = doc.containsKey("humidity_off_pct") ? doc["humidity_off_pct"].as<float>() : cfg.humidityOffPct;
+
+        fanCtrlSetConfig(enabled, autoMode, manualState, tempOnC, tempOffC, humidityOnPct, humidityOffPct);
+        LOG_INFO("Fan Config updated: En=%d, Auto=%d, Manual=%d, T=%.1f/%.1f, H=%.1f/%.1f",
+                 enabled, autoMode, manualState, tempOnC, tempOffC, humidityOnPct, humidityOffPct);
+        _publishFanStatus();
+    }
+
     if (strcmp(topic, LOCAL_MQTT_TOPIC_CONFIG_WATER_SYSTEM) == 0) {
         WaterSystemConfig cfg;
         waterSystemGetConfig(&cfg);
@@ -266,8 +398,8 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
     // Handle Hardware Test Commands (Pi Dashboard → ESP32)
     if (strcmp(topic, LOCAL_MQTT_TOPIC_HW_TEST_CMD) == 0) {
         const char* cmd = doc["cmd"] | "";
-        unsigned long duration = doc["duration"] | 3000;
-        if (duration <= 0) duration = 3000;
+        unsigned long duration = doc["duration"] | HW_TEST_PUMP_DURATION_MS;
+        if (duration <= 0) duration = HW_TEST_PUMP_DURATION_MS;
         
         StaticJsonDocument<256> result;
         result["cmd"] = cmd;
@@ -278,6 +410,7 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
         }
         
         if (strcmp(cmd, "pump_a") == 0) {
+            _stopHwTestPumpOutputs(false);
             digitalWrite(PUMP_NUTRIENT_A_PIN, PUMP_ON);
             result["status"] = "running";
             result["duration_ms"] = duration;
@@ -285,6 +418,7 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
             LOG_INFO("[HW TEST] Pump A ON for %d ms", duration);
         }
         else if (strcmp(cmd, "pump_b") == 0) {
+            _stopHwTestPumpOutputs(false);
             digitalWrite(PUMP_NUTRIENT_B_PIN, PUMP_ON);
             result["status"] = "running";
             result["duration_ms"] = duration;
@@ -293,9 +427,7 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
         }
 
         else if (strcmp(cmd, "pump_stop") == 0) {
-            digitalWrite(PUMP_NUTRIENT_A_PIN, PUMP_OFF);
-            digitalWrite(PUMP_NUTRIENT_B_PIN, PUMP_OFF);
-            automatorResume();  // Resume automator after emergency stop
+            _stopHwTestPumpOutputs(true);
             result["status"] = "stopped";
             LOG_INFO("[HW TEST] All pumps STOPPED, automator resumed");
         }
@@ -308,6 +440,40 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
             lightCtrlSetState(false);
             result["status"] = "off";
             LOG_INFO("[HW TEST] Light OFF");
+        }
+        else if (strcmp(cmd, "feeder_feed") == 0) {
+            fishFeederSetDurationMs(duration);
+            if (fishFeederStartManualFeed("Hardware test feed triggered")) {
+                result["status"] = "feeding";
+                result["duration_ms"] = duration;
+                result["gpio"] = FISH_FEEDER_PIN;
+                LOG_INFO("[HW TEST] Fish feeder ON for %lu ms", duration);
+                _publishFishFeederStatus();
+            } else {
+                result["status"] = "error";
+                result["message"] = "Feeder unavailable";
+            }
+        }
+        else if (strcmp(cmd, "fan_on") == 0) {
+            fanCtrlSetEnabled(true);
+            fanCtrlSetManualState(true);
+            result["status"] = "on";
+            LOG_INFO("[HW TEST] Fan manual ON");
+            _publishFanStatus();
+        }
+        else if (strcmp(cmd, "fan_off") == 0) {
+            fanCtrlSetEnabled(true);
+            fanCtrlSetManualState(false);
+            result["status"] = "off";
+            LOG_INFO("[HW TEST] Fan manual OFF");
+            _publishFanStatus();
+        }
+        else if (strcmp(cmd, "fan_auto") == 0) {
+            fanCtrlSetEnabled(true);
+            fanCtrlSetAutoMode(true);
+            result["status"] = "auto";
+            LOG_INFO("[HW TEST] Fan AUTO mode");
+            _publishFanStatus();
         }
         else if (strcmp(cmd, "read_sensors") == 0) {
             result["status"] = "ok";
@@ -344,12 +510,6 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
 
             
             if (pin > 0) {
-                // Kill previous auto-off task if running
-                if (_hwTestTaskHandle != NULL) {
-                    vTaskDelete(_hwTestTaskHandle);
-                    _hwTestTaskHandle = NULL;
-                }
-                
                 // Allocate params for the task
                 HwTestParams* params = new HwTestParams();
                 params->pin = pin;
@@ -413,10 +573,16 @@ static bool _reconnect() {
         _localMqtt.subscribe("aquaponics/config/ph_cal", 1);
         _localMqtt.subscribe(LOCAL_MQTT_TOPIC_CONFIG_SENSORS, 1);
         _localMqtt.subscribe(LOCAL_MQTT_TOPIC_CONFIG_AUTOMATION, 1);
+        _localMqtt.subscribe(LOCAL_MQTT_TOPIC_CONFIG_LIGHT_CONTROL, 1);
+        _localMqtt.subscribe(LOCAL_MQTT_TOPIC_CONFIG_FISH_FEEDER, 1);
+        _localMqtt.subscribe(LOCAL_MQTT_TOPIC_CONFIG_FAN_CONTROL, 1);
         _localMqtt.subscribe(LOCAL_MQTT_TOPIC_CONFIG_WATER_SYSTEM, 1);
         _localMqtt.subscribe(LOCAL_MQTT_TOPIC_HW_TEST_CMD, 1);
         LOG_INFO("Subscribed to MQTT topics (QoS 1)");
 
+        _publishLightStatus();
+        _publishFishFeederStatus();
+        _publishFanStatus();
         _publishWaterSystemStatus();
         
         return true;
@@ -437,7 +603,7 @@ void localMqttSetup(void) {
     // Set TCP socket timeout to 5 seconds (default ~30s causes task stuck detection)
     _localWifiClient.setTimeout(5);  // seconds
     
-    _localMqtt.setBufferSize(1024);
+    _localMqtt.setBufferSize(LOCAL_MQTT_PACKET_BUFFER_SIZE);
     _localMqtt.setSocketTimeout(5);  // PubSubClient keepalive timeout (seconds)
     
     // Create a queue for passing logs across tasks safely (20 items of 128 bytes)
@@ -466,6 +632,21 @@ void localMqttLoop(void) {
         if (millis() - _lastWaterStatusPublishTime >= LOCAL_PUBLISH_INTERVAL) {
             _lastWaterStatusPublishTime = millis();
             _publishWaterSystemStatus();
+        }
+
+        if (millis() - _lastLightStatusPublishTime >= LOCAL_PUBLISH_INTERVAL) {
+            _lastLightStatusPublishTime = millis();
+            _publishLightStatus();
+        }
+
+        if (millis() - _lastFeederStatusPublishTime >= LOCAL_PUBLISH_INTERVAL) {
+            _lastFeederStatusPublishTime = millis();
+            _publishFishFeederStatus();
+        }
+
+        if (millis() - _lastFanStatusPublishTime >= LOCAL_PUBLISH_INTERVAL) {
+            _lastFanStatusPublishTime = millis();
+            _publishFanStatus();
         }
         
         // Process cross-core log queue safely in the Networking Task
@@ -518,7 +699,7 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
     
     _lastPublishTime = millis();
 
-    StaticJsonDocument<1024> doc;
+    StaticJsonDocument<1536> doc;
     
     // Format same as Netpie for consistency, or simpler flat JSON
     if (!isnan(waterTemp)) doc["water_temp"] = round(waterTemp * 10) / 10.0;
@@ -564,6 +745,36 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
     doc["auto_reason"] = automatorGetActionReason();
     doc["auto_time_left"] = automatorGetTimeRemainingSec();
 
+    LightControlConfig lightCfg;
+    LightControlStatus lightStatus;
+    lightCtrlGetConfig(&lightCfg);
+    lightCtrlGetStatus(&lightStatus);
+    doc["light_relay"] = lightStatus.running;
+    doc["light_schedule_enabled"] = lightCfg.enabled;
+    doc["light_manual_state"] = lightCfg.manualState;
+    doc["light_source"] = lightCtrlGetCommandSourceString(lightCfg.commandSource);
+
+    FanControlConfig fanCfg;
+    FanControlStatus fanStatus;
+    fanCtrlGetConfig(&fanCfg);
+    fanCtrlGetStatus(&fanStatus);
+    doc["fan_enabled"] = fanCfg.enabled;
+    doc["fan_auto_mode"] = fanCfg.autoMode;
+    doc["fan_manual_state"] = fanCfg.manualState;
+    doc["fan_running"] = fanStatus.running;
+    doc["fan_state"] = fanCtrlGetStateString(fanStatus.state);
+    doc["fan_reason"] = fanStatus.reason;
+    doc["fan_has_output"] = fanStatus.hasOutput;
+
+    FishFeederConfig feederCfg;
+    FishFeederStatus feederStatus;
+    fishFeederGetConfig(&feederCfg);
+    fishFeederGetStatus(&feederStatus);
+    doc["feeder_enabled"] = feederCfg.enabled;
+    doc["feeder_running"] = feederStatus.running;
+    doc["feeder_state"] = fishFeederGetStateString(feederStatus.state);
+    doc["feeder_source"] = commandSourceToString(feederCfg.commandSource);
+
     WaterSystemConfig waterCfg;
     WaterSystemStatus waterStatus;
     waterSystemGetConfig(&waterCfg);
@@ -584,13 +795,20 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
     doc["water_state"] = waterSystemGetStateString(waterStatus.state);
     doc["water_reason"] = waterStatus.reason;
 
-    char payload[1024];
-    serializeJson(doc, payload);
+    char payload[LOCAL_MQTT_PACKET_BUFFER_SIZE];
+    size_t payloadLen = serializeJson(doc, payload, sizeof(payload));
+
+    if (payloadLen == 0 || payloadLen >= sizeof(payload) - 1) {
+        LOG_ERROR("Local MQTT payload too large (%u bytes), skipping publish", (unsigned int)payloadLen);
+        return;
+    }
 
     if (_localMqtt.publish(LOCAL_MQTT_TOPIC_SENSORS, payload)) {
         LOG_DEBUG("Local MQTT Publish: %s", payload);
     } else {
-        LOG_ERROR("Local MQTT Publish Failed");
+        LOG_ERROR("Local MQTT Publish Failed (len=%u, state=%d)",
+                  (unsigned int)payloadLen,
+                  _localMqtt.state());
     }
 }
 
@@ -669,6 +887,85 @@ static void _publishWaterSystemStatus(void) {
     char buffer[384];
     serializeJson(doc, buffer, sizeof(buffer));
     _localMqtt.publish(LOCAL_MQTT_TOPIC_STATUS_WATER_SYSTEM, buffer);
+}
+
+static void _publishFanStatus(void) {
+    if (!_localMqtt.connected()) return;
+
+    FanControlConfig cfg;
+    FanControlStatus status;
+    fanCtrlGetConfig(&cfg);
+    fanCtrlGetStatus(&status);
+
+    StaticJsonDocument<320> doc;
+    doc["enabled"] = cfg.enabled;
+    doc["auto_mode"] = cfg.autoMode;
+    doc["manual_state"] = cfg.manualState;
+    doc["temp_on_c"] = round(cfg.tempOnC * 10) / 10.0;
+    doc["temp_off_c"] = round(cfg.tempOffC * 10) / 10.0;
+    doc["humidity_on_pct"] = round(cfg.humidityOnPct * 10) / 10.0;
+    doc["humidity_off_pct"] = round(cfg.humidityOffPct * 10) / 10.0;
+    doc["state"] = fanCtrlGetStateString(status.state);
+    doc["running"] = status.running;
+    doc["has_output"] = status.hasOutput;
+    doc["reason"] = status.reason;
+    if (!isnan(status.airTempC)) doc["air_temp_c"] = round(status.airTempC * 10) / 10.0;
+    if (!isnan(status.humidityPct)) doc["humidity_pct"] = round(status.humidityPct * 10) / 10.0;
+
+    char buffer[320];
+    serializeJson(doc, buffer, sizeof(buffer));
+    _localMqtt.publish(LOCAL_MQTT_TOPIC_STATUS_FAN_CONTROL, buffer);
+}
+
+static void _publishLightStatus(void) {
+    if (!_localMqtt.connected()) return;
+
+    LightControlConfig cfg;
+    LightControlStatus status;
+    lightCtrlGetConfig(&cfg);
+    lightCtrlGetStatus(&status);
+
+    StaticJsonDocument<320> doc;
+    doc["command_source"] = lightCtrlGetCommandSourceString(cfg.commandSource);
+    doc["enabled"] = cfg.enabled;
+    doc["manual_state"] = cfg.manualState;
+    doc["on_day"] = cfg.onDay;
+    doc["on_time"] = cfg.onTime;
+    doc["off_day"] = cfg.offDay;
+    doc["off_time"] = cfg.offTime;
+    doc["running"] = status.running;
+    doc["ntp_synced"] = status.ntpSynced;
+    doc["has_output"] = status.hasOutput;
+    doc["reason"] = status.reason;
+
+    char buffer[320];
+    serializeJson(doc, buffer, sizeof(buffer));
+    _localMqtt.publish(LOCAL_MQTT_TOPIC_STATUS_LIGHT_CONTROL, buffer);
+}
+
+static void _publishFishFeederStatus(void) {
+    if (!_localMqtt.connected()) return;
+
+    FishFeederConfig cfg;
+    FishFeederStatus status;
+    fishFeederGetConfig(&cfg);
+    fishFeederGetStatus(&status);
+
+    StaticJsonDocument<320> doc;
+    doc["command_source"] = commandSourceToString(cfg.commandSource);
+    doc["enabled"] = cfg.enabled;
+    doc["feed_day"] = cfg.feedDay;
+    doc["feed_time"] = cfg.feedTime;
+    doc["duration_ms"] = cfg.durationMs;
+    doc["state"] = fishFeederGetStateString(status.state);
+    doc["running"] = status.running;
+    doc["has_output"] = status.hasOutput;
+    doc["last_feed_at"] = status.lastFeedAt;
+    doc["reason"] = status.reason;
+
+    char buffer[320];
+    serializeJson(doc, buffer, sizeof(buffer));
+    _localMqtt.publish(LOCAL_MQTT_TOPIC_STATUS_FISH_FEEDER, buffer);
 }
 
 

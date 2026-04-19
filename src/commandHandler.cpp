@@ -17,6 +17,8 @@
 #include "tempSensor.h"
 #include "lightSensor.h"
 #include "lightController.h"
+#include "fishFeeder.h"
+#include "fanController.h"
 #include "automator.h"
 #include "waterSystem.h"
 #include "telnetServer.h"
@@ -27,7 +29,7 @@
 static unsigned long _pumpTestStartMs = 0;
 static uint8_t       _pumpTestPin     = 0;
 static bool          _pumpTestActive  = false;
-#define PUMP_TEST_DURATION_MS 3000  // 3 วินาที
+#define PUMP_TEST_DURATION_MS HW_TEST_PUMP_DURATION_MS
 
 // ============================================================================
 // PRIVATE VARIABLES
@@ -35,6 +37,46 @@ static bool          _pumpTestActive  = false;
 
 static char _cmdBuffer[64];
 static size_t _cmdIndex = 0;
+
+static void _showLightController(CommandOutput_t out) {
+    LightControlConfig cfg;
+    LightControlStatus status;
+
+    lightCtrlGetConfig(&cfg);
+    lightCtrlGetStatus(&status);
+
+    commandPrintf(out, "\r\n");
+    commandPrintf(out, "========== LIGHT CONTROL =========\r\n");
+    commandPrintf(out, "  Source         : %s\r\n", lightCtrlGetCommandSourceString(cfg.commandSource));
+    commandPrintf(out, "  Schedule En    : %s\r\n", cfg.enabled ? "YES" : "NO");
+    commandPrintf(out, "  Manual State   : %s\r\n", cfg.manualState ? "ON" : "OFF");
+    commandPrintf(out, "  Running Output : %s\r\n", status.running ? "ON" : "OFF");
+    commandPrintf(out, "  NTP Synced     : %s\r\n", status.ntpSynced ? "YES" : "NO");
+    commandPrintf(out, "  ON Schedule    : %d %s\r\n", cfg.onDay, cfg.onTime);
+    commandPrintf(out, "  OFF Schedule   : %d %s\r\n", cfg.offDay, cfg.offTime);
+    commandPrintf(out, "  Reason         : %s\r\n", status.reason);
+    commandPrintf(out, "===============================\r\n");
+}
+
+static void _showFishFeeder(CommandOutput_t out) {
+    FishFeederConfig cfg;
+    FishFeederStatus status;
+
+    fishFeederGetConfig(&cfg);
+    fishFeederGetStatus(&status);
+
+    commandPrintf(out, "\r\n");
+    commandPrintf(out, "========== FISH FEEDER =========\r\n");
+    commandPrintf(out, "  Source         : %s\r\n", commandSourceToString(cfg.commandSource));
+    commandPrintf(out, "  Enabled        : %s\r\n", cfg.enabled ? "YES" : "NO");
+    commandPrintf(out, "  Feed Schedule  : %d %s\r\n", cfg.feedDay, cfg.feedTime);
+    commandPrintf(out, "  Duration       : %lu ms\r\n", cfg.durationMs);
+    commandPrintf(out, "  State          : %s\r\n", fishFeederGetStateString(status.state));
+    commandPrintf(out, "  Running Output : %s\r\n", status.running ? "ON" : "OFF");
+    commandPrintf(out, "  Last Feed      : %s\r\n", status.lastFeedAt);
+    commandPrintf(out, "  Reason         : %s\r\n", status.reason);
+    commandPrintf(out, "===============================\r\n");
+}
 
 static void _showWaterSystem(CommandOutput_t out) {
     WaterSystemConfig cfg;
@@ -61,6 +103,42 @@ static void _showWaterSystem(CommandOutput_t out) {
     commandPrintf(out, "  Route Blocked   : %s\r\n", status.routeBlocked ? "YES" : "NO");
     commandPrintf(out, "  Alarm Active    : %s\r\n", status.alarmActive ? "YES" : "NO");
     commandPrintf(out, "  Max Refill Time : %lu ms\r\n", cfg.refillMaxRuntimeMs);
+    commandPrintf(out, "===============================\r\n");
+}
+
+static void _showFanController(CommandOutput_t out) {
+    FanControlConfig cfg;
+    FanControlStatus status;
+    char airBuf[16];
+    char humidBuf[16];
+
+    fanCtrlGetConfig(&cfg);
+    fanCtrlGetStatus(&status);
+
+    if (isnan(status.airTempC)) {
+        snprintf(airBuf, sizeof(airBuf), "N/A");
+    } else {
+        snprintf(airBuf, sizeof(airBuf), "%.1f C", status.airTempC);
+    }
+
+    if (isnan(status.humidityPct)) {
+        snprintf(humidBuf, sizeof(humidBuf), "N/A");
+    } else {
+        snprintf(humidBuf, sizeof(humidBuf), "%.1f %%", status.humidityPct);
+    }
+
+    commandPrintf(out, "\r\n");
+    commandPrintf(out, "========== FAN CONTROL =========\r\n");
+    commandPrintf(out, "  State          : %s\r\n", fanCtrlGetStateString(status.state));
+    commandPrintf(out, "  Mode           : %s\r\n", fanCtrlGetModeString(cfg.autoMode));
+    commandPrintf(out, "  Enabled        : %s\r\n", cfg.enabled ? "YES" : "NO");
+    commandPrintf(out, "  Manual State   : %s\r\n", cfg.manualState ? "ON" : "OFF");
+    commandPrintf(out, "  Running Output : %s\r\n", status.running ? "ON" : "OFF");
+    commandPrintf(out, "  Temp On/Off    : %.1f / %.1f C\r\n", cfg.tempOnC, cfg.tempOffC);
+    commandPrintf(out, "  Humid On/Off   : %.1f / %.1f %%\r\n", cfg.humidityOnPct, cfg.humidityOffPct);
+    commandPrintf(out, "  Air Temp       : %s\r\n", airBuf);
+    commandPrintf(out, "  Humidity       : %s\r\n", humidBuf);
+    commandPrintf(out, "  Reason         : %s\r\n", status.reason);
     commandPrintf(out, "===============================\r\n");
 }
 
@@ -103,8 +181,22 @@ static void _showHelp(CommandOutput_t out) {
     commandPrintf(out, "  ph       - อ่านค่า pH ปัจจุบัน\r\n");
     commandPrintf(out, "  cal7     - Calibrate pH 7.0\r\n");
     commandPrintf(out, "  cal4     - Calibrate pH 4.0\r\n");
+    commandPrintf(out, "  light    - สถานะ light controller\r\n");
     commandPrintf(out, "  light on - เปิดไฟปลูกพืช\r\n");
     commandPrintf(out, "  light off- ปิดไฟปลูกพืช\r\n");
+    commandPrintf(out, "  light auto - กลับไปใช้ schedule\r\n");
+    commandPrintf(out, "  light netpie - ให้ NETPIE คุมไฟ\r\n");
+    commandPrintf(out, "  light web - ให้เว็บ/Pi คุมไฟ\r\n");
+    commandPrintf(out, "  feed     - สถานะระบบให้อาหารปลา\r\n");
+    commandPrintf(out, "  feed now - สั่งให้อาหารทันที\r\n");
+    commandPrintf(out, "  feed enable - เปิด schedule ให้อาหารปลา\r\n");
+    commandPrintf(out, "  feed disable - ปิด schedule ให้อาหารปลา\r\n");
+    commandPrintf(out, "  feed netpie - ให้ NETPIE คุม feeder\r\n");
+    commandPrintf(out, "  feed web - ให้เว็บ/Pi คุม feeder\r\n");
+    commandPrintf(out, "  fan      - สถานะพัดลมระบายอากาศ\r\n");
+    commandPrintf(out, "  fan on   - เปิดพัดลมแบบ manual\r\n");
+    commandPrintf(out, "  fan off  - ปิดพัดลมแบบ manual\r\n");
+    commandPrintf(out, "  fan auto - ให้พัดลมกลับไปทำงานแบบ auto\r\n");
     commandPrintf(out, "  auto     - สถานะ Automator\r\n");
     commandPrintf(out, "  water    - สถานะระบบน้ำ\r\n");
     commandPrintf(out, "  circ on  - เปิดปั๊มน้ำวนหลัก\r\n");
@@ -115,8 +207,8 @@ static void _showHelp(CommandOutput_t out) {
     commandPrintf(out, "  route fish- บังคับเติมผ่านตู้ปลา\r\n");
     commandPrintf(out, "  route sump- บังคับเติมเข้าถังรวมตรง\r\n");
     commandPrintf(out, "  water clear- ล้าง alarm ระบบน้ำ\r\n");
-    commandPrintf(out, "  pump a   - ทดสอบปั๊ม A (3 วินาที)\r\n");
-    commandPrintf(out, "  pump b   - ทดสอบปั๊ม B (3 วินาที)\r\n");
+    commandPrintf(out, "  pump a   - ทดสอบปั๊ม A (~%.1f วินาที / %.1f mL)\r\n", PUMP_TEST_DURATION_MS / 1000.0f, HW_TEST_PUMP_TEST_VOLUME_ML);
+    commandPrintf(out, "  pump b   - ทดสอบปั๊ม B (~%.1f วินาที / %.1f mL)\r\n", PUMP_TEST_DURATION_MS / 1000.0f, HW_TEST_PUMP_TEST_VOLUME_ML);
     commandPrintf(out, "  pump stop- หยุดปั๊มทั้งหมด\r\n");
     commandPrintf(out, "  version  - แสดง Firmware Version\r\n");
     commandPrintf(out, "  reboot   - รีสตาร์ทบอร์ด\r\n");
@@ -493,17 +585,76 @@ void commandProcess(char* cmd, CommandOutput_t output) {
         phCalibratePh4();
         commandPrintf(output, "[PH] Calibration complete!\r\n");
     }
+    else if (strcmp(cleanCmd, "light") == 0) {
+        _showLightController(output);
+    }
     else if (strcmp(cleanCmd, "light on") == 0) {
+        lightCtrlSetEnabled(0);
+        lightCtrlSetManualState(true);
         lightCtrlSetState(true);
         commandPrintf(output, "[LIGHT] Forced ON\r\n");
     }
     else if (strcmp(cleanCmd, "light off") == 0) {
+        lightCtrlSetEnabled(0);
+        lightCtrlSetManualState(false);
         lightCtrlSetState(false);
         commandPrintf(output, "[LIGHT] Forced OFF\r\n");
     }
     else if (strcmp(cleanCmd, "light auto") == 0) {
         lightCtrlSetEnabled(1);  // Re-enable schedule
         commandPrintf(output, "[LIGHT] Auto mode (schedule enabled)\r\n");
+    }
+    else if (strcmp(cleanCmd, "light netpie") == 0) {
+        lightCtrlSetCommandSource(COMMAND_SOURCE_NETPIE);
+        commandPrintf(output, "[LIGHT] Control source -> NETPIE\r\n");
+    }
+    else if (strcmp(cleanCmd, "light web") == 0) {
+        lightCtrlSetCommandSource(COMMAND_SOURCE_LOCAL_WEB);
+        commandPrintf(output, "[LIGHT] Control source -> LOCAL WEB\r\n");
+    }
+    else if (strcmp(cleanCmd, "feed") == 0) {
+        _showFishFeeder(output);
+    }
+    else if (strcmp(cleanCmd, "feed now") == 0) {
+        if (fishFeederStartManualFeed("Manual feed triggered from CLI")) {
+            commandPrintf(output, "[FEED] Manual feed started\r\n");
+        } else {
+            commandPrintf(output, "[FEED] Manual feed rejected\r\n");
+        }
+    }
+    else if (strcmp(cleanCmd, "feed enable") == 0) {
+        fishFeederSetEnabled(true);
+        commandPrintf(output, "[FEED] Schedule enabled\r\n");
+    }
+    else if (strcmp(cleanCmd, "feed disable") == 0) {
+        fishFeederSetEnabled(false);
+        commandPrintf(output, "[FEED] Schedule disabled\r\n");
+    }
+    else if (strcmp(cleanCmd, "feed netpie") == 0) {
+        fishFeederSetCommandSource(COMMAND_SOURCE_NETPIE);
+        commandPrintf(output, "[FEED] Control source -> NETPIE\r\n");
+    }
+    else if (strcmp(cleanCmd, "feed web") == 0) {
+        fishFeederSetCommandSource(COMMAND_SOURCE_LOCAL_WEB);
+        commandPrintf(output, "[FEED] Control source -> LOCAL WEB\r\n");
+    }
+    else if (strcmp(cleanCmd, "fan") == 0) {
+        _showFanController(output);
+    }
+    else if (strcmp(cleanCmd, "fan on") == 0) {
+        fanCtrlSetEnabled(true);
+        fanCtrlSetManualState(true);
+        commandPrintf(output, "[FAN] Manual ON\r\n");
+    }
+    else if (strcmp(cleanCmd, "fan off") == 0) {
+        fanCtrlSetEnabled(true);
+        fanCtrlSetManualState(false);
+        commandPrintf(output, "[FAN] Manual OFF\r\n");
+    }
+    else if (strcmp(cleanCmd, "fan auto") == 0) {
+        fanCtrlSetEnabled(true);
+        fanCtrlSetAutoMode(true);
+        commandPrintf(output, "[FAN] AUTO mode restored\r\n");
     }
     else if (strcmp(cleanCmd, "water") == 0) {
         _showWaterSystem(output);
@@ -559,7 +710,10 @@ void commandProcess(char* cmd, CommandOutput_t output) {
         _pumpTestStartMs = millis();
         _pumpTestActive = true;
         digitalWrite(PUMP_NUTRIENT_A_PIN, PUMP_ON);
-        commandPrintf(output, "[PUMP] Testing Nutrient A (GPIO %d) for 3 seconds...\r\n", PUMP_NUTRIENT_A_PIN);
+        commandPrintf(output, "[PUMP] Testing Nutrient A (GPIO %d) for %.1f seconds (~%.1f mL)...\r\n",
+                  PUMP_NUTRIENT_A_PIN,
+                  PUMP_TEST_DURATION_MS / 1000.0f,
+                  HW_TEST_PUMP_TEST_VOLUME_ML);
         LOG_INFO("[PUMP TEST] Nutrient A ON (GPIO %d)", PUMP_NUTRIENT_A_PIN);
     }
     else if (strcmp(cleanCmd, "pump b") == 0) {
@@ -567,7 +721,10 @@ void commandProcess(char* cmd, CommandOutput_t output) {
         _pumpTestStartMs = millis();
         _pumpTestActive = true;
         digitalWrite(PUMP_NUTRIENT_B_PIN, PUMP_ON);
-        commandPrintf(output, "[PUMP] Testing Nutrient B (GPIO %d) for 3 seconds...\r\n", PUMP_NUTRIENT_B_PIN);
+        commandPrintf(output, "[PUMP] Testing Nutrient B (GPIO %d) for %.1f seconds (~%.1f mL)...\r\n",
+                  PUMP_NUTRIENT_B_PIN,
+                  PUMP_TEST_DURATION_MS / 1000.0f,
+                  HW_TEST_PUMP_TEST_VOLUME_ML);
         LOG_INFO("[PUMP TEST] Nutrient B ON (GPIO %d)", PUMP_NUTRIENT_B_PIN);
     }
     else if (strcmp(cleanCmd, "pump stop") == 0) {

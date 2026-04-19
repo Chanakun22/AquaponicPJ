@@ -125,6 +125,44 @@ def load_settings():
             "route_valve_output": False,
             "has_route_valve": False
         },
+        "fan_control": {
+            "enabled": False,
+            "auto_mode": True,
+            "manual_state": False,
+            "temp_on_c": 32.0,
+            "temp_off_c": 30.0,
+            "humidity_on_pct": 80.0,
+            "humidity_off_pct": 75.0,
+            "state": "DISABLED",
+            "running": False,
+            "has_output": False,
+            "reason": "Waiting for ESP32 status"
+        },
+        "light_control": {
+            "command_source": "netpie",
+            "enabled": False,
+            "manual_state": False,
+            "on_day": 0,
+            "on_time": "06:00",
+            "off_day": 0,
+            "off_time": "18:00",
+            "running": False,
+            "ntp_synced": False,
+            "has_output": True,
+            "reason": "Waiting for ESP32 status"
+        },
+        "fish_feeder": {
+            "command_source": "local_web",
+            "enabled": False,
+            "feed_day": 7,
+            "feed_time": "08:00",
+            "duration_ms": 2000,
+            "state": "DISABLED",
+            "running": False,
+            "has_output": False,
+            "last_feed_at": "Never",
+            "reason": "Waiting for ESP32 status"
+        },
         "tds_calibration": {
             "low_ppm": 500,
             "low_voltage": 0.0,
@@ -251,6 +289,8 @@ last_data = {
     # ESP32 Data
     "water_temp": 0, "air_temp": 0, "humidity": 0,
     "tds": 0, "ph": 0, "light": 0,
+    "fan_enabled": False, "fan_auto_mode": True, "fan_manual_state": False,
+    "fan_running": False, "fan_state": "DISABLED", "fan_reason": "Waiting for ESP32 status", "fan_has_output": False,
     "uptime_sec": 0, "wifi_rssi": 0, "free_heap": 0,
     
     # Pi Server Data
@@ -416,7 +456,10 @@ def on_connect(client, userdata, flags, rc):
     client.subscribe("aquaponics/logs")
     client.subscribe("aquaponics/status/sensors")
     client.subscribe("aquaponics/status/ph_cal")
+    client.subscribe("aquaponics/status/fan_control")
     client.subscribe("aquaponics/status/water_system")
+    client.subscribe("aquaponics/status/light_control")
+    client.subscribe("aquaponics/status/fish_feeder")
     client.subscribe("aquaponics/test/result")
 
 
@@ -483,6 +526,36 @@ def on_message(client, userdata, msg):
                     save_log(f"🚨 Water system alarm: {water_status.get('reason', 'Unknown alarm')}")
             except Exception as e:
                 print(f"❌ Error handling water system status: {e}")
+            return
+
+        if topic == "aquaponics/status/fan_control":
+            try:
+                fan_status = json.loads(payload)
+                app_settings.setdefault("fan_control", {})
+                app_settings["fan_control"].update(fan_status)
+                print(f"🔄 Fan control status updated: {fan_status}")
+            except Exception as e:
+                print(f"❌ Error handling fan control status: {e}")
+            return
+
+        if topic == "aquaponics/status/light_control":
+            try:
+                light_status = json.loads(payload)
+                app_settings.setdefault("light_control", {})
+                app_settings["light_control"].update(light_status)
+                print(f"🔄 Light control status updated: {light_status}")
+            except Exception as e:
+                print(f"❌ Error handling light control status: {e}")
+            return
+
+        if topic == "aquaponics/status/fish_feeder":
+            try:
+                feeder_status = json.loads(payload)
+                app_settings.setdefault("fish_feeder", {})
+                app_settings["fish_feeder"].update(feeder_status)
+                print(f"🔄 Fish feeder status updated: {feeder_status}")
+            except Exception as e:
+                print(f"❌ Error handling fish feeder status: {e}")
             return
         
 
@@ -751,6 +824,47 @@ def post_settings():
                     if mqtt_client and mqtt_client.is_connected():
                         mqtt_client.publish("aquaponics/config/automation", automation_payload, qos=1)
                         print(f"📤 Automation Config sent to ESP32: {automation_payload}")
+                except Exception as ex:
+                    print(f"MQTT Publish Error: {ex}")
+
+            if "fan_control" in new_settings:
+                try:
+                    fan_payload = json.dumps(new_settings["fan_control"])
+                    if mqtt_client and mqtt_client.is_connected():
+                        mqtt_client.publish("aquaponics/config/fan_control", fan_payload, qos=1)
+                        print(f"📤 Fan Control Config sent to ESP32: {fan_payload}")
+                except Exception as ex:
+                    print(f"MQTT Publish Error: {ex}")
+
+            if "light_control" in new_settings:
+                try:
+                    light_payload = {
+                        "command_source": new_settings["light_control"].get("command_source", "netpie"),
+                        "enabled": new_settings["light_control"].get("enabled", False),
+                        "manual_state": new_settings["light_control"].get("manual_state", False),
+                        "on_day": new_settings["light_control"].get("on_day", 0),
+                        "on_time": new_settings["light_control"].get("on_time", "06:00"),
+                        "off_day": new_settings["light_control"].get("off_day", 0),
+                        "off_time": new_settings["light_control"].get("off_time", "18:00")
+                    }
+                    if mqtt_client and mqtt_client.is_connected():
+                        mqtt_client.publish("aquaponics/config/light_control", json.dumps(light_payload), qos=1)
+                        print(f"📤 Light Control Config sent to ESP32: {light_payload}")
+                except Exception as ex:
+                    print(f"MQTT Publish Error: {ex}")
+
+            if "fish_feeder" in new_settings:
+                try:
+                    feeder_payload = {
+                        "command_source": new_settings["fish_feeder"].get("command_source", "local_web"),
+                        "enabled": new_settings["fish_feeder"].get("enabled", False),
+                        "feed_day": new_settings["fish_feeder"].get("feed_day", 7),
+                        "feed_time": new_settings["fish_feeder"].get("feed_time", "08:00"),
+                        "duration_ms": new_settings["fish_feeder"].get("duration_ms", 2000)
+                    }
+                    if mqtt_client and mqtt_client.is_connected():
+                        mqtt_client.publish("aquaponics/config/fish_feeder", json.dumps(feeder_payload), qos=1)
+                        print(f"📤 Fish Feeder Config sent to ESP32: {feeder_payload}")
                 except Exception as ex:
                     print(f"MQTT Publish Error: {ex}")
 
@@ -1059,6 +1173,160 @@ def automation_config():
         return jsonify({"status": "ok", "message": "Automation settings applied successfully"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 400
+
+@app.route('/api/fan_control/config', methods=['POST'])
+@admin_required
+def fan_control_config():
+    """Receive exhaust fan settings from Web Dashboard and publish to MQTT"""
+    global app_settings
+    try:
+        data = request.get_json()
+        enabled = bool(data.get('enabled', False))
+        auto_mode = bool(data.get('auto_mode', True))
+        manual_state = bool(data.get('manual_state', False))
+        temp_on_c = float(data.get('temp_on_c', 32.0))
+        temp_off_c = float(data.get('temp_off_c', 30.0))
+        humidity_on_pct = float(data.get('humidity_on_pct', 80.0))
+        humidity_off_pct = float(data.get('humidity_off_pct', 75.0))
+
+        if temp_off_c >= temp_on_c:
+            return jsonify({'status': 'error', 'message': 'temp_off_c must be lower than temp_on_c'}), 400
+        if humidity_off_pct >= humidity_on_pct:
+            return jsonify({'status': 'error', 'message': 'humidity_off_pct must be lower than humidity_on_pct'}), 400
+
+        app_settings.setdefault('fan_control', {})
+        app_settings['fan_control'].update({
+            'enabled': enabled,
+            'auto_mode': auto_mode,
+            'manual_state': manual_state,
+            'temp_on_c': temp_on_c,
+            'temp_off_c': temp_off_c,
+            'humidity_on_pct': humidity_on_pct,
+            'humidity_off_pct': humidity_off_pct
+        })
+        save_settings(app_settings)
+
+        payload = {
+            'enabled': enabled,
+            'auto_mode': auto_mode,
+            'manual_state': manual_state,
+            'temp_on_c': temp_on_c,
+            'temp_off_c': temp_off_c,
+            'humidity_on_pct': humidity_on_pct,
+            'humidity_off_pct': humidity_off_pct
+        }
+
+        if mqtt_client and mqtt_client.is_connected():
+            mqtt_client.publish('aquaponics/config/fan_control', json.dumps(payload), qos=1)
+
+        save_log(
+            f"🌬️ Fan control -> enabled={enabled}, auto={auto_mode}, manual={manual_state}, "
+            f"temp={temp_on_c}/{temp_off_c}, humidity={humidity_on_pct}/{humidity_off_pct}"
+        )
+        log_activity(session.get('username', '?'), 'fan_control', 'Fan control updated', request.remote_addr)
+        return jsonify({'status': 'ok', 'message': 'Fan control settings applied successfully'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/api/light_control/config', methods=['POST'])
+@admin_required
+def light_control_config():
+    """Receive light control settings from Web Dashboard and publish to MQTT"""
+    global app_settings
+    try:
+        data = request.get_json()
+        command_source = str(data.get('command_source', 'netpie')).lower()
+        enabled = bool(data.get('enabled', False))
+        manual_state = bool(data.get('manual_state', False))
+        on_day = int(data.get('on_day', 0))
+        on_time = str(data.get('on_time', '06:00'))
+        off_day = int(data.get('off_day', 0))
+        off_time = str(data.get('off_time', '18:00'))
+
+        if command_source not in ['netpie', 'local_web']:
+            return jsonify({'status': 'error', 'message': 'Invalid command_source'}), 400
+
+        app_settings.setdefault('light_control', {})
+        app_settings['light_control'].update({
+            'command_source': command_source,
+            'enabled': enabled,
+            'manual_state': manual_state,
+            'on_day': on_day,
+            'on_time': on_time,
+            'off_day': off_day,
+            'off_time': off_time
+        })
+        save_settings(app_settings)
+
+        payload = {
+            'command_source': command_source,
+            'enabled': enabled,
+            'manual_state': manual_state,
+            'on_day': on_day,
+            'on_time': on_time,
+            'off_day': off_day,
+            'off_time': off_time
+        }
+
+        if mqtt_client and mqtt_client.is_connected():
+            mqtt_client.publish('aquaponics/config/light_control', json.dumps(payload), qos=1)
+
+        save_log(
+            f"💡 Light control -> source={command_source}, enabled={enabled}, manual={manual_state}, "
+            f"on={on_day} {on_time}, off={off_day} {off_time}"
+        )
+        log_activity(session.get('username', '?'), 'light_control', 'Light control updated', request.remote_addr)
+        return jsonify({'status': 'ok', 'message': 'Light control settings applied successfully'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+@app.route('/api/fish_feeder/config', methods=['POST'])
+@admin_required
+def fish_feeder_config():
+    """Receive fish feeder settings from Web Dashboard and publish to MQTT"""
+    global app_settings
+    try:
+        data = request.get_json()
+        command_source = str(data.get('command_source', 'local_web')).lower()
+        enabled = bool(data.get('enabled', False))
+        feed_day = int(data.get('feed_day', 7))
+        feed_time = str(data.get('feed_time', '08:00'))
+        duration_ms = int(data.get('duration_ms', 2000))
+        trigger_feed = bool(data.get('trigger_feed', False))
+
+        if command_source not in ['netpie', 'local_web']:
+            return jsonify({'status': 'error', 'message': 'Invalid command_source'}), 400
+
+        app_settings.setdefault('fish_feeder', {})
+        app_settings['fish_feeder'].update({
+            'command_source': command_source,
+            'enabled': enabled,
+            'feed_day': feed_day,
+            'feed_time': feed_time,
+            'duration_ms': duration_ms
+        })
+        save_settings(app_settings)
+
+        payload = {
+            'command_source': command_source,
+            'enabled': enabled,
+            'feed_day': feed_day,
+            'feed_time': feed_time,
+            'duration_ms': duration_ms,
+            'trigger_feed': trigger_feed
+        }
+
+        if mqtt_client and mqtt_client.is_connected():
+            mqtt_client.publish('aquaponics/config/fish_feeder', json.dumps(payload), qos=1)
+
+        save_log(
+            f"🐟 Fish feeder -> source={command_source}, enabled={enabled}, schedule={feed_day} {feed_time}, "
+            f"duration={duration_ms}ms, trigger={trigger_feed}"
+        )
+        log_activity(session.get('username', '?'), 'fish_feeder', 'Fish feeder updated', request.remote_addr)
+        return jsonify({'status': 'ok', 'message': 'Fish feeder settings applied successfully'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
 
 @app.route('/api/water_system/config', methods=['POST'])
 @admin_required

@@ -8,6 +8,7 @@
 #include "wifiConn.h"
 #include <time.h>
 #include <Preferences.h>
+#include <string.h>
 
 // Light Relay Control (Active LOW: LOW = ON, HIGH = OFF)
 
@@ -16,6 +17,8 @@
 // ============================================================================
 
 static bool _lightEnabled = false;
+static bool _manualState = false;
+static CommandSource _commandSource = LIGHT_DEFAULT_COMMAND_SOURCE;
 static int _onDay = 0;       // 0=Sun, 1=Mon, ..., 6=Sat, 7=Everyday
 static int _onHour = 0;
 static int _onMinute = 0;
@@ -26,6 +29,7 @@ static bool _currentState = false;
 static bool _ntpSynced = false;
 static unsigned long _lastCheckTime = 0;
 static Preferences _lightPrefs;
+static LightControlStatus _status = {false, false, true, "Light controller not initialized"};
 
 // ============================================================================
 // PRIVATE FUNCTIONS
@@ -46,7 +50,9 @@ static void _parseTime(const char* timeStr, int* hour, int* minute) {
  */
 static void _saveSchedule(void) {
     _lightPrefs.begin("light_sched", false);
+    _lightPrefs.putInt("source", (int)_commandSource);
     _lightPrefs.putBool("enabled", _lightEnabled);
+    _lightPrefs.putBool("manual", _manualState);
     _lightPrefs.putInt("onDay", _onDay);
     _lightPrefs.putInt("onHour", _onHour);
     _lightPrefs.putInt("onMin", _onMinute);
@@ -62,7 +68,9 @@ static void _saveSchedule(void) {
  */
 static void _loadSchedule(void) {
     _lightPrefs.begin("light_sched", true);
+    _commandSource = (CommandSource)_lightPrefs.getInt("source", (int)LIGHT_DEFAULT_COMMAND_SOURCE);
     _lightEnabled = _lightPrefs.getBool("enabled", false);
+    _manualState = _lightPrefs.getBool("manual", false);
     _onDay = _lightPrefs.getInt("onDay", 0);
     _onHour = _lightPrefs.getInt("onHour", 6);
     _onMinute = _lightPrefs.getInt("onMin", 0);
@@ -71,6 +79,13 @@ static void _loadSchedule(void) {
     _offMinute = _lightPrefs.getInt("offMin", 0);
     _lightPrefs.end();
     LOG_INFO("Loaded Light Schedule from NVS");
+}
+
+static void _setReason(const char* reason) {
+    if (strncmp(_status.reason, reason, sizeof(_status.reason)) != 0) {
+        snprintf(_status.reason, sizeof(_status.reason), "%s", reason);
+        LOG_INFO("[LIGHT] %s", _status.reason);
+    }
 }
 
 /**
@@ -159,6 +174,7 @@ void lightCtrlSetup(void) {
     pinMode(LIGHT_RELAY_PIN, OUTPUT);
     digitalWrite(LIGHT_RELAY_PIN, HIGH);  // OFF (Active LOW)
     _currentState = false;
+    _status.hasOutput = true;
     
     LOG_INFO("Light Relay initialized (GPIO %d)", LIGHT_RELAY_PIN);
     
@@ -187,6 +203,12 @@ void lightCtrlLoop(void) {
     
     // ถ้ายังไม่ได้เปิดใช้งาน ไม่ต้องทำอะไร
     if (!_lightEnabled) {
+        if (_currentState != _manualState) {
+            lightCtrlSetState(_manualState);
+        }
+        _status.running = _currentState;
+        _status.ntpSynced = _ntpSynced;
+        _setReason(_manualState ? "Manual ON" : "Manual OFF");
         if (showDebug) {
             LOG_DEBUG("Light controller DISABLED (lightEnabled=0)");
         }
@@ -196,6 +218,9 @@ void lightCtrlLoop(void) {
     // ถ้า WiFi ไม่ได้เชื่อมต่อ ใช้เวลาจาก RTC ภายใน
     struct tm timeinfo;
     if (!getLocalTime(&timeinfo, 10)) {  // 10ms timeout — non-blocking
+        _status.running = _currentState;
+        _status.ntpSynced = false;
+        _setReason("Waiting for NTP time sync");
         if (showDebug) {
             LOG_DEBUG("NTP NOT synced yet!");
         }
@@ -206,6 +231,7 @@ void lightCtrlLoop(void) {
         _ntpSynced = true;
         LOG_INFO("NTP synced!");
     }
+    _status.ntpSynced = true;
     
     // DEBUG: แสดงเวลาปัจจุบัน
     static const char* dayNames[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Every"};
@@ -233,10 +259,13 @@ void lightCtrlLoop(void) {
         LOG_INFO("Schedule OFF at %s %02d:%02d", 
                  dayNames[timeinfo.tm_wday], timeinfo.tm_hour, timeinfo.tm_min);
     }
+    _status.running = _currentState;
+    _setReason(_currentState ? "Schedule keeps light ON" : "Schedule keeps light OFF");
 }
 
 void lightCtrlSetState(bool state) {
     _currentState = state;
+    _status.running = state;
     
     // Relay control (Active LOW: LOW = ON, HIGH = OFF)
     if (state) {
@@ -279,7 +308,24 @@ bool lightCtrlGetTime(char* buffer, size_t bufferSize) {
 void lightCtrlSetEnabled(int enabled) {
     _lightEnabled = (enabled == 1);
     LOG_INFO("Light controller enabled: %s", _lightEnabled ? "YES" : "NO");
+    if (!_lightEnabled) {
+        lightCtrlSetState(_manualState);
+    }
     _saveSchedule();
+}
+
+void lightCtrlSetManualState(bool state) {
+    _manualState = state;
+    if (!_lightEnabled) {
+        lightCtrlSetState(state);
+    }
+    _saveSchedule();
+}
+
+void lightCtrlSetCommandSource(CommandSource source) {
+    _commandSource = source;
+    _saveSchedule();
+    _setReason(source == COMMAND_SOURCE_NETPIE ? "Control source set to NETPIE" : "Control source set to Local Web");
 }
 
 void lightCtrlSetOnDay(int day) {
@@ -319,10 +365,45 @@ void lightCtrlSetOffTime(const char* offTime) {
 void lightCtrlPrintSchedule(void) {
     static const char* dayNames[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Everyday"};
     LOG_INFO("=== Current Light Schedule ===");
+    LOG_INFO("  Source : %s", lightCtrlGetCommandSourceString(_commandSource));
     LOG_INFO("  Enabled: %s", _lightEnabled ? "YES" : "NO");
+    LOG_INFO("  Manual : %s", _manualState ? "ON" : "OFF");
     LOG_INFO("  ON:  %s %02d:%02d", (_onDay <= 7) ? dayNames[_onDay] : "?", _onHour, _onMinute);
     LOG_INFO("  OFF: %s %02d:%02d", (_offDay <= 7) ? dayNames[_offDay] : "?", _offHour, _offMinute);
     LOG_INFO("==============================");
+}
+
+CommandSource lightCtrlGetCommandSource(void) { return _commandSource; }
+
+const char* lightCtrlGetCommandSourceString(CommandSource source) {
+    return commandSourceToString(source);
+}
+
+bool lightCtrlAllowsNetpieControl(void) {
+    return _commandSource == COMMAND_SOURCE_NETPIE;
+}
+
+bool lightCtrlAllowsLocalControl(void) {
+    return _commandSource == COMMAND_SOURCE_LOCAL_WEB;
+}
+
+void lightCtrlGetConfig(LightControlConfig* config) {
+    if (config == NULL) {
+        return;
+    }
+    config->commandSource = _commandSource;
+    config->enabled = _lightEnabled;
+    config->manualState = _manualState;
+    config->onDay = _onDay;
+    config->offDay = _offDay;
+    snprintf(config->onTime, sizeof(config->onTime), "%02d:%02d", _onHour, _onMinute);
+    snprintf(config->offTime, sizeof(config->offTime), "%02d:%02d", _offHour, _offMinute);
+}
+
+void lightCtrlGetStatus(LightControlStatus* status) {
+    if (status != NULL) {
+        *status = _status;
+    }
 }
 
 int lightCtrlGetOnDay(void) { return _onDay; }

@@ -9,6 +9,7 @@
 #define CONFIG_H
 
 #include <Arduino.h>
+#include "controlSource.h"
 #include "secrets.h"
 
 // ============================================================================
@@ -41,6 +42,14 @@
 
 // Relay/Light Control
 #define LIGHT_RELAY_PIN     12       // ขา Relay ควบคุมไฟ NeoPixel
+
+#ifndef FISH_FEEDER_PIN
+#define FISH_FEEDER_PIN     -1       // รีเลย์/มอเตอร์ให้อาหารปลา
+#endif
+
+#ifndef EXHAUST_FAN_PIN
+#define EXHAUST_FAN_PIN     -1       // พัดลมระบายอากาศ/ดูดอากาศ
+#endif
 
 // Automation Pumps (Dosing & Water)
 #define PUMP_NUTRIENT_A_PIN 10      // ปั๊มปุ๋ย A
@@ -241,6 +250,15 @@
 #define LOCAL_MQTT_TOPIC_CONFIG_AUTOMATION "aquaponics/config/automation" // MQTT Topic สำหรับกำหนดเป้าหมาย TDS/pH
 #define LOCAL_MQTT_TOPIC_STATUS_AUTOMATION "aquaponics/status/automation" // MQTT Topic แจ้งสถานะเป้าหมายปัจจุบัน
 
+#define LOCAL_MQTT_TOPIC_CONFIG_FAN_CONTROL "aquaponics/config/fan_control" // MQTT Topic สำหรับพัดลมระบายอากาศ (Pi -> ESP)
+#define LOCAL_MQTT_TOPIC_STATUS_FAN_CONTROL "aquaponics/status/fan_control" // MQTT Topic สถานะพัดลมระบายอากาศ (ESP -> Pi)
+
+#define LOCAL_MQTT_TOPIC_CONFIG_LIGHT_CONTROL "aquaponics/config/light_control" // MQTT Topic สำหรับ light controller
+#define LOCAL_MQTT_TOPIC_STATUS_LIGHT_CONTROL "aquaponics/status/light_control" // MQTT Topic สถานะ light controller
+
+#define LOCAL_MQTT_TOPIC_CONFIG_FISH_FEEDER "aquaponics/config/fish_feeder" // MQTT Topic สำหรับ fish feeder
+#define LOCAL_MQTT_TOPIC_STATUS_FISH_FEEDER "aquaponics/status/fish_feeder" // MQTT Topic สถานะ fish feeder
+
 #define LOCAL_MQTT_TOPIC_CONFIG_WATER_SYSTEM "aquaponics/config/water_system" // MQTT Topic สำหรับระบบน้ำ (Pi -> ESP)
 #define LOCAL_MQTT_TOPIC_STATUS_WATER_SYSTEM "aquaponics/status/water_system" // MQTT Topic สถานะระบบน้ำ (ESP -> Pi)
 
@@ -263,6 +281,34 @@
  * @section Light Schedule Settings
  */
 #define LIGHT_CHECK_INTERVAL 1000             // ตรวจสอบตารางเวลาทุก (ms)
+#define LIGHT_DEFAULT_COMMAND_SOURCE COMMAND_SOURCE_NETPIE
+
+// ============================================================================
+// FISH FEEDER CONFIGURATION
+// ============================================================================
+
+#define FEEDER_CHECK_INTERVAL_MS          1000UL
+#define FEEDER_DEFAULT_COMMAND_SOURCE     COMMAND_SOURCE_LOCAL_WEB
+#define FEEDER_DEFAULT_ENABLED            0
+#define FEEDER_DEFAULT_FEED_DAY           7
+#define FEEDER_DEFAULT_FEED_HOUR          8
+#define FEEDER_DEFAULT_FEED_MINUTE        0
+#define FEEDER_DEFAULT_DURATION_MS        2000UL
+#define FEEDER_MIN_DURATION_MS            250UL
+#define FEEDER_MAX_DURATION_MS            10000UL
+
+// ============================================================================
+// FAN CONTROLLER CONFIGURATION
+// ============================================================================
+
+#define FAN_CONTROL_INTERVAL_MS           2000UL
+#define FAN_DEFAULT_ENABLED               0
+#define FAN_DEFAULT_AUTO_MODE             1
+#define FAN_DEFAULT_MANUAL_STATE          0
+#define FAN_DEFAULT_TEMP_ON_C             32.0f
+#define FAN_DEFAULT_TEMP_OFF_C            30.0f
+#define FAN_DEFAULT_HUMIDITY_ON_PCT       80.0f
+#define FAN_DEFAULT_HUMIDITY_OFF_PCT      75.0f
 
 // ============================================================================
 // AUTOMATOR CONFIGURATION
@@ -272,8 +318,14 @@
  * @section Automation Settings
  * @brief ตั้งค่าพื้นฐานสำหรับระบบควบคุมอัตโนมัติ
  */
+#define DOSING_PUMP_RATED_VOLTAGE_V         12.0f   // สเปกปั๊มโดส: DC 12V
+#define DOSING_PUMP_RATED_CURRENT_A         0.25f   // สเปกปั๊มโดส: กระแสประมาณ 0.25A
+#define DOSING_PUMP_FLOW_RATE_ML_PER_MIN    39.0f   // สเปกปั๊มโดส: อัตราการไหล 39 mL/min
+#define AUTOMATOR_DOSE_VOLUME_ML            1.5f    // จ่ายสารต่อรอบแบบ conservative ประมาณ 1.5 mL ต่อปั๊ม
+#define HW_TEST_PUMP_TEST_VOLUME_ML         2.0f    // ทดสอบปั๊มครั้งละประมาณ 2.0 mL
 #define AUTOMATOR_CHECK_INTERVAL    5000    // ตรวจสอบสถานะทุก 5 วินาที
-#define AUTOMATOR_PUMP_DOSE_MS      3000    // ปั๊มทำงานครั้งละ 3 วินาที
+#define AUTOMATOR_PUMP_DOSE_MS      ((unsigned long)((AUTOMATOR_DOSE_VOLUME_ML * 60000.0f / DOSING_PUMP_FLOW_RATE_ML_PER_MIN) + 0.5f))
+#define HW_TEST_PUMP_DURATION_MS    ((unsigned long)((HW_TEST_PUMP_TEST_VOLUME_ML * 60000.0f / DOSING_PUMP_FLOW_RATE_ML_PER_MIN) + 0.5f))
 #define AUTOMATOR_COOLDOWN_MS       600000  // พักระบบ 10 นาที (600,000 ms) หลังจากการจ่ายปุ๋ย
 #define AUTOMATOR_DEFAULT_TDS       800.0f  // ค่า TDS พื้นฐาน
 #define AUTOMATOR_DEFAULT_PH        6.5f    // ค่า pH พื้นฐาน

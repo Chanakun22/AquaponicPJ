@@ -50,4 +50,10 @@ void netpiePublishData(float waterTemp, float airTemp, float humidity, float tds
  */
 void netpiePublish(const char* topic, const char* payload);
 
+/**
+ * @brief ขอ shadow ล่าสุดจาก NETPIE อีกครั้ง
+ * @return true ถ้าส่ง request สำเร็จ, false ถ้า NETPIE ยังไม่ connected
+ */
+bool netpieRequestShadowSync(void);
+
 #endif // NETPIE_H

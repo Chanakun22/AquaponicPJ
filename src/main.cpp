@@ -16,6 +16,8 @@
 #include "lightSensor.h"
 #include "phSensor.h"
 #include "lightController.h"
+#include "fishFeeder.h"
+#include "fanController.h"
 #include "wifiConn.h"
 #include "netpie.h"
 #include "localMqtt.h"
@@ -245,6 +247,12 @@ void TaskControl(void *pvParameters) {
         
         // Light Controller Schedule
         lightCtrlLoop();
+
+        // Fish feeder schedule
+        fishFeederLoop();
+
+        // Exhaust fan controller
+        fanCtrlLoop();
         
         // Automation Engine (Process State Machine)
         automatorLoop();
@@ -316,6 +324,8 @@ void setup() {
     netpieSetup();
     localMqttSetup();
     lightCtrlSetup();
+    fishFeederSetup();
+    fanCtrlSetup();
     
     // เริ่มต้นเซ็นเซอร์
     tdsSetup();

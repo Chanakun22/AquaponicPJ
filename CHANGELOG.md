@@ -6,6 +6,47 @@ All notable changes to the **Smart Aquaponics AI** project will be documented in
 
 ### Changed
 
+- **fix: refresh NETPIE shadow on light source switch (`include/netpie.h`, `src/netpie.cpp`, `src/localMqtt.cpp`):**
+  - เมื่อหน้า settings เปลี่ยน light `command_source` จาก `local_web` เป็น `netpie` ให้ firmware ขอ `@shadow/data/get` ทันที เพื่อดึงตารางล่าสุดจาก NETPIE กลับมาใช้และทำให้ไฟเข้าสู่สถานะตาม schedule ปัจจุบันได้เร็วขึ้น แทนการค้างอยู่กับ config ฝั่ง local เดิม
+
+- **fix: enlarge NETPIE shadow parse/buffer capacity (`src/netpie.cpp`):**
+  - เพิ่มขนาด `StaticJsonDocument` และ MQTT/message buffer ของ NETPIE จาก 1024 เป็น 2048 ไบต์ พร้อม log `payload_len` และเตือนเมื่อ payload ถูกตัด เพื่อแก้ error `JSON parse error: NoMemory` หลัง ESP reboot เมื่อ shadow response ใหญ่ขึ้นจาก field ที่เพิ่มในระบบ
+
+- **feat: fish widget current web summary (`docs/netpie_widgets/fish_feeder_widget.html`):**
+  - ปรับกล่อง summary ของ fish feeder ให้แสดง `Mode`, `Feed`, `Duration => State`, `Running`, และ `Source` จาก shadow ในรูปแบบเดียวกับ light widget โดยยังคง flow save/feed-now/pending draft เดิมไว้
+
+- **feat: light widget shows source/running/block state (`docs/netpie_widgets/light_timer_widget.html`):**
+  - ขยายกล่อง `Current Web Setting` ให้แสดง `OFF => State`, `Running`, และ `Source` โดยอ่านค่า `light_relay` และ `light_source` จาก shadow เพื่อให้หน้า NETPIE เห็นทันทีว่า widget ถูก block ด้วย `local_web` อยู่หรือไม่
+
+- **fix: revert light widget to direct working baseline (`docs/netpie_widgets/light_timer_widget.html`):**
+  - ตัด light widget กลับมาใช้ flow ตรงแบบโค้ดที่ผู้ใช้ยืนยันว่า save เวลาได้จริง แล้วเพิ่มเฉพาะตัวเลือก `Everyday` และกล่อง `Current Web Setting` ที่อ่านค่าจาก shadow ปัจจุบัน โดยไม่ใช้ wrapper/state เพิ่มเติม
+
+- **feat: light widget current web summary (`docs/netpie_widgets/light_timer_widget.html`):**
+  - เพิ่มกล่อง `Current Web Setting` ใน light NETPIE widget เพื่อสรุป mode, เวลา ON, และเวลา OFF ที่อ่านมาจาก shadow/web ปัจจุบัน พร้อมรองรับค่า `Everyday` และอัปเดต view นี้ทันทีหลัง toggle หรือ save
+
+- **fix: isolate NETPIE widget scope (`docs/netpie_widgets/light_timer_widget.html`, `docs/netpie_widgets/fish_feeder_widget.html`):**
+  - เปลี่ยน DOM id, handler names, และ state variables ของ light/fish widgets ให้แยก namespace กัน พร้อมห่อ logic ไว้ใน closure เพื่อกัน event และตัวแปร global ชนกันเมื่อวางสอง widget บนหน้า NETPIE เดียวกัน
+- **fix: normalize NETPIE time input values (`docs/netpie_widgets/light_timer_widget.html`, `docs/netpie_widgets/fish_feeder_widget.html`):**
+  - เพิ่มตัว normalize/read helper สำหรับช่องเวลา เพื่อรองรับกรณีที่ environment ของ NETPIE คืนค่า time input ไม่ตรง `HH:MM` เป๊ะ แม้ใน UI จะยังแสดงเวลาอยู่ ทำให้ validation และ save ไม่พลาดง่าย
+- **fix: restore original-style light widget flow (`docs/netpie_widgets/light_timer_widget.html`):**
+  - ปรับ light widget กลับไปใช้ `input type="time"` และ flow อ่านค่าจาก DOM ตอน save แบบใกล้เคียงโค้ดตั้งต้นของผู้ใช้มากที่สุด โดยยังคง namespace id/handler แยกจาก fish widget เพื่อไม่ให้สองการ์ดชนกันบนหน้า NETPIE เดียวกัน
+- **fix: save latest NETPIE edited values from draft state (`docs/netpie_widgets/light_timer_widget.html`, `docs/netpie_widgets/fish_feeder_widget.html`):**
+  - เปลี่ยนให้ widget เก็บค่าที่ผู้ใช้แก้ล่าสุดจาก event ลงใน local draft state และใช้ draft นี้ตอน save แทนการอ่าน DOM input ซ้ำ เพื่อลดอาการที่ NETPIE แสดงเวลาที่เปลี่ยนแล้วแต่ตอนบันทึกยังส่งค่าเดิม
+- **fix: persist light widget dropdown edits across NETPIE re-render (`docs/netpie_widgets/light_timer_widget.html`):**
+  - เพิ่ม pending draft + sessionStorage ให้ฝั่ง light เหมือน fish feeder เพื่อกันกรณี NETPIE re-render หลังผู้ใช้เลือกเวลาใหม่แล้วทำให้ตอนกด Save ยังส่งเวลาเก่าจาก shadow
+- **fix: replace NETPIE time inputs with hour/minute dropdowns (`docs/netpie_widgets/light_timer_widget.html`, `docs/netpie_widgets/fish_feeder_widget.html`):**
+  - เปลี่ยนตัวเลือกเวลาใน widget จาก `input type="time"` เป็น dropdown ชั่วโมง/นาที แล้ว compose เป็น `HH:MM` ใน script เพื่อหลีกเลี่ยงปัญหา NETPIE runtime ไม่อัปเดตค่าจาก time input ตามที่ผู้ใช้เลือก
+- **fix: apply NETPIE time dropdown event value before composing time (`docs/netpie_widgets/light_timer_widget.html`, `docs/netpie_widgets/fish_feeder_widget.html`):**
+  - แก้ให้ handler ของ dropdown เวลาเขียนค่าที่เพิ่งเลือกจาก event ลง select ก่อน แล้วค่อย compose `HH:MM` เพื่อกันกรณี runtime ของ NETPIE อัปเดต DOM ช้ากว่า event จนทำให้ save ยังได้เวลาเก่า
+- **docs: NETPIE widget templates (`docs/netpie_widgets/light_timer_widget.html`, `docs/netpie_widgets/fish_feeder_widget.html`, `docs/netpie_widgets/README.md`):**
+  - เพิ่ม template widget สำหรับหน้า NETPIE ของ light timer และ fish feeder โดยใส่ pending-state persistence, validation, reset-to-shadow, และสถานะ source เพื่อให้ใช้งานบนหน้า NETPIE ได้เสถียรขึ้น
+- **fix: feeder `feedNow` shadow edge handling (`src/netpie.cpp`):**
+  - ปรับให้ trigger `feedNow` จาก shadow ทำงานแบบ rising-edge และ clear flag กลับเป็น `false` อัตโนมัติ เพื่อลดโอกาสให้อาหารซ้ำเมื่อ shadow ถูก re-render หรือค้างค่าจากรอบก่อน
+- **feat: selectable control source for light and fish feeder (`include/controlSource.h`, `include/fishFeeder.h`, `src/fishFeeder.cpp`, `src/lightController.cpp`, `src/netpie.cpp`, `src/localMqtt.cpp`, `src/commandHandler.cpp`, `pi_server/app.py`, `pi_server/settings.html`, `pi_server/hardware_test.html`):**
+  - เพิ่มระบบเลือกแหล่งคำสั่งของ light controller และ fish feeder ระหว่าง `NETPIE` กับ `Local Web`
+  - เพิ่ม fish feeder controller ใหม่พร้อม schedule, manual trigger, NVS persistence, MQTT config/status, CLI commands, และ tile ทดสอบบนหน้า hardware test
+  - ปรับให้ NETPIE และ Local MQTT respect `command_source` ที่เลือกไว้เพื่อกันคำสั่งคนละฝั่งเขียนทับกัน
+  - เพิ่มการ์ดตั้งค่า Light Control และ Fish Feeder ในหน้า settings พร้อม apply-now endpoint และ realtime status feedback จาก ESP32
 - **refactor: hardware test page aligned with current firmware features (`pi_server/hardware_test.html`):**
   - ตัด water pump test แบบเก่าที่ firmware ไม่รองรับแล้ว
   - เพิ่ม live summary สำหรับ ESP, automation, water state, และ route
@@ -14,6 +55,19 @@ All notable changes to the **Smart Aquaponics AI** project will be documented in
   - แก้ให้ water status ใช้ MQTT realtime fields ที่ตรงกับ firmware (`circ_running`, `water_alarm`, `water_reason`) และให้ทุก action ดึง config ล่าสุดก่อนส่งเพื่อลดการทับค่าเก่า
   - ปรับ safe stop ให้ปิด auto refill ด้วย เพื่อไม่ให้ปั๊มเติมกลับมาทำงานต่อเองเมื่อ low-level condition ยังอยู่
   - เพิ่ม banner เตือนบนหน้า hw test หลัง Safe Stop เพื่อบอกผู้ใช้ว่า auto refill ถูกปิดไว้และต้องเปิดกลับเองเมื่อพร้อม
+  - แก้ reliability ของ dosing pump test: firmware จะปิด output test เดิมก่อนเริ่มรอบใหม่ และหน้า hw test บังคับ test ทีละตัวพร้อม fallback stop หาก completion event ไม่กลับมา
+  - ปรับ timing ของปั๊มโดสและ pump test ให้คำนวณจากสเปกปั๊มใหม่ 12V, 39 mL/min โดยใช้ปริมาณทดสอบ/โดสประมาณ 2.0 mL ต่อรอบ แทนการ hardcode 3000 ms
+  - ปรับ automation dosing ให้ conservative ขึ้นโดยลดปริมาณโดสต่อรอบเหลือ 1.5 mL ต่อปั๊ม ขณะที่ pump test ยังใช้ 2.0 mL สำหรับทดสอบฮาร์ดแวร์
+- **feat: exhaust fan controller (`include/fanController.h`, `src/fanController.cpp`, `src/localMqtt.cpp`, `src/commandHandler.cpp`, `pi_server/app.py`, `pi_server/settings.html`, `pi_server/hardware_test.html`):**
+  - เพิ่ม controller พัดลมระบายอากาศแบบ auto/manual พร้อม threshold อุณหภูมิและความชื้น, hysteresis, NVS persistence, CLI commands, MQTT config/status, และหน้า settings/hwtest สำหรับคุมและทดสอบพัดลม
+- **fix: local MQTT sensor payload headroom (`src/localMqtt.cpp`):**
+  - เพิ่ม packet buffer และใส่ length-aware serialization/logging เพื่อกัน `Local MQTT Publish Failed` จาก payload sensor ที่ใหญ่ขึ้นหลังเพิ่ม fan/water/automation fields
+- **fix: ESP32-S3 N8 build target config (`platformio.ini`):**
+  - ลบ override ของ 16MB flash และ PSRAM ที่ไม่ตรงกับบอร์ด ESP32-S3-DevKitC-1 (N8, no PSRAM) เพื่อหลีกเลี่ยงอาการบูตล้มเหลว/`SHA-256 comparison failed` หลังแฟลช
+- **chore: restore legacy board build spec (`platformio.ini`):**
+  - ย้อนกลับไปใช้ override เดิมของ 16MB flash, QIO/80MHz, และ PSRAM flags ตามที่ขอ เพื่อให้ build spec ตรงกับ workflow เดิมก่อนหน้า
+- **docs: non-technical operator test guide (`TEST_OPERATOR_GUIDE.md`, `README.md`):**
+  - เพิ่มคู่มือทดสอบระบบสำหรับผู้ใช้ที่ไม่รู้โครงสร้างภายใน โดยจัดลำดับการทดสอบแบบ step-by-step, เกณฑ์ pass/fail, และวิธีรายงานปัญหาให้อ่านง่ายจากหน้า Dashboard, Hardware Test, และ Settings
 - **docs: hardware test runbook (`docs/vault/05-testing/bringup-checklist.md`):**
   - เพิ่ม checklist แยกสำหรับหน้า `/hwtest` ครอบคลุม sensor snapshot, dosing pumps, light relay, water system controls, และ safe stop verification
 

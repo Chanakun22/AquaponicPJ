@@ -8,6 +8,7 @@
 #include "system.h"
 #include "wifiConn.h"
 #include "lightController.h"
+#include "fishFeeder.h"
 #include "phSensor.h"
 #include "localMqtt.h"
 #include <WiFi.h>
@@ -23,6 +24,9 @@ static PubSubClient _mqtt(_wifiClient);
 static unsigned long _lastReconnectAttempt = 0;
 static unsigned long _lastPublishTime = 0;
 static bool _shadowRequested = false;
+static bool _lastFeedNowShadow = false;
+static const size_t NETPIE_SHADOW_JSON_CAPACITY = 2048;
+static const size_t NETPIE_MQTT_MESSAGE_BUFFER_SIZE = 2048;
 
 // Exponential backoff for reconnection
 static unsigned long _reconnectInterval = MQTT_RECONNECT_INTERVAL;  // Start at 5s
@@ -44,57 +48,102 @@ static void _parseShadowData(const char* json);
  * @brief Parse Shadow data จาก NETPIE (รองรับ partial update)
  */
 static void _parseShadowData(const char* json) {
-    StaticJsonDocument<1024> doc;
+    StaticJsonDocument<NETPIE_SHADOW_JSON_CAPACITY> doc;
     DeserializationError err = deserializeJson(doc, json);
     
     if (err) {
-        LOG_ERROR("JSON parse error: %s", err.c_str());
+        LOG_ERROR("JSON parse error: %s (payload_len=%u, doc_cap=%u)",
+                  err.c_str(),
+                  static_cast<unsigned int>(strlen(json)),
+                  static_cast<unsigned int>(NETPIE_SHADOW_JSON_CAPACITY));
         return;
     }
     
     // ตรวจสอบ light schedule
     if (doc.containsKey("data")) {
         JsonObject data = doc["data"];
-        
-        // Light Schedule - อัพเดทเฉพาะ field ที่มี
-        bool hasLightData = false;
-        
-        if (data.containsKey("lightEnabled")) {
-            lightCtrlSetEnabled(data["lightEnabled"].as<int>());
-            hasLightData = true;
-        }
-        if (data.containsKey("lightOnDay")) {
-            lightCtrlSetOnDay(data["lightOnDay"].as<int>());
-            hasLightData = true;
-        }
-        if (data.containsKey("lightOnTime")) {
-            lightCtrlSetOnTime(data["lightOnTime"].as<const char*>());
-            hasLightData = true;
-        }
-        if (data.containsKey("lightOffDay")) {
-            lightCtrlSetOffDay(data["lightOffDay"].as<int>());
-            hasLightData = true;
-        }
-        if (data.containsKey("lightOffTime")) {
-            lightCtrlSetOffTime(data["lightOffTime"].as<const char*>());
-            hasLightData = true;
-        }
-        
-        // lightRelay: สั่งเปิด/ปิดไฟโดยตรง (0=OFF, 1=ON)
-        // ทำงานได้เฉพาะเมื่อ lightEnabled = 0 (manual mode)
-        if (data.containsKey("lightRelay")) {
-            int relay = data["lightRelay"].as<int>();
-            if (!lightCtrlIsEnabled()) {
-                lightCtrlSetState(relay == 1);
-                LOG_INFO("lightRelay: %s", relay == 1 ? "ON" : "OFF");
-            } else {
-                LOG_DEBUG("lightRelay IGNORED (schedule mode active)");
+
+        if (lightCtrlAllowsNetpieControl()) {
+            bool hasLightData = false;
+
+            if (data.containsKey("lightEnabled")) {
+                lightCtrlSetEnabled(data["lightEnabled"].as<int>());
+                hasLightData = true;
             }
+            if (data.containsKey("lightOnDay")) {
+                lightCtrlSetOnDay(data["lightOnDay"].as<int>());
+                hasLightData = true;
+            }
+            if (data.containsKey("lightOnTime")) {
+                lightCtrlSetOnTime(data["lightOnTime"].as<const char*>());
+                hasLightData = true;
+            }
+            if (data.containsKey("lightOffDay")) {
+                lightCtrlSetOffDay(data["lightOffDay"].as<int>());
+                hasLightData = true;
+            }
+            if (data.containsKey("lightOffTime")) {
+                lightCtrlSetOffTime(data["lightOffTime"].as<const char*>());
+                hasLightData = true;
+            }
+
+            if (data.containsKey("lightRelay")) {
+                int relay = data["lightRelay"].as<int>();
+                lightCtrlSetManualState(relay == 1);
+                if (!lightCtrlIsEnabled()) {
+                    lightCtrlSetState(relay == 1);
+                    LOG_INFO("lightRelay: %s", relay == 1 ? "ON" : "OFF");
+                } else {
+                    LOG_DEBUG("lightRelay IGNORED (schedule mode active)");
+                }
+            }
+
+            if (hasLightData) {
+                lightCtrlPrintSchedule();
+            }
+        } else if (data.containsKey("lightEnabled") || data.containsKey("lightOnDay") ||
+                   data.containsKey("lightOnTime") || data.containsKey("lightOffDay") ||
+                   data.containsKey("lightOffTime") || data.containsKey("lightRelay")) {
+            LOG_WARN("NETPIE light command ignored because control source is not netpie");
         }
-        
-        if (hasLightData) {
-            lightCtrlPrintSchedule();
+
+        bool feedNowShadow = data["feedNow"] | false;
+
+        if (fishFeederAllowsNetpieControl()) {
+            bool hasFeederData = false;
+
+            if (data.containsKey("feederEnabled")) {
+                fishFeederSetEnabled(data["feederEnabled"].as<int>() == 1);
+                hasFeederData = true;
+            }
+            if (data.containsKey("feederDay")) {
+                fishFeederSetFeedDay(data["feederDay"].as<int>());
+                hasFeederData = true;
+            }
+            if (data.containsKey("feederTime")) {
+                fishFeederSetFeedTime(data["feederTime"].as<const char*>());
+                hasFeederData = true;
+            }
+            if (data.containsKey("feederDurationMs")) {
+                fishFeederSetDurationMs(data["feederDurationMs"].as<unsigned long>());
+                hasFeederData = true;
+            }
+            if (feedNowShadow && !_lastFeedNowShadow) {
+                fishFeederStartManualFeed("Manual feed triggered from NETPIE");
+                hasFeederData = true;
+                _mqtt.publish("@shadow/data/update", "{\"data\":{\"feedNow\":false}}");
+            }
+
+            if (hasFeederData) {
+                LOG_INFO("Fish feeder config updated from NETPIE");
+            }
+        } else if (data.containsKey("feederEnabled") || data.containsKey("feederDay") ||
+                   data.containsKey("feederTime") || data.containsKey("feederDurationMs") ||
+                   feedNowShadow) {
+            LOG_WARN("NETPIE fish feeder command ignored because control source is not netpie");
         }
+
+        _lastFeedNowShadow = data.containsKey("feedNow") ? feedNowShadow : false;
         
         // pH Calibration Commands
         if (data.containsKey("phCal7")) {
@@ -119,10 +168,14 @@ static void _mqttCallback(char* topic, byte* payload, unsigned int length) {
     LOG_DEBUG("MQTT message received: %s", topic);
     
     // ใช้ static buffer แทน VLA เพื่อป้องกัน stack overflow
-    static char message[1024];
+    static char message[NETPIE_MQTT_MESSAGE_BUFFER_SIZE];
     size_t copyLen = (length < sizeof(message) - 1) ? length : sizeof(message) - 1;
     memcpy(message, payload, copyLen);
     message[copyLen] = '\0';
+
+    if (copyLen != length) {
+        LOG_WARN("NETPIE payload truncated from %u to %u bytes", length, static_cast<unsigned int>(copyLen));
+    }
     
     // Shadow response (ตอนเริ่มต้น) หรือ Shadow updated (real-time)
     if (strstr(topic, "@shadow/data/get/response") || 
@@ -134,6 +187,10 @@ static void _mqttCallback(char* topic, byte* payload, unsigned int length) {
     
     // Message topics
     if (strstr(topic, "@msg/lightEnabled")) {
+        if (!lightCtrlAllowsNetpieControl()) {
+            LOG_WARN("NETPIE @msg/lightEnabled ignored because control source is not netpie");
+            return;
+        }
         int enabled = atoi(message);
         StaticJsonDocument<256> doc;
         doc["data"]["lightEnabled"] = enabled;
@@ -143,13 +200,31 @@ static void _mqttCallback(char* topic, byte* payload, unsigned int length) {
     }
     
     if (strstr(topic, "@msg/lightOn")) {
-        lightCtrlSetState(true);
-        _mqtt.publish("@shadow/data/update", "{\"data\":{\"lightRelay\":1}}");
+        if (lightCtrlAllowsNetpieControl()) {
+            lightCtrlSetManualState(true);
+            lightCtrlSetState(true);
+            _mqtt.publish("@shadow/data/update", "{\"data\":{\"lightRelay\":1}}");
+        } else {
+            LOG_WARN("NETPIE @msg/lightOn ignored because control source is not netpie");
+        }
     }
     
     if (strstr(topic, "@msg/lightOff")) {
-        lightCtrlSetState(false);
-        _mqtt.publish("@shadow/data/update", "{\"data\":{\"lightRelay\":0}}");
+        if (lightCtrlAllowsNetpieControl()) {
+            lightCtrlSetManualState(false);
+            lightCtrlSetState(false);
+            _mqtt.publish("@shadow/data/update", "{\"data\":{\"lightRelay\":0}}");
+        } else {
+            LOG_WARN("NETPIE @msg/lightOff ignored because control source is not netpie");
+        }
+    }
+
+    if (strstr(topic, "@msg/feedNow")) {
+        if (fishFeederAllowsNetpieControl()) {
+            fishFeederStartManualFeed("Manual feed triggered from NETPIE @msg");
+        } else {
+            LOG_WARN("NETPIE @msg/feedNow ignored because control source is not netpie");
+        }
     }
 }
 
@@ -199,7 +274,7 @@ void netpieSetup(void) {
     
     _mqtt.setServer(MQTT_BROKER, MQTT_PORT);
     _mqtt.setCallback(_mqttCallback);
-    _mqtt.setBufferSize(1024);  // เพิ่ม buffer size
+    _mqtt.setBufferSize(NETPIE_MQTT_MESSAGE_BUFFER_SIZE);
     _mqtt.setSocketTimeout(5);  // PubSubClient keepalive timeout (seconds)
     
     LOG_INFO("MQTT Broker: %s:%d", MQTT_BROKER, MQTT_PORT);
@@ -267,6 +342,16 @@ void netpiePublishData(float waterTemp, float airTemp, float humidity, float tds
     
     // เพิ่มสถานะไฟ
     data["light_relay"] = lightCtrlGetState() ? 1 : 0;
+    data["light_source"] = lightCtrlGetCommandSourceString(lightCtrlGetCommandSource());
+
+    FishFeederConfig feederCfg;
+    FishFeederStatus feederStatus;
+    fishFeederGetConfig(&feederCfg);
+    fishFeederGetStatus(&feederStatus);
+    data["feeder_enabled"] = feederCfg.enabled;
+    data["feeder_running"] = feederStatus.running;
+    data["feeder_state"] = fishFeederGetStateString(feederStatus.state);
+    data["feeder_source"] = commandSourceToString(feederCfg.commandSource);
     
     char payload[512];
     serializeJson(doc, payload);
@@ -283,4 +368,20 @@ void netpiePublish(const char* topic, const char* payload) {
         return;
     }
     _mqtt.publish(topic, payload);
+}
+
+bool netpieRequestShadowSync(void) {
+    if (!netpieIsConnected()) {
+        LOG_WARN("NETPIE shadow sync requested while MQTT is disconnected");
+        return false;
+    }
+
+    bool published = _mqtt.publish("@shadow/data/get", "{}");
+    if (published) {
+        _shadowRequested = true;
+        LOG_INFO("Requested NETPIE shadow sync");
+    } else {
+        LOG_WARN("Failed to request NETPIE shadow sync");
+    }
+    return published;
 }

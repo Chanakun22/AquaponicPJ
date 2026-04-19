@@ -504,8 +504,9 @@
                     <div class="water-status-grid">
                         <div class="water-stat"><div class="water-stat-label">Dosing Test</div><div class="water-stat-value">Pump A / B only</div></div>
                         <div class="water-stat"><div class="water-stat-label">Light Test</div><div class="water-stat-value">Relay ON / OFF</div></div>
+                        <div class="water-stat"><div class="water-stat-label">Fan Test</div><div class="water-stat-value">Manual ON / OFF / AUTO</div></div>
                         <div class="water-stat"><div class="water-stat-label">Water Test</div><div class="water-stat-value">Config + Manual Actions</div></div>
-                        <div class="water-stat"><div class="water-stat-label">Safe Stop</div><div class="water-stat-value">Pump Stop + Light Off + Refill OFF</div></div>
+                        <div class="water-stat"><div class="water-stat-label">Safe Stop</div><div class="water-stat-value">Pump Stop + Light Off + Fan OFF + Refill OFF</div></div>
                     </div>
                 </div>
             </div>
@@ -515,18 +516,18 @@
                     <div class="tile-head">
                         <div>
                             <div class="tile-title"><i class="fas fa-flask"></i> Pump A Test</div>
-                            <div class="tile-subtitle">ทดสอบปั๊มโดส Nutrient A 3 วินาทีผ่าน GPIO 10</div>
+                            <div class="tile-subtitle" id="pumpASubtitle">ทดสอบปั๊มโดส Nutrient A ตามสเปกปั๊มจริงผ่าน GPIO 10</div>
                         </div>
                         <div class="state-pill" id="pumpAState">Idle</div>
                     </div>
                     <div class="progress-wrap">
-                        <div class="progress-meta"><span>Remaining</span><span id="pumpATime">3.0s</span></div>
+                        <div class="progress-meta"><span>Remaining</span><span id="pumpATime">--</span></div>
                         <div class="progress-bar"><span id="pumpABar"></span></div>
                     </div>
                     <div class="result-line" id="pumpAResult">Ready</div>
                     <div class="action-group">
                         <div class="action-row">
-                            <button class="test-btn primary" onclick="runPumpTest('pump_a')"><i class="fas fa-play"></i> Run Pump A</button>
+                            <button class="test-btn primary" id="btnPumpA" onclick="runPumpTest('pump_a')"><i class="fas fa-play"></i> Run Pump A</button>
                         </div>
                     </div>
                 </div>
@@ -535,18 +536,18 @@
                     <div class="tile-head">
                         <div>
                             <div class="tile-title"><i class="fas fa-flask"></i> Pump B Test</div>
-                            <div class="tile-subtitle">ทดสอบปั๊มโดส Nutrient B 3 วินาทีผ่าน GPIO 11</div>
+                            <div class="tile-subtitle" id="pumpBSubtitle">ทดสอบปั๊มโดส Nutrient B ตามสเปกปั๊มจริงผ่าน GPIO 11</div>
                         </div>
                         <div class="state-pill" id="pumpBState">Idle</div>
                     </div>
                     <div class="progress-wrap">
-                        <div class="progress-meta"><span>Remaining</span><span id="pumpBTime">3.0s</span></div>
+                        <div class="progress-meta"><span>Remaining</span><span id="pumpBTime">--</span></div>
                         <div class="progress-bar"><span id="pumpBBar"></span></div>
                     </div>
                     <div class="result-line" id="pumpBResult">Ready</div>
                     <div class="action-group">
                         <div class="action-row">
-                            <button class="test-btn primary" onclick="runPumpTest('pump_b')"><i class="fas fa-play"></i> Run Pump B</button>
+                            <button class="test-btn primary" id="btnPumpB" onclick="runPumpTest('pump_b')"><i class="fas fa-play"></i> Run Pump B</button>
                         </div>
                     </div>
                 </div>
@@ -564,6 +565,40 @@
                         <div class="action-row">
                             <button class="test-btn warn" onclick="runLightTest('light_on')"><i class="fas fa-sun"></i> Light ON</button>
                             <button class="test-btn" onclick="runLightTest('light_off')"><i class="fas fa-moon"></i> Light OFF</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="test-tile" id="tileFan">
+                    <div class="tile-head">
+                        <div>
+                            <div class="tile-title"><i class="fas fa-fan"></i> Exhaust Fan Test</div>
+                            <div class="tile-subtitle">สั่งพัดลมแบบ manual ON/OFF หรือคืนโหมด AUTO เพื่อตรวจ relay และ logic ควบคุม</div>
+                        </div>
+                        <div class="state-pill" id="fanState">Unknown</div>
+                    </div>
+                    <div class="result-line" id="fanResult">Waiting for command</div>
+                    <div class="action-group">
+                        <div class="action-row">
+                            <button class="test-btn warn" onclick="runFanTest('fan_on')"><i class="fas fa-wind"></i> Fan ON</button>
+                            <button class="test-btn" onclick="runFanTest('fan_off')"><i class="fas fa-stop"></i> Fan OFF</button>
+                            <button class="test-btn" onclick="runFanTest('fan_auto')"><i class="fas fa-rotate"></i> Fan AUTO</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="test-tile" id="tileFeeder">
+                    <div class="tile-head">
+                        <div>
+                            <div class="tile-title"><i class="fas fa-fish"></i> Fish Feeder Test</div>
+                            <div class="tile-subtitle">สั่งให้ feeder ทำงาน 1 cycle เพื่อตรวจ output ของชุดให้อาหารปลา</div>
+                        </div>
+                        <div class="state-pill" id="feederState">Unknown</div>
+                    </div>
+                    <div class="result-line" id="feederResult">Waiting for command</div>
+                    <div class="action-group">
+                        <div class="action-row">
+                            <button class="test-btn warn" onclick="runFeederTest()"><i class="fas fa-bowl-food"></i> Feed Once</button>
                         </div>
                     </div>
                 </div>
@@ -653,7 +688,9 @@
     <script src="/static/js/socket.io.min.js"></script>
     <script>
         const socket = io({ transports: ['websocket', 'polling'] });
-        const PUMP_DURATION = 3000;
+        const DOSING_PUMP_FLOW_RATE_ML_PER_MIN = 39.0;
+        const PUMP_TEST_VOLUME_ML = 2.0;
+        const PUMP_DURATION = Math.round((PUMP_TEST_VOLUME_ML * 60000) / DOSING_PUMP_FLOW_RATE_ML_PER_MIN);
         const DEFAULT_WATER_CONFIG = {
             circulation_enabled: true,
             refill_enabled: false,
@@ -664,10 +701,12 @@
         };
 
         const pumpTimers = { a: null, b: null };
+        const pumpFallbackTimers = { a: null, b: null };
         let waterConfig = { ...DEFAULT_WATER_CONFIG };
         let liveSensors = {};
         let waterStatus = {};
         let safeStopNoticeActive = false;
+        let activePumpKey = null;
 
         function timeStr() {
             return new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -725,6 +764,38 @@
             document.getElementById(`pump${upper}Result`).textContent = result;
             document.getElementById(`pump${upper}Time`).textContent = timeText;
             document.getElementById(`pump${upper}Bar`).style.width = progressWidth;
+        }
+
+        function setPumpButtonsDisabled(disabled) {
+            document.getElementById('btnPumpA').disabled = disabled;
+            document.getElementById('btnPumpB').disabled = disabled;
+        }
+
+        function initializePumpTestUi() {
+            const secondsText = `${(PUMP_DURATION / 1000).toFixed(1)}s`;
+            const subtitle = `ทดสอบปั๊มโดสประมาณ ${PUMP_TEST_VOLUME_ML.toFixed(1)} mL (${secondsText}) ตามสเปก ${DOSING_PUMP_FLOW_RATE_ML_PER_MIN.toFixed(0)} mL/min`;
+            document.getElementById('pumpASubtitle').textContent = `${subtitle} ผ่าน GPIO 10`;
+            document.getElementById('pumpBSubtitle').textContent = `${subtitle} ผ่าน GPIO 11`;
+            document.getElementById('pumpATime').textContent = secondsText;
+            document.getElementById('pumpBTime').textContent = secondsText;
+        }
+
+        function clearPumpFallback(key) {
+            if (pumpFallbackTimers[key]) {
+                clearTimeout(pumpFallbackTimers[key]);
+                pumpFallbackTimers[key] = null;
+            }
+        }
+
+        function finishPumpTestState(key, state, result, timeText, progressWidth) {
+            clearPumpFallback(key);
+            if (pumpTimers[key]) {
+                clearInterval(pumpTimers[key]);
+                pumpTimers[key] = null;
+            }
+            activePumpKey = null;
+            setPumpButtonsDisabled(false);
+            setPumpDisplay(key, state, result, timeText, progressWidth);
         }
 
         function formatBool(value) {
@@ -985,14 +1056,51 @@
             }
         }
 
+        async function runFanTest(cmd) {
+            setTileState('tileFan', 'fanState', 'running', 'Sending');
+            document.getElementById('fanResult').textContent = `Sending ${cmd}...`;
+            addLog(`🌬️ Sending ${cmd}`);
+
+            try {
+                const result = await sendHwCommand(cmd);
+                if (result.status !== 'ok') {
+                    throw new Error(result.message || `${cmd} failed`);
+                }
+            } catch (error) {
+                setTileState('tileFan', 'fanState', 'error', 'Error');
+                document.getElementById('fanResult').textContent = error.message;
+                addLog(`❌ Fan command failed: ${error.message}`);
+            }
+        }
+
+        async function runFeederTest() {
+            const feederDuration = 2000;
+            setTileState('tileFeeder', 'feederState', 'running', 'Sending');
+            document.getElementById('feederResult').textContent = 'Sending feeder_feed...';
+            addLog('🐟 Sending feeder_feed');
+
+            try {
+                const result = await sendHwCommand('feeder_feed', feederDuration);
+                if (result.status !== 'ok') {
+                    throw new Error(result.message || 'feeder_feed failed');
+                }
+            } catch (error) {
+                setTileState('tileFeeder', 'feederState', 'error', 'Error');
+                document.getElementById('feederResult').textContent = error.message;
+                addLog(`❌ Feeder command failed: ${error.message}`);
+            }
+        }
+
         async function runPumpTest(cmd) {
             const key = cmd.replace('pump_', '');
-            if (pumpTimers[key]) {
-                addLog(`⚠️ Pump ${key.toUpperCase()} test already running`);
+            if (activePumpKey) {
+                addLog(`⚠️ Pump ${activePumpKey.toUpperCase()} test is still running`);
                 return;
             }
 
             const upper = key.toUpperCase();
+            activePumpKey = key;
+            setPumpButtonsDisabled(true);
             setPumpDisplay(key, 'running', 'Pump running...', `${(PUMP_DURATION / 1000).toFixed(1)}s`, '0%');
             addLog(`🧪 Starting Pump ${upper} test for ${PUMP_DURATION / 1000}s`);
 
@@ -1002,6 +1110,8 @@
                     throw new Error(result.message || `${cmd} failed`);
                 }
             } catch (error) {
+                activePumpKey = null;
+                setPumpButtonsDisabled(false);
                 setPumpDisplay(key, 'error', error.message, `${(PUMP_DURATION / 1000).toFixed(1)}s`, '0%');
                 addLog(`❌ Pump ${upper} request failed: ${error.message}`);
                 return;
@@ -1020,25 +1130,41 @@
                     pumpTimers[key] = null;
                 }
             }, 80);
+
+            pumpFallbackTimers[key] = window.setTimeout(async () => {
+                if (activePumpKey !== key) {
+                    return;
+                }
+
+                addLog(`⚠️ Pump ${upper} did not report completion in time, sending fallback stop`);
+                await stopDosingTests('Fallback stop sent after timeout');
+            }, PUMP_DURATION + 1200);
         }
 
-        async function stopDosingTests() {
+        async function stopDosingTests(reason = 'Dosing pumps stop requested') {
             try {
                 const result = await sendHwCommand('pump_stop');
                 if (result.status !== 'ok') {
                     throw new Error(result.message || 'pump_stop failed');
                 }
-                addLog('🛑 Dosing pumps stop requested');
+                addLog(`🛑 ${reason}`);
             } catch (error) {
                 addLog(`❌ Failed to stop pumps: ${error.message}`);
             }
 
             ['a', 'b'].forEach((key) => {
+                clearPumpFallback(key);
                 if (pumpTimers[key]) {
                     clearInterval(pumpTimers[key]);
                     pumpTimers[key] = null;
                 }
-                setPumpDisplay(key, 'error', 'Stopped by safe stop', `${(PUMP_DURATION / 1000).toFixed(1)}s`, '0%');
+            });
+
+            activePumpKey = null;
+            setPumpButtonsDisabled(false);
+
+            ['a', 'b'].forEach((key) => {
+                setPumpDisplay(key, 'error', 'Stopped by stop command', `${(PUMP_DURATION / 1000).toFixed(1)}s`, '0%');
             });
         }
 
@@ -1046,6 +1172,7 @@
             addLog('🛑 Safe stop requested');
             await stopDosingTests();
             await runLightTest('light_off');
+            await runFanTest('fan_off');
             try {
                 await saveWaterConfig({
                     manual_refill: false,
@@ -1094,12 +1221,15 @@
 
             if (cmd === 'pump_stop') {
                 ['a', 'b'].forEach((key) => {
+                    clearPumpFallback(key);
                     if (pumpTimers[key]) {
                         clearInterval(pumpTimers[key]);
                         pumpTimers[key] = null;
                     }
                     setPumpDisplay(key, 'error', 'Stopped', `${(PUMP_DURATION / 1000).toFixed(1)}s`, '0%');
                 });
+                activePumpKey = null;
+                setPumpButtonsDisabled(false);
                 return;
             }
 
@@ -1115,14 +1245,39 @@
                 return;
             }
 
+            if (cmd === 'fan_on' && status === 'on') {
+                setTileState('tileFan', 'fanState', 'done', 'On');
+                document.getElementById('fanResult').textContent = 'Fan forced to MANUAL ON';
+                return;
+            }
+
+            if (cmd === 'fan_off' && status === 'off') {
+                setTileState('tileFan', 'fanState', 'done', 'Off');
+                document.getElementById('fanResult').textContent = 'Fan forced to MANUAL OFF';
+                return;
+            }
+
+            if (cmd === 'fan_auto' && status === 'auto') {
+                setTileState('tileFan', 'fanState', 'done', 'Auto');
+                document.getElementById('fanResult').textContent = 'Fan returned to AUTO mode';
+                return;
+            }
+
+            if (cmd === 'feeder_feed') {
+                if (status === 'feeding') {
+                    setTileState('tileFeeder', 'feederState', 'done', 'Feeding');
+                    document.getElementById('feederResult').textContent = 'Fish feeder cycle started';
+                } else if (status === 'error') {
+                    setTileState('tileFeeder', 'feederState', 'error', 'Error');
+                    document.getElementById('feederResult').textContent = data.message || 'Fish feeder unavailable';
+                }
+                return;
+            }
+
             if (cmd === 'pump_a' || cmd === 'pump_b') {
                 const key = cmd.replace('pump_', '');
                 if (status === 'completed') {
-                    if (pumpTimers[key]) {
-                        clearInterval(pumpTimers[key]);
-                        pumpTimers[key] = null;
-                    }
-                    setPumpDisplay(key, 'done', 'Completed normally', '0.0s', '100%');
+                    finishPumpTestState(key, 'done', 'Completed normally', '0.0s', '100%');
                 } else if (status === 'running') {
                     const upper = key.toUpperCase();
                     document.getElementById(`pump${upper}Result`).textContent = `Running on GPIO ${data.gpio ?? '?'}`;
@@ -1139,6 +1294,8 @@
         });
 
         addLog('🔧 Hardware Test page loaded');
+        initializePumpTestUi();
+        setPumpButtonsDisabled(false);
         refreshWaterConfig(true);
         window.setInterval(() => refreshWaterConfig(true), 10000);
     </script>

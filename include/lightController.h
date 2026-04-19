@@ -10,6 +10,23 @@
 #include <Arduino.h>
 #include "config.h"
 
+typedef struct {
+	CommandSource commandSource;
+	bool enabled;
+	bool manualState;
+	int onDay;
+	int offDay;
+	char onTime[6];
+	char offTime[6];
+} LightControlConfig;
+
+typedef struct {
+	bool running;
+	bool ntpSynced;
+	bool hasOutput;
+	char reason[96];
+} LightControlStatus;
+
 // ============================================================================
 // PUBLIC FUNCTION PROTOTYPES
 // ============================================================================
@@ -29,6 +46,8 @@ void lightCtrlLoop(void);
  * @brief อัพเดทการตั้งค่าจาก NETPIE (แบบ partial update)
  */
 void lightCtrlSetEnabled(int enabled);
+void lightCtrlSetManualState(bool state);
+void lightCtrlSetCommandSource(CommandSource source);
 void lightCtrlSetOnDay(int day);
 void lightCtrlSetOnTime(const char* onTime);
 void lightCtrlSetOffDay(int day);
@@ -60,6 +79,12 @@ bool lightCtrlGetTime(char* buffer, size_t bufferSize);
  * @return true ถ้า lightEnabled = 1
  */
 bool lightCtrlIsEnabled(void);
+CommandSource lightCtrlGetCommandSource(void);
+const char* lightCtrlGetCommandSourceString(CommandSource source);
+bool lightCtrlAllowsNetpieControl(void);
+bool lightCtrlAllowsLocalControl(void);
+void lightCtrlGetConfig(LightControlConfig* config);
+void lightCtrlGetStatus(LightControlStatus* status);
 
 /**
  * @brief Getters for schedule parameters
