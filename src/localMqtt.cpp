@@ -42,10 +42,12 @@ static unsigned long _lastFeederStatusPublishTime = 0;
 static IPAddress _brokerIp;
 static bool _isIpResolved = false;
 static uint8_t _connectionFailCount = 0;
+static uint8_t _statusPublishCursor = 0;
 static const uint8_t MAX_FAIL_BEFORE_RERESOLUTION = 3; // Re-resolve mDNS หลังล้มเหลว 3 ครั้ง
 static unsigned long _reconnectInterval = 5000;          // Backoff interval (เริ่ม 5s, เพิ่มถึง 60s)
 static const unsigned long MAX_RECONNECT_INTERVAL = 60000; // สูงสุด 60 วินาที
 static const uint16_t LOCAL_MQTT_PACKET_BUFFER_SIZE = 2048;
+static const uint8_t LOCAL_MQTT_MAX_LOGS_PER_LOOP = 1;
 
 // HW Test: one-shot FreeRTOS task for guaranteed pump auto-off
 static TaskHandle_t _hwTestTaskHandle = NULL;
@@ -93,6 +95,7 @@ static void _publishWaterSystemStatus(void);
 static void _publishFanStatus(void);
 static void _publishLightStatus(void);
 static void _publishFishFeederStatus(void);
+static void _serviceScheduledStatusPublishes(void);
 
 static CommandSource _parseCommandSource(const char* sourceValue, CommandSource fallback) {
     if (sourceValue == NULL || sourceValue[0] == '\0') {
@@ -122,6 +125,53 @@ static void _stopHwTestPumpOutputs(bool resumeAutomator) {
 
     if (resumeAutomator) {
         automatorResume();
+    }
+}
+
+static void _serviceScheduledStatusPublishes(void) {
+    unsigned long now = millis();
+
+    for (uint8_t offset = 0; offset < 4; offset++) {
+        uint8_t slot = (_statusPublishCursor + offset) % 4;
+
+        switch (slot) {
+            case 0:
+                if (now - _lastWaterStatusPublishTime >= LOCAL_PUBLISH_INTERVAL) {
+                    _lastWaterStatusPublishTime = now;
+                    _publishWaterSystemStatus();
+                    _statusPublishCursor = (slot + 1) % 4;
+                    return;
+                }
+                break;
+
+            case 1:
+                if (now - _lastLightStatusPublishTime >= LOCAL_PUBLISH_INTERVAL) {
+                    _lastLightStatusPublishTime = now;
+                    _publishLightStatus();
+                    _statusPublishCursor = (slot + 1) % 4;
+                    return;
+                }
+                break;
+
+            case 2:
+                if (now - _lastFeederStatusPublishTime >= LOCAL_PUBLISH_INTERVAL) {
+                    _lastFeederStatusPublishTime = now;
+                    _publishFishFeederStatus();
+                    _statusPublishCursor = (slot + 1) % 4;
+                    return;
+                }
+                break;
+
+            case 3:
+            default:
+                if (now - _lastFanStatusPublishTime >= LOCAL_PUBLISH_INTERVAL) {
+                    _lastFanStatusPublishTime = now;
+                    _publishFanStatus();
+                    _statusPublishCursor = (slot + 1) % 4;
+                    return;
+                }
+                break;
+        }
     }
 }
 
@@ -628,33 +678,14 @@ void localMqttLoop(void) {
         }
     } else {
         _localMqtt.loop();
-
-        if (millis() - _lastWaterStatusPublishTime >= LOCAL_PUBLISH_INTERVAL) {
-            _lastWaterStatusPublishTime = millis();
-            _publishWaterSystemStatus();
-        }
-
-        if (millis() - _lastLightStatusPublishTime >= LOCAL_PUBLISH_INTERVAL) {
-            _lastLightStatusPublishTime = millis();
-            _publishLightStatus();
-        }
-
-        if (millis() - _lastFeederStatusPublishTime >= LOCAL_PUBLISH_INTERVAL) {
-            _lastFeederStatusPublishTime = millis();
-            _publishFishFeederStatus();
-        }
-
-        if (millis() - _lastFanStatusPublishTime >= LOCAL_PUBLISH_INTERVAL) {
-            _lastFanStatusPublishTime = millis();
-            _publishFanStatus();
-        }
+        _serviceScheduledStatusPublishes();
         
         // Process cross-core log queue safely in the Networking Task
         if (_logQueue != NULL) {
             char logBuff[128];
             int count = 0;
-            // Process max 5 logs per loop to prevent starving other network tasks
-            while (count < 5 && xQueueReceive(_logQueue, logBuff, 0) == pdTRUE) {
+            // Process a small number of logs per loop to avoid long publish bursts.
+            while (count < LOCAL_MQTT_MAX_LOGS_PER_LOOP && xQueueReceive(_logQueue, logBuff, 0) == pdTRUE) {
                 _localMqtt.publish(LOCAL_MQTT_TOPIC_LOGS, logBuff);
                 count++;
             }

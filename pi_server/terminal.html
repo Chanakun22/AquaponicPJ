@@ -20,7 +20,16 @@
             background: var(--bg-panel); border: 1px solid var(--glass-border);
             border-radius: var(--radius); padding: 20px 24px;
         }
+        .connect-bar-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
         .connect-bar h3 { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 14px; text-transform: uppercase; letter-spacing: 1px; }
+        .connect-bar-top h3 { margin-bottom: 0; }
         .connect-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
         .connect-input {
             flex: 1; min-width: 140px; padding: 10px 16px;
@@ -132,16 +141,18 @@
                     <div class="subtitle">ESP32 Remote CLI</div>
                 </div>
             </div>
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <div class="status-dot" id="statusDot"></div>
-                <span class="status-text" id="statusText">Disconnected</span>
-            </div>
         </div>
     </header>
 
     <!-- Connection Bar -->
     <div class="connect-bar">
-        <h3><i class="fas fa-plug" style="margin-right: 6px;"></i> ESP32 Connection</h3>
+        <div class="connect-bar-top">
+            <h3><i class="fas fa-plug" style="margin-right: 6px;"></i> ESP32 Connection</h3>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="status-dot" id="statusDot"></div>
+                <span class="status-text" id="statusText">Disconnected</span>
+            </div>
+        </div>
         <div class="connect-row">
             <input type="text" class="connect-input" id="espIp" placeholder="ESP32 IP" value="192.168.10.10">
             <input type="text" class="connect-input small" id="espPort" placeholder="Port" value="23">

@@ -2,9 +2,54 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-04-20] - Task WDT Hardening
+
+### Changed
+
+- **fix: normalize shared header layout across Pi pages (`pi_server/base.css`, `pi_server/index.html`, `pi_server/graphs.html`, `pi_server/full_logs.html`, `pi_server/terminal.html`, `pi_server/settings.html`, `pi_server/admin_logs.html`, `pi_server/admin_users.html`, `pi_server/wifi.html`, `pi_server/live.html`, `pi_server/pwa/sw.js`):**
+  - ทำให้ header ของหน้าที่เคยถูกครอบอยู่ใน container แคบสามารถ breakout เป็น full-width shell แบบเดียวกับหน้า Live โดยใช้กติกากลางใน `base.css` แทนการให้แต่ละหน้าได้ layout คนละความกว้าง
+  - ย้าย status/actions ที่ไม่ใช่ส่วนของ shared header ออกจาก `header-top` ในหน้า Dashboard, Graphs, Logs และ Terminal เพื่อให้ top row เหลือ brand + shared nav/net stats/logout แบบเดียวกันทุกหน้า
+  - แก้ regression ของหน้า Dashboard โดยคืน status pills เข้าไปใน `header-top` และให้ header ของหน้า index breakout ได้เต็มความกว้างจริง เพื่อไม่ให้ nav wrap ผิดชั้นและไม่ให้ status ไปลอยเป็นแถวแยกใต้ header
+  - แก้ root cause ของบางหน้าที่ยังเพี้ยน: เดิม breakout ใช้แค่ negative margins เลยเลื่อน header ออกจาก container แต่ไม่ได้ขยายความกว้างจริง ทำให้หน้าที่มี container แคบดูพัง; ตอนนี้เพิ่ม full-width sizing ควบคู่กับ breakout แล้ว
+  - ปรับ mobile overrides หลายหน้าให้ไปแก้ `header-top` แทน outer `.header` เพื่อไม่ให้ nav shell และ spacing แตกต่างจากหน้าต้นแบบ
+  - bump `pwa/sw.js` cache version เป็น `aquaponics-v7` เพื่อบังคับ browser/PWA ดึง `base.css` และหน้า HTML เวอร์ชันใหม่หลัง deploy
+
+- **fix: harden Task WDT handling around networking hot paths (`src/main.cpp`, `src/localMqtt.cpp`, `src/system.cpp`, `src/wifiConn.cpp`, `include/system.h`):**
+  - เพิ่ม task checkpoint สำหรับ `Networking`, `Sensors`, และ `Control` เพื่อบันทึก stage ล่าสุดของแต่ละ task และ feed watchdog/heartbeat ให้ถี่ขึ้นรอบจุดเสี่ยงอย่าง `netpieLoop`, `localMqttLoop`, และช่วง publish ข้อมูล
+  - ปรับ `localMqttLoop()` ให้ stagger การ publish status ของ water/light/feeder/fan ทีละหัวข้อแทนยิงหลาย topic ติดกันในรอบเดียว และลดการระบาย log queue ต่อรอบ เพื่อกัน publish burst ยาวจน `TaskNetworking` ไม่ได้ feed WDT ทัน
+  - ให้ `systemCheckTaskHealth()` latch การบันทึก stuck-task เพียงครั้งเดียวต่อเหตุการณ์ พร้อมเก็บ `stage` ล่าสุดลง NVS และแสดง stage ใน crash report/stack info เพื่อระบุได้ชัดขึ้นว่าค้างตอนทำอะไร
+  - feed watchdog ระหว่าง `wifiSetup()` ที่รอเชื่อมต่อช่วง boot เพื่อลด risk จาก startup wait path
+  - นับ `watchdog_resets` ตาม reset reason จริงตอนบูต แทนการมี counter ที่ประกาศไว้แต่ไม่ถูกเพิ่มค่าเมื่อเกิด WDT จริง
+
 ## [2026-04-18] - Hardware Test Page Alignment
 
 ### Changed
+
+- **feat: persistent action feedback for light and feeder settings (`pi_server/settings.html`):**
+  - เพิ่มกล่อง feedback ค้างอยู่บนการ์ด Light และ Fish Feeder เพื่อบอกสถานะ `sending`, `applied`, `confirmed`, หรือ `failed` หลังผู้ใช้กด Apply/Manual/Feed Now แทนการพึ่ง toast ชั่วคราวอย่างเดียว
+
+- **refactor: group shared header navigation by task (`pi_server/header.js`):**
+  - เปลี่ยน nav จาก flat link list เป็น 3 กลุ่ม `Monitor`, `Operate`, และ `Admin` เพื่อให้ผู้ใช้ใหม่หาเส้นทางการใช้งานได้ง่ายขึ้นทั้งบน desktop และ mobile โดยยังใช้ role filtering เดิม
+  - เพิ่ม accent/background แยกตาม section และทำให้ป้ายชื่อกลุ่มเด่นขึ้น เพื่อลดการมองรวมเป็นก้อนเดียวแล้วกดเมนูผิดโดยเฉพาะใน header ที่มีลิงก์หลายตัวติดกัน
+
+- **fix: improve graph and log empty/error states (`pi_server/graphs.html`, `pi_server/full_logs.html`):**
+  - หน้า graphs เปลี่ยนจาก `alert()` และ console-only error เป็น inline state banner ที่บอก loading/ready/empty/error พร้อม last-updated status
+  - แก้ layout ของหน้า graphs เพิ่มเติมให้ state banner span เต็มแถวของ grid เพื่อไม่ให้ chart cards เลื่อนไปผิดคอลัมน์และดูแปลกหลังเพิ่ม status banner
+  - จัดหน้า graphs ใหม่ให้ header และ grid อยู่ใน page shell เดียวกัน เพราะก่อนหน้านี้ header กว้างเต็มจอแต่กราฟถูกจำกัดความกว้างแค่ 1200px เลยทำให้สัดส่วนของหน้าดูไม่สัมพันธ์กัน
+  - แก้ root cause ของเส้นกราฟตกดิ่ง: ฝั่ง Pi เคยบันทึกค่า `0` ลงฐานข้อมูลเมื่อ field sensor หายจาก MQTT payload จึงทำให้ Chart.js วาดเส้นลงพื้น; ตอนนี้เปลี่ยนให้เก็บ `NULL` แทนและ normalize ค่า invalid ใน `/api/history` ให้เป็นช่องว่างแทนการตกผิดจริง
+  - เพิ่มสคริปต์ `pi_server/cleanup_sensor_history.py` สำหรับรายงานจำนวนค่า invalid/0/null ในตาราง `sensors`, สำรองฐานข้อมูล, และแปลงค่าประวัติที่ผิดจริงให้เป็น `NULL` เพื่อเก็บกราฟย้อนหลังให้สะอาดขึ้นบน DB จริง
+  - ปรับ cleanup script ให้ข้าม sensor ที่ตั้งใจไม่ต่อได้ผ่าน `--skip-sensors` และรองรับ auto-skip จาก `settings.json` เมื่อมี `sensor_config` เพื่อไม่ให้กรณีอย่าง pH ที่ไม่ได้ต่อถูกนับเป็นข้อมูลเสียโดยอัตโนมัติ
+  - bump `pwa/sw.js` cache version เป็น `aquaponics-v6` เพื่อให้ browser/PWA ดึง `header.js` และหน้า Pi server เวอร์ชันใหม่หลัง deploy ได้ทันที
+  - หน้า full logs เพิ่ม notice bar สำหรับผลการ refresh/delete และทำ state empty/no-match/error ให้มีคำอธิบายกับปุ่มลองใหม่โดยไม่ใช้ alert popup
+
+- **refactor: split light and feeder settings into basic/advanced sections (`pi_server/settings.html`):**
+  - ย้าย runtime status และ manual actions ของ Light/Fish Feeder ไปไว้ในส่วน `Advanced Controls & Status` แบบพับได้ โดยคง source, schedule, และปุ่ม apply ไว้ในส่วนหลัก เพื่อให้หน้า settings สแกนเร็วขึ้นและลดความแน่นของการ์ดสำหรับผู้ใช้หน้างาน
+
+- **fix: disable unavailable local-web actions in settings (`pi_server/settings.html`):**
+  - ปรับหน้า settings ให้ปุ่ม `Manual ON/OFF` ของ Light และ `Feed Now` ของ Fish Feeder ถูก disable ทันทีเมื่อ `command_source` ไม่ใช่ `local_web` พร้อมข้อความอธิบายใต้ action row เพื่อลดอาการกดแล้วค่อยโดน toast ปฏิเสธและทำให้ผู้ใช้เห็นชัดว่าตอนนี้ใครเป็นคนคุมอุปกรณ์
+
+- **fix: request NETPIE shadow on CLI light source switch (`src/commandHandler.cpp`):**
+  - ให้คำสั่ง CLI `light netpie` ขอ shadow refresh ทันทีเหมือนหน้า settings เพื่อไม่ให้เปลี่ยน source แล้วไฟยังค้างกับ config เดิมจนกว่าจะมี shadow update รอบใหม่
 
 - **fix: refresh NETPIE shadow on light source switch (`include/netpie.h`, `src/netpie.cpp`, `src/localMqtt.cpp`):**
   - เมื่อหน้า settings เปลี่ยน light `command_source` จาก `local_web` เป็น `netpie` ให้ firmware ขอ `@shadow/data/get` ทันที เพื่อดึงตารางล่าสุดจาก NETPIE กลับมาใช้และทำให้ไฟเข้าสู่สถานะตาม schedule ปัจจุบันได้เร็วขึ้น แทนการค้างอยู่กับ config ฝั่ง local เดิม

@@ -32,7 +32,7 @@
         }
         .brand .subtitle { color: rgba(255,255,255,0.5); }
         .nav-link.active { background: rgba(56,189,248,0.1); color: var(--accent-color); border-color: rgba(56,189,248,0.2); }
-        .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .header-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 
         h1 { margin: 0; color: var(--accent-color); font-size: 1.4rem; }
 
@@ -53,13 +53,19 @@
         .btn:hover { background: rgba(255, 255, 255, 0.2); }
         .btn-primary { background: var(--accent-color); color: #000; border: none; }
 
+        .page-shell {
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
         .charts-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 20px;
-            max-width: 1200px;
             width: 100%;
-            margin: 0 auto;
         }
 
         .chart-card {
@@ -75,6 +81,67 @@
         }
         .chart-card.full-width {
             grid-column: 1 / -1;
+        }
+
+        .charts-state {
+            grid-column: 1 / -1;
+            width: 100%;
+            margin: 0 0 4px;
+            padding: 14px 16px;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.04);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .charts-state[data-state="loading"] {
+            border-color: rgba(56,189,248,0.24);
+            background: rgba(56,189,248,0.08);
+        }
+
+        .charts-state[data-state="ready"] {
+            border-color: rgba(16,185,129,0.24);
+            background: rgba(16,185,129,0.08);
+        }
+
+        .charts-state[data-state="empty"] {
+            border-color: rgba(245,158,11,0.24);
+            background: rgba(245,158,11,0.08);
+        }
+
+        .charts-state[data-state="error"] {
+            border-color: rgba(239,68,68,0.24);
+            background: rgba(239,68,68,0.08);
+        }
+
+        .state-copy {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            color: #dbe7f3;
+        }
+
+        .state-copy i {
+            margin-top: 2px;
+        }
+
+        .state-copy strong {
+            display: block;
+            margin-bottom: 3px;
+        }
+
+        .state-detail {
+            color: rgba(255,255,255,0.7);
+            font-size: 0.82rem;
+        }
+
+        .state-meta {
+            color: rgba(255,255,255,0.65);
+            font-size: 0.8rem;
         }
 
         h2 {
@@ -119,71 +186,135 @@
     </style>
 </head>
 <body>
-    <header class="header">
-        <div class="header-top">
-            <div class="brand">
-                <i class="fas fa-chart-line"></i>
-                <div>
-                    <h1>Historical Graphs</h1>
-                    <div class="subtitle">Sensor Data Over Time</div>
+    <div class="page-shell">
+        <header class="header">
+            <div class="header-top">
+                <div class="brand">
+                    <i class="fas fa-chart-line"></i>
+                    <div>
+                        <h1>Historical Graphs</h1>
+                        <div class="subtitle">Sensor Data Over Time</div>
+                    </div>
                 </div>
             </div>
-            <div class="header-actions">
-                <button onclick="resetZoom()" class="btn"><i class="fas fa-search-minus"></i> Reset Zoom</button>
-                <button onclick="loadCharts()" class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
+        </header>
+
+        <div class="header-actions">
+            <button onclick="resetZoom()" class="btn"><i class="fas fa-search-minus"></i> Reset Zoom</button>
+            <button onclick="loadCharts()" class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
+        </div>
+
+        <div class="charts-grid">
+            <div class="charts-state" id="chartsState" data-state="loading">
+                <div class="state-copy">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <div>
+                        <strong id="chartsStateTitle">Loading chart data...</strong>
+                        <div class="state-detail" id="chartsStateDetail">Fetching history from the Pi server.</div>
+                    </div>
+                </div>
+                <div class="state-meta" id="chartsLastUpdated">Waiting for first successful load</div>
             </div>
-        </div>
-    </header>
 
-    <div class="charts-grid">
-        <!-- 1. Environment Chart -->
-        <div class="chart-card">
-            <h2><i class="fas fa-temperature-half icon-env"></i> Environment (Air & Water)</h2>
-            <div class="chart-container"><canvas id="envChart"></canvas></div>
-            <div class="zoom-hint">🖱️ Scroll to Zoom | Drag to Pan</div>
-        </div>
+            <!-- 1. Environment Chart -->
+            <div class="chart-card">
+                <h2><i class="fas fa-temperature-half icon-env"></i> Environment (Air & Water)</h2>
+                <div class="chart-container"><canvas id="envChart"></canvas></div>
+                <div class="zoom-hint">🖱️ Scroll to Zoom | Drag to Pan</div>
+            </div>
 
-        <!-- 2. Water Quality Chart -->
-        <div class="chart-card">
-            <h2><i class="fas fa-droplet icon-water"></i> Water Quality (pH & TDS)</h2>
-            <div class="chart-container"><canvas id="waterChart"></canvas></div>
-            <div class="zoom-hint">🖱️ Scroll to Zoom | Drag to Pan</div>
-        </div>
+            <!-- 2. Water Quality Chart -->
+            <div class="chart-card">
+                <h2><i class="fas fa-droplet icon-water"></i> Water Quality (pH & TDS)</h2>
+                <div class="chart-container"><canvas id="waterChart"></canvas></div>
+                <div class="zoom-hint">🖱️ Scroll to Zoom | Drag to Pan</div>
+            </div>
 
-        <!-- 3. Light Chart -->
-        <div class="chart-card full-width">
-            <h2><i class="fas fa-sun icon-light"></i> Light Intensity</h2>
-            <div class="chart-container"><canvas id="lightChart"></canvas></div>
-            <div class="zoom-hint">🖱️ Scroll to Zoom | Drag to Pan</div>
+            <!-- 3. Light Chart -->
+            <div class="chart-card full-width">
+                <h2><i class="fas fa-sun icon-light"></i> Light Intensity</h2>
+                <div class="chart-container"><canvas id="lightChart"></canvas></div>
+                <div class="zoom-hint">🖱️ Scroll to Zoom | Drag to Pan</div>
+            </div>
         </div>
     </div>
 
     <script>
         let envChart, waterChart, lightChart;
+        let chartsHaveData = false;
 
-        async function loadCharts() {
+        function setChartsState(state, title, detail, meta) {
+            const stateEl = document.getElementById('chartsState');
+            const titleEl = document.getElementById('chartsStateTitle');
+            const detailEl = document.getElementById('chartsStateDetail');
+            const metaEl = document.getElementById('chartsLastUpdated');
+            const iconClass = state === 'loading'
+                ? 'fas fa-spinner fa-spin'
+                : state === 'ready'
+                    ? 'fas fa-circle-check'
+                    : state === 'empty'
+                        ? 'fas fa-inbox'
+                        : 'fas fa-triangle-exclamation';
+
+            stateEl.dataset.state = state;
+            stateEl.querySelector('i').className = iconClass;
+            titleEl.textContent = title;
+            detailEl.textContent = detail;
+            if (meta) {
+                metaEl.textContent = meta;
+            }
+        }
+
+        function destroyCharts() {
+            if (envChart) envChart.destroy();
+            if (waterChart) waterChart.destroy();
+            if (lightChart) lightChart.destroy();
+            envChart = null;
+            waterChart = null;
+            lightChart = null;
+        }
+
+        async function loadCharts(options = {}) {
+            const silent = options.silent === true;
+            if (!silent || !chartsHaveData) {
+                setChartsState('loading', 'Loading chart data...', 'Fetching history from the Pi server.', chartsHaveData ? document.getElementById('chartsLastUpdated').textContent : 'Waiting for first successful load');
+            }
+
             try {
                 const res = await fetch('/api/history');
+                if (!res.ok) {
+                    throw new Error('HTTP ' + res.status);
+                }
                 const history = await res.json();
                 
                 if (!history.labels || history.labels.length === 0) {
-                    alert("No data available yet.");
+                    chartsHaveData = false;
+                    destroyCharts();
+                    setChartsState('empty', 'No chart data yet', 'The history database is reachable, but it does not contain any samples yet. Check again after the next logging cycle.', 'No successful chart load yet');
                     return;
                 }
 
                 renderEnvChart(history);
                 renderWaterChart(history);
                 renderLightChart(history);
+                chartsHaveData = true;
+                setChartsState('ready', 'Charts are up to date', 'History data loaded successfully. Scroll to zoom and drag to pan through the timeline.', 'Last updated ' + new Date().toLocaleTimeString());
 
             } catch(e) {
                 console.error(e);
-                // Don't alert on auto-refresh to be less annoying
-                // alert("Failed to load history data");
+                setChartsState(
+                    'error',
+                    chartsHaveData ? 'Could not refresh charts' : 'Could not load chart data',
+                    chartsHaveData
+                        ? 'Keeping the previous chart data on screen. Try Refresh again or check the Pi server connection.'
+                        : 'The page could not fetch history from the Pi server. Try Refresh again or check whether the backend is running.',
+                    chartsHaveData ? document.getElementById('chartsLastUpdated').textContent : 'No successful chart load yet'
+                );
             }
         }
 
         // Auto-refresh every 60 seconds (matches data log interval)
-        setInterval(loadCharts, 60000);
+        setInterval(() => loadCharts({ silent: true }), 60000);
 
         function renderEnvChart(data) {
             const ctx = document.getElementById('envChart').getContext('2d');
@@ -194,9 +325,9 @@
                 data: {
                     labels: data.labels,
                     datasets: [
-                        { label: 'Water Temp (°C)', data: data.datasets.water_temp, borderColor: '#38bdf8', tension: 0.4 },
-                        { label: 'Air Temp (°C)', data: data.datasets.air_temp, borderColor: '#f472b6', tension: 0.4 },
-                        { label: 'Humidity (%)', data: data.datasets.humidity, borderColor: '#a78bfa', tension: 0.4, hidden: true }
+                        { label: 'Water Temp (°C)', data: data.datasets.water_temp, borderColor: '#38bdf8', tension: 0.4, spanGaps: false },
+                        { label: 'Air Temp (°C)', data: data.datasets.air_temp, borderColor: '#f472b6', tension: 0.4, spanGaps: false },
+                        { label: 'Humidity (%)', data: data.datasets.humidity, borderColor: '#a78bfa', tension: 0.4, hidden: true, spanGaps: false }
                     ]
                 },
                 options: getChartOptions()
@@ -212,8 +343,8 @@
                 data: {
                     labels: data.labels,
                     datasets: [
-                        { label: 'pH Level', data: data.datasets.ph, borderColor: '#34d399', yAxisID: 'y', tension: 0.4 },
-                        { label: 'TDS (ppm)', data: data.datasets.tds, borderColor: '#fbbf24', yAxisID: 'y1', tension: 0.4 }
+                        { label: 'pH Level', data: data.datasets.ph, borderColor: '#34d399', yAxisID: 'y', tension: 0.4, spanGaps: false },
+                        { label: 'TDS (ppm)', data: data.datasets.tds, borderColor: '#fbbf24', yAxisID: 'y1', tension: 0.4, spanGaps: false }
                     ]
                 },
                 options: {
@@ -236,7 +367,7 @@
                 data: {
                     labels: data.labels,
                     datasets: [
-                        { label: 'Light (lux)', data: data.datasets.light, borderColor: '#facc15', backgroundColor: 'rgba(250, 204, 21, 0.1)', fill: true, tension: 0.4 }
+                        { label: 'Light (lux)', data: data.datasets.light, borderColor: '#facc15', backgroundColor: 'rgba(250, 204, 21, 0.1)', fill: true, tension: 0.4, spanGaps: false }
                     ]
                 },
                 options: getChartOptions()

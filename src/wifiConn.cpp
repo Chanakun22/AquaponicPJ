@@ -10,6 +10,10 @@
 #include <WiFi.h>
 #include <esp_wifi.h>
 
+#if defined(ESP32) && WATCHDOG_ENABLED
+#include "esp_task_wdt.h"
+#endif
+
 // ============================================================================
 // FIXED WIFI CREDENTIALS (Pi Hotspot)
 // ============================================================================
@@ -41,6 +45,9 @@ void wifiSetup(void) {
     // รอเชื่อมต่อสูงสุด 10 วินาที (non-blocking style)
     unsigned long startAttempt = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 10000) {
+        #if defined(ESP32) && WATCHDOG_ENABLED
+        esp_task_wdt_reset();
+        #endif
         vTaskDelay(pdMS_TO_TICKS(100));
     }
     

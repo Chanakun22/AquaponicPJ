@@ -161,6 +161,16 @@ extern const char* TASK_NAMES[TASK_ID_COUNT];
 void systemTaskHeartbeat(TaskId_t taskId);
 
 /**
+ * @brief Record the current execution stage for a task
+ */
+void systemSetTaskProgress(TaskId_t taskId, const char* stage);
+
+/**
+ * @brief Get the last recorded execution stage for a task
+ */
+const char* systemGetTaskProgress(TaskId_t taskId);
+
+/**
  * @brief Check all task heartbeats, log warning if any is stuck
  * @return true if all tasks are alive, false if any is stuck
  */

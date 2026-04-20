@@ -58,6 +58,12 @@ static void _savePersistedStats(void) {
     _prefs.end();
 }
 
+#if defined(ESP32)
+static bool _isWatchdogResetReason(esp_reset_reason_t reason) {
+    return reason == ESP_RST_TASK_WDT || reason == ESP_RST_INT_WDT || reason == ESP_RST_WDT;
+}
+#endif
+
 // ============================================================================
 // PUBLIC FUNCTIONS
 // ============================================================================
@@ -71,6 +77,15 @@ void systemInit(void) {
     
     // Load persisted statistics
     _loadPersistedStats();
+
+    #if defined(ESP32)
+    esp_reset_reason_t resetReason = esp_reset_reason();
+    if (_isWatchdogResetReason(resetReason)) {
+        _watchdogResets++;
+        _savePersistedStats();
+        LOG_WARN("Previous boot ended with watchdog reset (%s)", systemGetResetReasonString());
+    }
+    #endif
     
     // Load Sensor States
     systemSensorInit();
@@ -365,11 +380,33 @@ const char* TASK_NAMES[TASK_ID_COUNT] = {
 
 static volatile unsigned long _taskHeartbeat[TASK_ID_COUNT] = {0, 0, 0};
 static TaskHandle_t _taskHandles[TASK_ID_COUNT] = {NULL, NULL, NULL};
+static char _taskProgress[TASK_ID_COUNT][32] = {
+    "startup",
+    "startup",
+    "startup"
+};
+static bool _taskStuckLatched[TASK_ID_COUNT] = {false, false, false};
 
 void systemTaskHeartbeat(TaskId_t taskId) {
     if (taskId >= 0 && taskId < TASK_ID_COUNT) {
         _taskHeartbeat[taskId] = millis();
     }
+}
+
+void systemSetTaskProgress(TaskId_t taskId, const char* stage) {
+    if (taskId < 0 || taskId >= TASK_ID_COUNT || stage == NULL) {
+        return;
+    }
+
+    snprintf(_taskProgress[taskId], sizeof(_taskProgress[taskId]), "%s", stage);
+}
+
+const char* systemGetTaskProgress(TaskId_t taskId) {
+    if (taskId < 0 || taskId >= TASK_ID_COUNT) {
+        return "unknown";
+    }
+
+    return _taskProgress[taskId];
 }
 
 void systemSetTaskHandle(TaskId_t taskId, TaskHandle_t handle) {
@@ -395,18 +432,25 @@ bool systemCheckTaskHealth(void) {
         
         unsigned long age = now - hb;
         if (age > TASK_STUCK_THRESHOLD_MS) {
-            LOG_ERROR("STUCK TASK: %s — no heartbeat for %lu seconds!", 
-                      TASK_NAMES[i], age / 1000);
-            
-            // Save to NVS so we know after reboot
-            Preferences crashPrefs;
-            crashPrefs.begin("crash", false);
-            crashPrefs.putString("task", TASK_NAMES[i]);
-            crashPrefs.putULong("age", age / 1000);
-            crashPrefs.putULong("uptime", (millis() - _bootTime) / 1000);
-            crashPrefs.end();
+            if (!_taskStuckLatched[i]) {
+                LOG_ERROR("STUCK TASK: %s — no heartbeat for %lu seconds! (stage=%s)", 
+                          TASK_NAMES[i], age / 1000, _taskProgress[i]);
+                
+                // Save to NVS once so we know after reboot without flooding writes.
+                Preferences crashPrefs;
+                crashPrefs.begin("crash", false);
+                crashPrefs.putString("task", TASK_NAMES[i]);
+                crashPrefs.putULong("age", age / 1000);
+                crashPrefs.putULong("uptime", (millis() - _bootTime) / 1000);
+                crashPrefs.putString("stage", _taskProgress[i]);
+                crashPrefs.end();
+
+                _taskStuckLatched[i] = true;
+            }
             
             allOk = false;
+        } else {
+            _taskStuckLatched[i] = false;
         }
     }
     
@@ -418,8 +462,8 @@ void systemPrintStackInfo(void) {
         if (_taskHandles[i] != NULL) {
             UBaseType_t hwm = uxTaskGetStackHighWaterMark(_taskHandles[i]);
             unsigned long age = systemGetTaskHeartbeatAge((TaskId_t)i);
-            LOG_INFO("Task %-12s | Stack free: %4u bytes | Heartbeat: %lums ago",
-                     TASK_NAMES[i], (unsigned int)(hwm * 4), age);
+            LOG_INFO("Task %-12s | Stack free: %4u bytes | Heartbeat: %lums ago | Stage: %s",
+                     TASK_NAMES[i], (unsigned int)(hwm * 4), age, _taskProgress[i]);
         }
     }
 }
@@ -436,10 +480,11 @@ bool systemGetLastCrashInfo(char* buf, size_t bufSize) {
     
     unsigned long age = crashPrefs.getULong("age", 0);
     unsigned long uptime = crashPrefs.getULong("uptime", 0);
+    String stage = crashPrefs.getString("stage", "unknown");
     crashPrefs.end();
     
-    snprintf(buf, bufSize, "Task '%s' stuck %lus (uptime was %lus)",
-             taskName.c_str(), age, uptime);
+    snprintf(buf, bufSize, "Task '%s' stuck %lus (uptime was %lus, stage=%s)",
+             taskName.c_str(), age, uptime, stage.c_str());
     return true;
 }
 

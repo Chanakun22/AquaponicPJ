@@ -612,6 +612,9 @@ def save_data_to_db(data):
     if now - last_db_save < 60: # 60 seconds interval
         return
 
+    def sensor_db_value(payload, key):
+        return payload[key] if key in payload else None
+
     with db_lock:
         conn = None
         try:
@@ -621,12 +624,12 @@ def save_data_to_db(data):
                 INSERT INTO sensors (water_temp, air_temp, humidity, tds, ph, light)
                 VALUES (?, ?, ?, ?, ?, ?)
             ''', (
-                data.get("water_temp", 0),
-                data.get("air_temp", 0),
-                data.get("humidity", 0),
-                data.get("tds", 0),
-                data.get("ph", 0),
-                data.get("light", 0)
+                sensor_db_value(data, "water_temp"),
+                sensor_db_value(data, "air_temp"),
+                sensor_db_value(data, "humidity"),
+                sensor_db_value(data, "tds"),
+                sensor_db_value(data, "ph"),
+                sensor_db_value(data, "light")
             ))
             conn.commit()
             last_db_save = now
@@ -636,6 +639,31 @@ def save_data_to_db(data):
         finally:
             if conn:
                 conn.close()
+
+def normalize_history_value(sensor_key, value):
+    if value is None:
+        return None
+
+    invalid_exact_values = {
+        "water_temp": {0, 85.0, -127},
+        "air_temp": {0},
+        "humidity": {0},
+        "ph": {0},
+    }
+
+    if sensor_key in invalid_exact_values and value in invalid_exact_values[sensor_key]:
+        return None
+
+    if sensor_key == "tds" and value <= 0:
+        return None
+
+    if sensor_key == "ph" and (value <= 0 or value > 14):
+        return None
+
+    if sensor_key == "humidity" and (value < 0 or value > 100):
+        return None
+
+    return value
 
 # === Start MQTT in Background Thread ===
 mqtt_client = None  # Global reference for publishing
@@ -1534,12 +1562,12 @@ def get_history():
                 t_str = r[0] # Fallback
             
             labels.append(t_str)
-            data["water_temp"].append(r[1])
-            data["air_temp"].append(r[2])
-            data["humidity"].append(r[3])
-            data["tds"].append(r[4])
-            data["ph"].append(r[5])
-            data["light"].append(r[6])
+            data["water_temp"].append(normalize_history_value("water_temp", r[1]))
+            data["air_temp"].append(normalize_history_value("air_temp", r[2]))
+            data["humidity"].append(normalize_history_value("humidity", r[3]))
+            data["tds"].append(normalize_history_value("tds", r[4]))
+            data["ph"].append(normalize_history_value("ph", r[5]))
+            data["light"].append(normalize_history_value("light", r[6]))
             
         return jsonify({"labels": labels, "datasets": data})
 

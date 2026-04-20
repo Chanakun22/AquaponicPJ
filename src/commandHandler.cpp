@@ -606,6 +606,9 @@ void commandProcess(char* cmd, CommandOutput_t output) {
     }
     else if (strcmp(cleanCmd, "light netpie") == 0) {
         lightCtrlSetCommandSource(COMMAND_SOURCE_NETPIE);
+        if (!netpieRequestShadowSync()) {
+            commandPrintf(output, "[LIGHT] Warning: NETPIE shadow refresh request failed\r\n");
+        }
         commandPrintf(output, "[LIGHT] Control source -> NETPIE\r\n");
     }
     else if (strcmp(cleanCmd, "light web") == 0) {

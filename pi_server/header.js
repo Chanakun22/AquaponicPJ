@@ -13,18 +13,74 @@
     css.textContent = `
         /* Nav Bar */
         .nav-bar {
-            display: flex; gap: 4px; padding: 8px 12px;
+            display: flex; gap: 12px; padding: 10px 12px;
             background: rgba(0,0,0,0.25); border-top: 1px solid var(--glass-border, rgba(255,255,255,0.08));
             flex-wrap: wrap;
+        }
+        .nav-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            margin-right: 2px;
+            border: 1px solid var(--group-border, rgba(255,255,255,0.08));
+            border-radius: 14px;
+            background: var(--group-bg, rgba(255,255,255,0.03));
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+        }
+        .nav-group:last-child {
+            margin-right: 0;
+        }
+        .nav-group[data-section="monitor"] {
+            --group-accent: #38bdf8;
+            --group-bg: rgba(56,189,248,0.08);
+            --group-border: rgba(56,189,248,0.18);
+        }
+        .nav-group[data-section="operate"] {
+            --group-accent: #34d399;
+            --group-bg: rgba(52,211,153,0.08);
+            --group-border: rgba(52,211,153,0.18);
+        }
+        .nav-group[data-section="admin"] {
+            --group-accent: #f59e0b;
+            --group-bg: rgba(245,158,11,0.08);
+            --group-border: rgba(245,158,11,0.18);
+        }
+        .nav-group-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 10px;
+            color: var(--group-accent, var(--text-muted, #8b9bb4));
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            white-space: nowrap;
+            border-radius: 10px;
+            background: rgba(0,0,0,0.16);
+            border: 1px solid rgba(255,255,255,0.06);
+            min-height: 40px;
+        }
+        .nav-group-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
         }
         .nav-link {
             display: flex; align-items: center; gap: 8px; padding: 10px 18px;
             border-radius: 10px; font-size: 0.85rem; font-weight: 500;
             color: var(--text-muted, #8b9bb4); text-decoration: none; cursor: pointer;
             transition: all 0.25s ease; white-space: nowrap; border: 1px solid transparent;
+            background: rgba(255,255,255,0.02);
         }
-        .nav-link:hover { background: rgba(255,255,255,0.06); color: var(--text-main, #fff); }
-        .nav-link.active { background: rgba(0,242,170,0.1); color: var(--primary, #00f2aa); border-color: rgba(0,242,170,0.2); }
+        .nav-link:hover { background: rgba(255,255,255,0.08); color: var(--text-main, #fff); }
+        .nav-link.active {
+            background: color-mix(in srgb, var(--group-accent, var(--primary, #00f2aa)) 14%, transparent);
+            color: var(--group-accent, var(--primary, #00f2aa));
+            border-color: color-mix(in srgb, var(--group-accent, var(--primary, #00f2aa)) 28%, transparent);
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--group-accent, var(--primary, #00f2aa)) 12%, transparent);
+        }
         .nav-link i { font-size: 0.85rem; }
 
         /* Logout Button */
@@ -83,7 +139,26 @@
                 display: none; /* Hidden by default on mobile */
                 flex-direction: column;
                 padding: 8px;
-                gap: 2px;
+                gap: 8px;
+            }
+            .nav-group {
+                width: 100%;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 6px;
+                padding: 10px;
+                margin: 0;
+                border-bottom: 1px solid var(--group-border, rgba(255,255,255,0.08));
+            }
+            .nav-group:last-child {
+                border-bottom: none;
+            }
+            .nav-group-label {
+                padding: 10px 12px;
+            }
+            .nav-group-links {
+                flex-direction: column;
+                gap: 4px;
             }
             .nav-bar.open { display: flex; }
             .nav-link {
@@ -112,18 +187,39 @@
     document.head.appendChild(css);
 
     // === Navigation links ===
-    const NAV_LINKS = [
-        { href: '/',            icon: 'fa-solid fa-leaf',           label: 'Dashboard' },
-        { href: '/live',        icon: 'fa-solid fa-video',          label: 'Live' },
-        { href: '/graphs',      icon: 'fa-solid fa-chart-line',     label: 'Graphs' },
-        { href: '/full_logs',   icon: 'fa-solid fa-file-alt',       label: 'Logs' },
-        { href: '/hwtest',      icon: 'fa-solid fa-vial',           label: 'HW Test',   admin: true },
-        { href: '/settings',    icon: 'fa-solid fa-cog',            label: 'Settings',  admin: true },
-        { href: '/ota',         icon: 'fa-solid fa-upload',         label: 'OTA',       admin: true },
-        { href: '/wifi',        icon: 'fa-solid fa-wifi',           label: 'WiFi',      admin: true },
-        { href: '/terminal',    icon: 'fa-solid fa-terminal',       label: 'Terminal',   admin: true },
-        { href: '/admin/logs',  icon: 'fa-solid fa-clipboard-list', label: 'Activity',   admin: true },
-        { href: '/admin/users', icon: 'fa-solid fa-users-cog',      label: 'Users',      admin: true },
+    const NAV_SECTIONS = [
+        {
+            key: 'monitor',
+            label: 'Monitor',
+            icon: 'fa-solid fa-chart-simple',
+            links: [
+                { href: '/',          icon: 'fa-solid fa-leaf',       label: 'Dashboard' },
+                { href: '/live',      icon: 'fa-solid fa-video',      label: 'Live' },
+                { href: '/graphs',    icon: 'fa-solid fa-chart-line', label: 'Graphs' },
+                { href: '/full_logs', icon: 'fa-solid fa-file-alt',   label: 'Logs' }
+            ]
+        },
+        {
+            key: 'operate',
+            label: 'Operate',
+            icon: 'fa-solid fa-sliders',
+            links: [
+                { href: '/hwtest',   icon: 'fa-solid fa-vial',     label: 'HW Test', admin: true },
+                { href: '/settings', icon: 'fa-solid fa-cog',      label: 'Settings', admin: true },
+                { href: '/ota',      icon: 'fa-solid fa-upload',   label: 'OTA', admin: true },
+                { href: '/wifi',     icon: 'fa-solid fa-wifi',     label: 'WiFi', admin: true },
+                { href: '/terminal', icon: 'fa-solid fa-terminal', label: 'Terminal', admin: true }
+            ]
+        },
+        {
+            key: 'admin',
+            label: 'Admin',
+            icon: 'fa-solid fa-shield-halved',
+            links: [
+                { href: '/admin/logs',  icon: 'fa-solid fa-clipboard-list', label: 'Activity', admin: true },
+                { href: '/admin/users', icon: 'fa-solid fa-users-cog',      label: 'Users', admin: true }
+            ]
+        }
     ];
 
     // === Auto-detect active page ===
@@ -134,15 +230,36 @@
         const nav = document.createElement('nav');
         nav.className = 'nav-bar';
         nav.id = 'mainNavBar';
-        NAV_LINKS.forEach(link => {
-            if (link.admin && userRole !== 'admin') return;
-            const a = document.createElement('a');
-            a.href = link.href;
-            a.className = 'nav-link';
-            const linkPath = link.href.replace(/\/$/, '') || '/';
-            if (linkPath === currentPath) a.classList.add('active');
-            a.innerHTML = `<i class="${link.icon}"></i> ${link.label}`;
-            nav.appendChild(a);
+        NAV_SECTIONS.forEach(section => {
+            const visibleLinks = section.links.filter(link => !link.admin || userRole === 'admin');
+            if (visibleLinks.length === 0) {
+                return;
+            }
+
+            const group = document.createElement('div');
+            group.className = 'nav-group';
+            group.dataset.section = section.key || 'default';
+
+            const label = document.createElement('div');
+            label.className = 'nav-group-label';
+            label.innerHTML = `<i class="${section.icon}"></i> ${section.label}`;
+            group.appendChild(label);
+
+            const linksWrap = document.createElement('div');
+            linksWrap.className = 'nav-group-links';
+
+            visibleLinks.forEach(link => {
+                const a = document.createElement('a');
+                a.href = link.href;
+                a.className = 'nav-link';
+                const linkPath = link.href.replace(/\/$/, '') || '/';
+                if (linkPath === currentPath) a.classList.add('active');
+                a.innerHTML = `<i class="${link.icon}"></i> ${link.label}`;
+                linksWrap.appendChild(a);
+            });
+
+            group.appendChild(linksWrap);
+            nav.appendChild(group);
         });
         return nav;
     }

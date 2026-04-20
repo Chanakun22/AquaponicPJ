@@ -28,11 +28,6 @@
             border-radius: var(--radius-sm); flex-shrink: 0;
         }
         .header-top { padding: 16px 24px; gap: 12px; }
-        .header-brand { display: flex; align-items: center; gap: 12px; }
-        .header-brand h1 { font-size: 1.3rem; font-weight: 600; }
-        .header-brand h1 i { color: var(--primary); margin-right: 6px; }
-        .header-right { display: flex; gap: 8px; flex-wrap: wrap; }
-
         .btn {
             padding: 8px 16px; border-radius: 8px; border: 1px solid var(--glass-border);
             background: rgba(255,255,255,0.06); color: var(--text-main); cursor: pointer;
@@ -169,6 +164,49 @@
         }
         .state-box i { font-size: 2.5rem; opacity: 0.4; }
         .state-box p { font-size: 0.95rem; }
+        .state-box .state-detail {
+            font-size: 0.8rem;
+            color: rgba(255,255,255,0.6);
+            max-width: 420px;
+            text-align: center;
+            line-height: 1.5;
+        }
+
+        .notice-bar {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: var(--radius-sm);
+            color: var(--text-muted);
+            font-size: 0.82rem;
+        }
+        .notice-bar.show { display: flex; }
+        .notice-bar.error {
+            border-color: rgba(239,68,68,0.22);
+            background: rgba(239,68,68,0.08);
+        }
+        .notice-bar.success {
+            border-color: rgba(16,185,129,0.22);
+            background: rgba(16,185,129,0.08);
+        }
+        .notice-copy {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .notice-copy strong {
+            display: block;
+            color: var(--text-main);
+            margin-bottom: 2px;
+        }
+        .notice-meta {
+            color: rgba(255,255,255,0.64);
+            font-size: 0.78rem;
+        }
 
         /* Load More */
         .load-more {
@@ -195,7 +233,8 @@
         /* Responsive */
         @media (max-width: 768px) {
             body { padding: 12px; }
-            .header { padding: 12px 16px; flex-direction: column; gap: 10px; }
+            .header-top { padding: 12px 16px; flex-direction: column; gap: 10px; text-align: center; }
+            .brand { justify-content: center; }
             .toolbar { flex-direction: column; align-items: stretch; }
             .toolbar input[type="text"] { width: 100%; }
             .stats { margin-left: 0; justify-content: center; }
@@ -208,19 +247,24 @@
         <!-- Header -->
         <div class="header">
             <div class="header-top">
-                <div class="header-brand">
-                    <h1><i class="fas fa-scroll"></i> System Logs</h1>
-                </div>
-                <div class="header-right">
-                    <button onclick="fetchLogs()" class="btn" id="btnRefresh"><i class="fas fa-sync-alt"></i> Refresh</button>
-                    <button onclick="toggleAutoRefresh()" class="btn" id="btnAuto"><span class="refresh-dot"></span> Auto: ON</button>
-                    <button onclick="clearLogsFile()" class="btn btn-danger" id="btnDelete"><i class="fas fa-trash"></i> Delete All</button>
+                <div class="brand">
+                    <i class="fas fa-scroll"></i>
+                    <div>
+                        <h1>System Logs</h1>
+                        <div class="subtitle">Filter, inspect, and maintain runtime logs</div>
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- Toolbar -->
         <div class="toolbar">
+            <div class="toolbar-group">
+                <button onclick="fetchLogs()" class="btn" id="btnRefresh"><i class="fas fa-sync-alt"></i> Refresh</button>
+                <button onclick="toggleAutoRefresh()" class="btn" id="btnAuto"><span class="refresh-dot"></span> Auto: ON</button>
+                <button onclick="clearLogsFile()" class="btn btn-danger" id="btnDelete"><i class="fas fa-trash"></i> Delete All</button>
+            </div>
+
             <div class="toolbar-group">
                 <label><i class="fas fa-calendar-alt" style="margin-right:4px;"></i> Date</label>
                 <div style="display:flex;gap:4px;align-items:center;">
@@ -251,6 +295,17 @@
             </div>
         </div>
 
+        <div class="notice-bar" id="logsNotice">
+            <div class="notice-copy">
+                <i class="fas fa-info-circle"></i>
+                <div>
+                    <strong id="logsNoticeTitle">Logs will update here</strong>
+                    <div id="logsNoticeDetail">The latest fetch status and destructive action results will appear here.</div>
+                </div>
+            </div>
+            <div class="notice-meta" id="logsNoticeMeta">Waiting for first successful refresh</div>
+        </div>
+
         <!-- Log Panel -->
         <div class="log-panel">
             <div class="log-scroll" id="logScroll">
@@ -279,6 +334,16 @@
     var autoRefresh = true;
     var refreshTimer = null;
     var REFRESH_INTERVAL = 5000;
+    var lastSuccessfulFetchLabel = 'Waiting for first successful refresh';
+
+    function setLogsNotice(status, title, detail, meta) {
+        var notice = document.getElementById('logsNotice');
+        notice.className = 'notice-bar show' + (status ? ' ' + status : '');
+        notice.querySelector('i').className = 'fas ' + (status === 'error' ? 'fa-triangle-exclamation' : status === 'success' ? 'fa-circle-check' : 'fa-info-circle');
+        document.getElementById('logsNoticeTitle').textContent = title;
+        document.getElementById('logsNoticeDetail').textContent = detail;
+        document.getElementById('logsNoticeMeta').textContent = meta || lastSuccessfulFetchLabel;
+    }
 
     // =============================================
     // FETCH & PARSE
@@ -287,6 +352,7 @@
         var btn = document.getElementById('btnRefresh');
         btn.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Loading...';
         btn.disabled = true;
+        setLogsNotice('', 'Refreshing logs...', 'Fetching the latest log file from the Pi server.', lastSuccessfulFetchLabel);
 
         try {
             var resp = await fetch('/api/full_logs_file');
@@ -298,6 +364,8 @@
                 filtered = [];
                 renderState('empty');
                 updateStats();
+                lastSuccessfulFetchLabel = 'Checked at ' + new Date().toLocaleTimeString();
+                setLogsNotice('success', 'Log file is empty', 'The request succeeded, but there are no log lines yet.', lastSuccessfulFetchLabel);
                 return;
             }
 
@@ -309,9 +377,12 @@
             }
 
             applyFilters();
+            lastSuccessfulFetchLabel = 'Updated at ' + new Date().toLocaleTimeString();
+            setLogsNotice('success', 'Logs refreshed', 'Latest log data loaded successfully. Filters are applied on the entries shown below.', lastSuccessfulFetchLabel);
 
         } catch (err) {
             renderState('error', err.message);
+            setLogsNotice('error', 'Could not refresh logs', 'The page could not load the log file from the Pi server. Try Refresh again or verify the backend service.', lastSuccessfulFetchLabel);
         } finally {
             btn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
             btn.disabled = false;
@@ -428,17 +499,24 @@
 
     function renderState(type, details) {
         var scroll = document.getElementById('logScroll');
-        var icon, text;
+        var icon, text, detailText = '', actionHtml = '';
 
         if (type === 'empty') {
-            icon = 'fas fa-inbox'; text = 'Log file is empty';
+            icon = 'fas fa-inbox';
+            text = 'No log lines yet';
+            detailText = 'The log file exists but does not contain entries yet. Trigger an action or wait for the next system event.';
         } else if (type === 'no-match') {
-            icon = 'fas fa-filter'; text = 'No logs match your filters';
+            icon = 'fas fa-filter';
+            text = 'No logs match these filters';
+            detailText = 'Try clearing the date, search text, or log type filter to show more entries.';
         } else if (type === 'error') {
-            icon = 'fas fa-exclamation-triangle'; text = 'Error: ' + (details || 'Unknown');
+            icon = 'fas fa-exclamation-triangle';
+            text = 'Could not load logs';
+            detailText = details || 'Unknown error';
+            actionHtml = '<button class="btn" onclick="fetchLogs()"><i class="fas fa-sync-alt"></i> Try Again</button>';
         }
 
-        scroll.innerHTML = '<div class="state-box"><i class="' + icon + '"></i><p>' + text + '</p></div>';
+        scroll.innerHTML = '<div class="state-box"><i class="' + icon + '"></i><p>' + text + '</p><div class="state-detail">' + escapeHtml(detailText) + '</div>' + actionHtml + '</div>';
     }
 
     function escapeHtml(s) {
@@ -501,11 +579,13 @@
                 filtered = [];
                 renderState('empty');
                 updateStats();
+                lastSuccessfulFetchLabel = 'Cleared at ' + new Date().toLocaleTimeString();
+                setLogsNotice('success', 'Logs deleted', 'The log file was cleared successfully. New entries will appear here as the system runs.', lastSuccessfulFetchLabel);
             } else {
-                alert('Failed to clear logs (HTTP ' + res.status + ')');
+                setLogsNotice('error', 'Could not delete logs', 'The server refused to clear the log file (HTTP ' + res.status + ').', lastSuccessfulFetchLabel);
             }
         } catch (e) {
-            alert('Error: ' + e.message);
+            setLogsNotice('error', 'Could not delete logs', 'The delete request failed before the server could clear the log file.', lastSuccessfulFetchLabel);
         } finally {
             btn.innerHTML = '<i class="fas fa-trash"></i> Delete All';
             btn.disabled = false;

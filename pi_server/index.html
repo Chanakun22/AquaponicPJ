@@ -21,6 +21,7 @@
     <style>
       :root {
         /* Palette - Cyber/Modern Nature */
+        --page-gutter: 24px;
         --bg-dark: #0f1115;
         --bg-panel: #181b21;
         --primary: #00f2aa;      /* Neon Green - Healthy */
@@ -54,7 +55,7 @@
           radial-gradient(circle at 90% 80%, rgba(0, 200, 255, 0.03) 0%, transparent 40%);
         color: var(--text-main);
         min-height: 100vh;
-        padding: 24px;
+        padding: var(--page-gutter);
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -66,6 +67,14 @@
         display: flex;
         flex-direction: column;
         gap: 32px;
+      }
+
+      .container > .header:first-child,
+      .container > header.header:first-child {
+        width: calc(100vw - (var(--page-gutter) * 2));
+        max-width: none;
+        margin-left: calc(50% - 50vw + var(--page-gutter));
+        margin-right: calc(50% - 50vw + var(--page-gutter));
       }
 
       /* === Header === */
@@ -395,6 +404,9 @@
 
       /* Responsive */
       @media (max-width: 768px) {
+        :root {
+          --page-gutter: 12px;
+        }
         body { padding: 12px; }
         .header-top { flex-direction: column; text-align: center; padding: 16px; gap: 12px; }
         .brand { justify-content: center; }
@@ -627,10 +639,10 @@
             <i class="fa-solid fa-leaf"></i>
             <div>
               <h1 id="deviceName">Aquaponics System Project</h1>
-              <div style="font-size: 0.8rem; color: var(--text-muted); letter-spacing: 1px;">SYSTEM V2.3 • PRODUCTION</div>
+              <div class="subtitle">System V2.3 • Production</div>
             </div>
           </div>
-          
+
           <div class="status-bar">
             <div class="status-pill">
               <div class="status-indicator" id="statusDot"></div>

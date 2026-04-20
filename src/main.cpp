@@ -41,6 +41,15 @@ static float currentTds = -1;         // ค่า TDS (ppm)
 static float currentLight = -1;       // ความเข้มแสง (lux)
 static float currentPh = -1;          // ค่า pH
 
+static void taskCheckpoint(TaskId_t taskId, const char* stage) {
+    systemSetTaskProgress(taskId, stage);
+    systemTaskHeartbeat(taskId);
+
+    #if defined(ESP32) && WATCHDOG_ENABLED
+    esp_task_wdt_reset();
+    #endif
+}
+
 // ============================================================================
 // VALIDATION FUNCTIONS
 // ============================================================================
@@ -91,49 +100,49 @@ void TaskNetworking(void *pvParameters) {
     #endif
     
     for (;;) {
-        #if defined(ESP32) && WATCHDOG_ENABLED
-        esp_task_wdt_reset();
-        #endif
-        systemTaskHeartbeat(TASK_NETWORKING);
+        taskCheckpoint(TASK_NETWORKING, "loop_start");
         
         // Handle WiFi connection / config portal
+        systemSetTaskProgress(TASK_NETWORKING, "wifi_loop");
         wifiLoop();
         
         // Skip all network services when WiFi not connected
         if (wifiIsConnected()) {
             // Handle Telnet clients
+            taskCheckpoint(TASK_NETWORKING, "telnet_loop");
             telnetLoop();
             
             // Handle OTA updates
+            taskCheckpoint(TASK_NETWORKING, "ota_loop");
             otaLoop();
         }
         
         // Handle Netpie MQTT (connect timeout set to 5s in netpieSetup)
+        taskCheckpoint(TASK_NETWORKING, "netpie_loop");
         netpieLoop();
         
         // Reset heartbeat after Netpie (connect can take up to 5s)
-        systemTaskHeartbeat(TASK_NETWORKING);
-        #if defined(ESP32) && WATCHDOG_ENABLED
-        esp_task_wdt_reset();
-        #endif
+        taskCheckpoint(TASK_NETWORKING, "post_netpie");
         
         // Yield to IDLE task to prevent Task WDT accumulation timeout
+        systemSetTaskProgress(TASK_NETWORKING, "yield_after_netpie");
         vTaskDelay(pdMS_TO_TICKS(10));
         
         // Handle Local MQTT (Pi) (connect timeout set to 5s in localMqttSetup)
+        taskCheckpoint(TASK_NETWORKING, "local_mqtt_loop");
         localMqttLoop();
         
         // Reset heartbeat after Local MQTT (connect can take up to 5s)
-        systemTaskHeartbeat(TASK_NETWORKING);
-        #if defined(ESP32) && WATCHDOG_ENABLED
-        esp_task_wdt_reset();
-        #endif
+        taskCheckpoint(TASK_NETWORKING, "post_local_mqtt");
         
         // Command Handling from Serial/Telnet is safe here or needs mutex?
         // Serial is hardware, Telnet is network. 
         // commandCheckSerial() uses Serial.read(), safe to poll here or in separate task.
+        systemSetTaskProgress(TASK_NETWORKING, "command_serial");
         commandCheckSerial();
+        taskCheckpoint(TASK_NETWORKING, "pump_test_tick");
         commandPumpTestTick();      // Auto-off pump test after 3 seconds (CLI)
+        taskCheckpoint(TASK_NETWORKING, "hwtest_tick");
         localMqttHwTestTick();      // Auto-off pump test after duration (Web HW Test)
         
         // Publish Data if connected
@@ -142,13 +151,17 @@ void TaskNetworking(void *pvParameters) {
             lastPublish = millis();
             if (wifiIsConnected()) {
                 if (netpieIsConnected()) {
+                    taskCheckpoint(TASK_NETWORKING, "netpie_publish");
                     netpiePublishData(currentWaterTemp, currentAirTemp, currentHumidity, currentTds, currentLight, currentPh);
                 }
+                taskCheckpoint(TASK_NETWORKING, "local_publish");
                 localMqttPublishData(currentWaterTemp, currentAirTemp, currentHumidity, currentTds, currentLight, currentPh);
+                taskCheckpoint(TASK_NETWORKING, "post_publish");
             }
         }
         
         // Yield to other tasks
+        systemSetTaskProgress(TASK_NETWORKING, "idle_yield");
         vTaskDelay(pdMS_TO_TICKS(10)); // 10ms delay to prevent WDT and allow other tasks
     }
 }
@@ -161,13 +174,11 @@ void TaskSensors(void *pvParameters) {
     #endif
     
     for (;;) {
-        #if defined(ESP32) && WATCHDOG_ENABLED
-        esp_task_wdt_reset();
-        #endif
-        systemTaskHeartbeat(TASK_SENSORS);
+        taskCheckpoint(TASK_SENSORS, "loop_start");
         
         // Water Temp (OneWire is slow, blocking)
         if (systemGetSensorEnabled(SENSOR_WATER_TEMP)) {
+            systemSetTaskProgress(TASK_SENSORS, "water_temp");
             float rawWaterTemp = tempRead();
             currentWaterTemp = validateTemperature(rawWaterTemp);
             tempLoop(); // Maintains sensor state if needed
@@ -177,6 +188,7 @@ void TaskSensors(void *pvParameters) {
         
         // Air Temp & Humidity
         if (systemGetSensorEnabled(SENSOR_AIR_TEMP)) {
+            systemSetTaskProgress(TASK_SENSORS, "air_temp_humidity");
             float rawAirTemp = dhtReadTemperature();
             float rawHumidity = dhtReadHumidity();
             currentAirTemp = validateTemperature(rawAirTemp);
@@ -191,6 +203,7 @@ void TaskSensors(void *pvParameters) {
         // tdsLoop() เก็บ sample ภายใน (เรียก tdsRead ให้แล้ว)
         // ดึงค่าจาก tdsRead เฉพาะตอนที่ buffer พร้อม
         if (systemGetSensorEnabled(SENSOR_TDS)) {
+            systemSetTaskProgress(TASK_SENSORS, "tds");
             tdsLoop(currentWaterTemp);
             if (tdsIsReady()) {
                 currentTds = validateTds(tdsGetLastValue());
@@ -201,6 +214,7 @@ void TaskSensors(void *pvParameters) {
         
         // Light
         if (systemGetSensorEnabled(SENSOR_LIGHT)) {
+            systemSetTaskProgress(TASK_SENSORS, "light");
             if (lightIsReady()) {
                 currentLight = validateLight(lightRead());
             }
@@ -211,6 +225,7 @@ void TaskSensors(void *pvParameters) {
         
         // pH
         if (systemGetSensorEnabled(SENSOR_PH)) {
+            systemSetTaskProgress(TASK_SENSORS, "ph");
             if (!isnan(currentWaterTemp)) {
                 phSetTemperature(currentWaterTemp);
             }
@@ -234,40 +249,46 @@ void TaskControl(void *pvParameters) {
     #endif
     
     for (;;) {
-        #if defined(ESP32) && WATCHDOG_ENABLED
-        esp_task_wdt_reset();
-        #endif
-        systemTaskHeartbeat(TASK_CONTROL);
+        taskCheckpoint(TASK_CONTROL, "loop_start");
 
         // System Management (Button checks etc)
+        systemSetTaskProgress(TASK_CONTROL, "system_loop");
         systemLoop();
 
         // Water circulation / refill controller
+        systemSetTaskProgress(TASK_CONTROL, "water_system");
         waterSystemLoop();
         
         // Light Controller Schedule
+        systemSetTaskProgress(TASK_CONTROL, "light_control");
         lightCtrlLoop();
 
         // Fish feeder schedule
+        systemSetTaskProgress(TASK_CONTROL, "fish_feeder");
         fishFeederLoop();
 
         // Exhaust fan controller
+        systemSetTaskProgress(TASK_CONTROL, "fan_control");
         fanCtrlLoop();
         
         // Automation Engine (Process State Machine)
+        systemSetTaskProgress(TASK_CONTROL, "automator");
         automatorLoop();
         
         // Check task heartbeats (detect stuck tasks)
+        systemSetTaskProgress(TASK_CONTROL, "task_health_check");
         if (!systemCheckTaskHealth()) {
             LOG_ERROR("Task stuck detected! Printing stack info...");
             systemPrintStackInfo();
         }
         
         // System Health / Heap Check
+        systemSetTaskProgress(TASK_CONTROL, "system_health_check");
         if (!systemIsHealthy()) {
              LOG_ERROR("System unhealthy! Free heap: %lu", ESP.getFreeHeap());
         }
         
+        systemSetTaskProgress(TASK_CONTROL, "idle_delay");
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }

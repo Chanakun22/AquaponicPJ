@@ -108,6 +108,59 @@
             opacity: 1;
         }
 
+        .advanced-panel {
+            margin-top: 18px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            padding-top: 14px;
+        }
+
+        .advanced-panel summary {
+            list-style: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            cursor: pointer;
+            color: var(--text-main);
+            font-size: 0.88rem;
+            font-weight: 600;
+        }
+
+        .advanced-panel summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .advanced-panel summary::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            color: var(--text-muted);
+            transition: transform 0.2s ease;
+        }
+
+        .advanced-panel[open] summary::after {
+            transform: rotate(180deg);
+        }
+
+        .advanced-hint {
+            margin-left: auto;
+            text-align: right;
+            color: var(--text-muted);
+            font-size: 0.74rem;
+            font-weight: 500;
+        }
+
+        .advanced-body {
+            margin-top: 14px;
+        }
+
+        .status-block {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 18px;
+            line-height: 1.7;
+        }
+
         .card h2 {
             font-size: 1.05rem;
             font-weight: 600;
@@ -173,6 +226,65 @@
             color: var(--text-muted);
             font-size: 0.75rem;
             line-height: 1.5;
+        }
+
+        .action-status {
+            display: block;
+            margin-top: 10px;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            line-height: 1.5;
+        }
+
+        .action-status strong {
+            color: var(--text-main);
+        }
+
+        .action-feedback {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-top: 12px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.04);
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            line-height: 1.5;
+        }
+
+        .action-feedback i {
+            margin-top: 2px;
+            color: var(--text-main);
+        }
+
+        .action-feedback strong {
+            display: block;
+            color: var(--text-main);
+            margin-bottom: 2px;
+        }
+
+        .action-feedback.pending {
+            border-color: rgba(245, 158, 11, 0.28);
+            background: rgba(245, 158, 11, 0.08);
+        }
+
+        .action-feedback.success {
+            border-color: rgba(16, 185, 129, 0.24);
+            background: rgba(16, 185, 129, 0.08);
+        }
+
+        .action-feedback.error {
+            border-color: rgba(239, 68, 68, 0.24);
+            background: rgba(239, 68, 68, 0.08);
+        }
+
+        .action-row .btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
         }
 
         /* === Forms === */
@@ -532,7 +644,7 @@
         /* === Responsive === */
         @media (max-width: 768px) {
             body { padding: 12px; }
-            .header { flex-direction: column; text-align: center; padding: 16px; gap: 12px; }
+            .header-top { flex-direction: column; text-align: center; padding: 16px; gap: 12px; }
             .brand { justify-content: center; }
             .nav-pills { justify-content: center; }
             .settings-grid { grid-template-columns: 1fr; gap: 14px; }
@@ -661,23 +773,40 @@
                 </div>
             </div>
 
-            <div class="form-group" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 18px;">
-                Running: <strong id="light_running_text">NO</strong><br>
-                NTP Synced: <strong id="light_ntp_text">NO</strong><br>
-                Reason: <span id="light_reason_text">-</span>
+            <button class="btn btn-primary" id="light_apply_btn" onclick="saveLightConfig()" style="width: 100%; margin-top: 10px;">
+                <i class="fas fa-save"></i> Apply Light Config
+            </button>
+            <div class="action-feedback" id="light_feedback">
+                <i class="fas fa-info-circle"></i>
+                <div>
+                    <strong>Ready to apply</strong>
+                    Changes in this card will be sent to ESP32 when you press Apply Light Config.
+                </div>
             </div>
 
-            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
-                <button class="btn btn-primary" onclick="saveLightConfig()" style="flex:1; min-width:170px;">
-                    <i class="fas fa-save"></i> Apply Light Config
-                </button>
-                <button class="btn" onclick="setLightManual(true)" style="flex:1; min-width:140px;">
-                    <i class="fas fa-sun"></i> Manual ON
-                </button>
-                <button class="btn" onclick="setLightManual(false)" style="flex:1; min-width:140px;">
-                    <i class="fas fa-moon"></i> Manual OFF
-                </button>
-            </div>
+            <details class="advanced-panel" id="light_advanced_panel">
+                <summary>
+                    <span>Advanced Controls &amp; Status</span>
+                    <span class="advanced-hint" id="light_advanced_hint">Manual controls and runtime status</span>
+                </summary>
+                <div class="advanced-body">
+                    <div class="status-block">
+                        Running: <strong id="light_running_text">NO</strong><br>
+                        NTP Synced: <strong id="light_ntp_text">NO</strong><br>
+                        Reason: <span id="light_reason_text">-</span>
+                    </div>
+
+                    <div class="action-row" style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+                        <button class="btn" id="light_manual_on_btn" onclick="setLightManual(true)" style="flex:1; min-width:140px;">
+                            <i class="fas fa-sun"></i> Manual ON
+                        </button>
+                        <button class="btn" id="light_manual_off_btn" onclick="setLightManual(false)" style="flex:1; min-width:140px;">
+                            <i class="fas fa-moon"></i> Manual OFF
+                        </button>
+                    </div>
+                    <span class="action-status" id="light_action_status">Manual ON/OFF จะพร้อมใช้เมื่อเลือก Light Command Source เป็น Local Web</span>
+                </div>
+            </details>
         </div>
 
         <div class="card">
@@ -725,21 +854,38 @@
                 <span class="field-tip">เวลาที่จะเปิด output ของ feeder ต่อครั้ง ใช้ให้ตรงกับอุปกรณ์จริงเพื่อลดการให้อาหารเกิน</span>
             </div>
 
-            <div class="form-group" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 18px;">
-                State: <strong id="feeder_state_text">UNKNOWN</strong><br>
-                Running: <strong id="feeder_running_text">NO</strong><br>
-                Last Feed: <strong id="feeder_last_feed_text">Never</strong><br>
-                Reason: <span id="feeder_reason_text">-</span>
+            <button class="btn btn-primary" id="feeder_apply_btn" onclick="saveFishFeederConfig()" style="width: 100%; margin-top: 10px;">
+                <i class="fas fa-save"></i> Apply Feeder Config
+            </button>
+            <div class="action-feedback" id="feeder_feedback">
+                <i class="fas fa-info-circle"></i>
+                <div>
+                    <strong>Ready to apply</strong>
+                    Schedule and duration changes will be sent to ESP32 when you press Apply Feeder Config.
+                </div>
             </div>
 
-            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
-                <button class="btn btn-primary" onclick="saveFishFeederConfig()" style="flex:1; min-width:170px;">
-                    <i class="fas fa-save"></i> Apply Feeder Config
-                </button>
-                <button class="btn" onclick="triggerFeedNow()" style="flex:1; min-width:140px;">
-                    <i class="fas fa-bowl-food"></i> Feed Now
-                </button>
-            </div>
+            <details class="advanced-panel" id="feeder_advanced_panel">
+                <summary>
+                    <span>Advanced Controls &amp; Status</span>
+                    <span class="advanced-hint" id="feeder_advanced_hint">Manual actions and runtime status</span>
+                </summary>
+                <div class="advanced-body">
+                    <div class="status-block">
+                        State: <strong id="feeder_state_text">UNKNOWN</strong><br>
+                        Running: <strong id="feeder_running_text">NO</strong><br>
+                        Last Feed: <strong id="feeder_last_feed_text">Never</strong><br>
+                        Reason: <span id="feeder_reason_text">-</span>
+                    </div>
+
+                    <div class="action-row" style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+                        <button class="btn" id="feeder_feed_now_btn" onclick="triggerFeedNow()" style="flex:1; min-width:140px;">
+                            <i class="fas fa-bowl-food"></i> Feed Now
+                        </button>
+                    </div>
+                    <span class="action-status" id="feeder_action_status">Feed Now จะพร้อมใช้เมื่อเลือก Fish Feeder Command Source เป็น Local Web</span>
+                </div>
+            </details>
         </div>
 
         <div class="card">
@@ -1250,6 +1396,20 @@
 
     <script>
         let settings = {};
+        const actionFeedbackState = {
+            light: {
+                status: 'idle',
+                title: 'Ready to apply',
+                detail: 'Changes in this card will be sent to ESP32 when you press Apply Light Config.',
+                icon: 'fa-info-circle'
+            },
+            feeder: {
+                status: 'idle',
+                title: 'Ready to apply',
+                detail: 'Schedule and duration changes will be sent to ESP32 when you press Apply Feeder Config.',
+                icon: 'fa-info-circle'
+            }
+        };
 
         async function loadSettings() {
             try {
@@ -1348,6 +1508,108 @@
             document.getElementById('cam_resolution').value = `${camW}x${camH}`;
             document.getElementById('cam_fps').value = settings.camera?.framerate ?? 15;
             document.getElementById('cam_quality').value = settings.camera?.quality ?? 80;
+
+            renderActionFeedback('light');
+            renderActionFeedback('feeder');
+            updateSourceDrivenActions();
+        }
+
+        function setActionFeedback(target, status, title, detail, icon) {
+            actionFeedbackState[target] = {
+                status,
+                title,
+                detail,
+                icon
+            };
+            renderActionFeedback(target);
+        }
+
+        function renderActionFeedback(target) {
+            const state = actionFeedbackState[target];
+            const container = document.getElementById(`${target}_feedback`);
+            if (!container || !state) {
+                return;
+            }
+
+            container.className = `action-feedback ${state.status === 'idle' ? '' : state.status}`.trim();
+            container.innerHTML = `
+                <i class="fas ${state.icon}"></i>
+                <div>
+                    <strong>${state.title}</strong>
+                    ${state.detail}
+                </div>
+            `;
+        }
+
+        function setActionButtonBusy(buttonId, busy, busyHtml, idleHtml) {
+            const button = document.getElementById(buttonId);
+            if (!button) {
+                return;
+            }
+            button.disabled = busy;
+            button.innerHTML = busy ? busyHtml : idleHtml;
+        }
+
+        function describeLightAction(overrides = {}) {
+            if (Object.prototype.hasOwnProperty.call(overrides, 'manual_state')) {
+                return overrides.manual_state ? 'Manual ON' : 'Manual OFF';
+            }
+            return 'Light config';
+        }
+
+        function describeFeederAction(overrides = {}) {
+            if (overrides.trigger_feed) {
+                return 'Feed Now';
+            }
+            return 'Feeder config';
+        }
+
+        function setButtonsDisabled(buttonIds, disabled, titleText) {
+            buttonIds.forEach((buttonId) => {
+                const button = document.getElementById(buttonId);
+                if (!button) {
+                    return;
+                }
+                button.disabled = disabled;
+                button.title = disabled ? titleText : '';
+            });
+        }
+
+        function updateSourceDrivenActions() {
+            const lightSource = document.getElementById('light_command_source').value;
+            const feederSource = document.getElementById('feeder_command_source').value;
+
+            const lightManualEnabled = lightSource === 'local_web';
+            const feederManualEnabled = feederSource === 'local_web';
+
+            setButtonsDisabled(
+                ['light_manual_on_btn', 'light_manual_off_btn'],
+                !lightManualEnabled,
+                'Available only when Light Command Source is Local Web'
+            );
+            setButtonsDisabled(
+                ['feeder_feed_now_btn'],
+                !feederManualEnabled,
+                'Available only when Fish Feeder Command Source is Local Web'
+            );
+
+            document.getElementById('light_action_status').innerHTML = lightManualEnabled
+                ? '<strong>Manual ON/OFF พร้อมใช้งาน</strong> เพราะตอนนี้ Light Command Source เป็น Local Web'
+                : '<strong>Manual ON/OFF ถูกปิดไว้</strong> เพราะตอนนี้ Light Command Source เป็น NETPIE';
+
+            document.getElementById('feeder_action_status').innerHTML = feederManualEnabled
+                ? '<strong>Feed Now พร้อมใช้งาน</strong> เพราะตอนนี้ Fish Feeder Command Source เป็น Local Web'
+                : '<strong>Feed Now ถูกปิดไว้</strong> เพราะตอนนี้ Fish Feeder Command Source เป็น NETPIE';
+
+            document.getElementById('light_advanced_hint').textContent = lightManualEnabled
+                ? 'Manual controls are available now'
+                : 'Open to view runtime status';
+            document.getElementById('feeder_advanced_hint').textContent = feederManualEnabled
+                ? 'Feed Now is available now'
+                : 'Open to view runtime status';
+
+            document.getElementById('light_advanced_panel').open = lightManualEnabled;
+            document.getElementById('feeder_advanced_panel').open = feederManualEnabled;
         }
 
         function collectForm() {
@@ -1513,6 +1775,14 @@
 
         async function saveLightConfig(overrides = {}) {
             const data = collectLightConfig(overrides);
+            const actionLabel = describeLightAction(overrides);
+            setActionButtonBusy(
+                'light_apply_btn',
+                true,
+                '<i class="fas fa-spinner fa-spin"></i> Applying... ',
+                '<i class="fas fa-save"></i> Apply Light Config'
+            );
+            setActionFeedback('light', 'pending', `${actionLabel} is being sent`, 'Waiting for Pi server to forward this command to ESP32 and refresh the latest device status.', 'fa-spinner fa-spin');
             try {
                 const res = await fetch('/api/light_control/config', {
                     method: 'POST',
@@ -1525,13 +1795,24 @@
                         ...(settings.light_control || {}),
                         ...data
                     };
+                    setActionFeedback('light', 'pending', `${actionLabel} applied`, 'Pi accepted the command. Refreshing the latest status from the device now.', 'fa-rotate');
+                    await loadSettings();
+                    setActionFeedback('light', 'success', `${actionLabel} confirmed`, 'Latest settings were reloaded after the apply call, so this card now reflects the newest device-facing state.', 'fa-circle-check');
                     showToast('Light Control Applied to ESP32! ✅');
-                    loadSettings();
                 } else {
+                    setActionFeedback('light', 'error', `${actionLabel} failed`, result.message || 'The server rejected this request.', 'fa-triangle-exclamation');
                     showToast('Error: ' + result.message, true);
                 }
             } catch (e) {
+                setActionFeedback('light', 'error', `${actionLabel} failed`, 'Could not reach the server while sending the command to ESP32.', 'fa-triangle-exclamation');
                 showToast('Failed to connect to server', true);
+            } finally {
+                setActionButtonBusy(
+                    'light_apply_btn',
+                    false,
+                    '<i class="fas fa-spinner fa-spin"></i> Applying... ',
+                    '<i class="fas fa-save"></i> Apply Light Config'
+                );
             }
         }
 
@@ -1556,6 +1837,14 @@
 
         async function saveFishFeederConfig(overrides = {}) {
             const data = collectFishFeederConfig(overrides);
+            const actionLabel = describeFeederAction(overrides);
+            setActionButtonBusy(
+                'feeder_apply_btn',
+                true,
+                '<i class="fas fa-spinner fa-spin"></i> Applying... ',
+                '<i class="fas fa-save"></i> Apply Feeder Config'
+            );
+            setActionFeedback('feeder', 'pending', `${actionLabel} is being sent`, 'Waiting for Pi server to forward this command to ESP32 and refresh the latest device status.', 'fa-spinner fa-spin');
             try {
                 const res = await fetch('/api/fish_feeder/config', {
                     method: 'POST',
@@ -1568,13 +1857,24 @@
                         ...(settings.fish_feeder || {}),
                         ...data
                     };
+                    setActionFeedback('feeder', 'pending', `${actionLabel} applied`, 'Pi accepted the command. Refreshing the latest status from the device now.', 'fa-rotate');
+                    await loadSettings();
+                    setActionFeedback('feeder', 'success', `${actionLabel} confirmed`, 'Latest settings were reloaded after the apply call, so this card now reflects the newest device-facing state.', 'fa-circle-check');
                     showToast('Fish Feeder Applied to ESP32! ✅');
-                    loadSettings();
                 } else {
+                    setActionFeedback('feeder', 'error', `${actionLabel} failed`, result.message || 'The server rejected this request.', 'fa-triangle-exclamation');
                     showToast('Error: ' + result.message, true);
                 }
             } catch (e) {
+                setActionFeedback('feeder', 'error', `${actionLabel} failed`, 'Could not reach the server while sending the command to ESP32.', 'fa-triangle-exclamation');
                 showToast('Failed to connect to server', true);
+            } finally {
+                setActionButtonBusy(
+                    'feeder_apply_btn',
+                    false,
+                    '<i class="fas fa-spinner fa-spin"></i> Applying... ',
+                    '<i class="fas fa-save"></i> Apply Feeder Config'
+                );
             }
         }
 
@@ -1722,6 +2022,8 @@
 
 
         document.getElementById('notify_enabled').addEventListener('change', updateNotifyStatus);
+        document.getElementById('light_command_source').addEventListener('change', updateSourceDrivenActions);
+        document.getElementById('feeder_command_source').addEventListener('change', updateSourceDrivenActions);
 
         // === TDS Calibration Functions ===
         async function refreshVoltage() {
