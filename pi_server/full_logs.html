@@ -262,7 +262,7 @@
             <div class="toolbar-group">
                 <button onclick="fetchLogs()" class="btn" id="btnRefresh"><i class="fas fa-sync-alt"></i> Refresh</button>
                 <button onclick="toggleAutoRefresh()" class="btn" id="btnAuto"><span class="refresh-dot"></span> Auto: ON</button>
-                <button onclick="clearLogsFile()" class="btn btn-danger" id="btnDelete"><i class="fas fa-trash"></i> Delete All</button>
+                <button onclick="clearLogsFile()" class="btn btn-danger" id="btnDelete" hidden><i class="fas fa-trash"></i> Delete All</button>
             </div>
 
             <div class="toolbar-group">
@@ -335,6 +335,27 @@
     var refreshTimer = null;
     var REFRESH_INTERVAL = 5000;
     var lastSuccessfulFetchLabel = 'Waiting for first successful refresh';
+    var currentUserRole = 'user';
+
+    function setDeleteButtonAccess(role) {
+        var btn = document.getElementById('btnDelete');
+        var isAdmin = role === 'admin';
+        btn.hidden = !isAdmin;
+        btn.disabled = !isAdmin;
+    }
+
+    async function loadCurrentUser() {
+        try {
+            var resp = await fetch('/api/me');
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            var user = await resp.json();
+            currentUserRole = user.role || 'user';
+        } catch (err) {
+            currentUserRole = 'user';
+        }
+
+        setDeleteButtonAccess(currentUserRole);
+    }
 
     function setLogsNotice(status, title, detail, meta) {
         var notice = document.getElementById('logsNotice');
@@ -465,7 +486,7 @@
         // Show date+time when viewing all dates, time only when filtered
         var showDate = !document.getElementById('filterDate').value;
 
-        var html = '';
+        var htmlParts = [];
         for (var j = 0; j < toShow.length; j++) {
             var log = toShow[j];
             var lineClass = '';
@@ -474,14 +495,14 @@
 
             var timeDisplay = showDate ? (log.date.substring(5) + ' ' + log.time.substring(0,5)) : log.time;
 
-            html += '<div class="log-line' + lineClass + '">' +
+            htmlParts.push('<div class="log-line' + lineClass + '">' +
                 '<span class="l-time">' + timeDisplay + '</span>' +
                 '<span class="l-tag tag-' + log.type + '">' + log.type.toUpperCase() + '</span>' +
                 '<span class="l-msg">' + escapeHtml(log.msg) + '</span>' +
-                '</div>';
+                '</div>');
         }
 
-        scroll.innerHTML = html;
+        scroll.innerHTML = htmlParts.join('');
 
         // Restore scroll position
         if (!wasAtTop) {
@@ -566,6 +587,11 @@
     // DELETE LOGS
     // =============================================
     async function clearLogsFile() {
+        if (currentUserRole !== 'admin') {
+            setLogsNotice('error', 'Admin access required', 'Only admin users can clear the runtime log file.', lastSuccessfulFetchLabel);
+            return;
+        }
+
         if (!confirm('⚠️ Delete ALL logs? This cannot be undone.')) return;
 
         var btn = document.getElementById('btnDelete');
@@ -581,6 +607,8 @@
                 updateStats();
                 lastSuccessfulFetchLabel = 'Cleared at ' + new Date().toLocaleTimeString();
                 setLogsNotice('success', 'Logs deleted', 'The log file was cleared successfully. New entries will appear here as the system runs.', lastSuccessfulFetchLabel);
+            } else if (res.status === 403) {
+                setLogsNotice('error', 'Admin access required', 'Your current account is not allowed to clear the runtime log file.', lastSuccessfulFetchLabel);
             } else {
                 setLogsNotice('error', 'Could not delete logs', 'The server refused to clear the log file (HTTP ' + res.status + ').', lastSuccessfulFetchLabel);
             }
@@ -588,7 +616,7 @@
             setLogsNotice('error', 'Could not delete logs', 'The delete request failed before the server could clear the log file.', lastSuccessfulFetchLabel);
         } finally {
             btn.innerHTML = '<i class="fas fa-trash"></i> Delete All';
-            btn.disabled = false;
+            btn.disabled = currentUserRole !== 'admin';
         }
     }
 
@@ -603,8 +631,10 @@
         applyFilters();
     });
 
-    fetchLogs();
-    startAutoRefresh();
+    loadCurrentUser().finally(function() {
+        fetchLogs();
+        startAutoRefresh();
+    });
     </script>
 
 </body>

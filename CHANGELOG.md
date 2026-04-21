@@ -2,6 +2,49 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-04-22] - Pi Server Auth And UI Hardening
+
+### Changed
+
+- **fix: remove HW test pump auto-off leak window and harden firmware config setters (`src/localMqtt.cpp`, `src/lightController.cpp`, `src/waterSystem.cpp`):**
+  - ตัดการใช้ `new HwTestParams` + one-shot FreeRTOS task สำหรับ pump auto-off ออก แล้วเปลี่ยนเป็น deadline-based auto-off ที่รันใน `localMqttHwTestTick()` แทน เพื่อปิดช่อง race ที่ task ถูก `vTaskDelete()` จากภายนอกก่อนจะได้ `delete` พารามิเตอร์
+  - เมื่อหน้า Hardware Test สั่ง pump A/B ระบบจะ arm deadline ใน task networking เดิม, ปิดปั๊มตามเวลา, resume automator, และ publish สถานะ `completed` โดยไม่ต้องพึ่ง dynamic allocation หรือ task ownership เพิ่มอีกชั้น
+  - เพิ่ม schedule sanitization ให้ light controller ทั้งตอนโหลดจาก NVS และตอนรับ `on_time`/`off_time` จาก MQTT โดย reject เวลา format ผิดหรือเกินช่วง `00:00-23:59`
+  - เพิ่ม water system config sanitization เพื่อกัน `refillMaxRuntimeMs` ที่เป็นศูนย์/เกินค่าสูงสุด และ route enum ที่หลุดช่วงก่อนบันทึกหรือใช้งานจริง
+
+- **fix: persist Flask session secret and harden cookie defaults (`pi_server/app.py`):**
+  - เปลี่ยนจากการสุ่ม `app.secret_key` ใหม่ทุกครั้งที่ process boot มาเป็นการ reuse ค่า `session_secret` ที่เก็บใน `auth_config.json` หรือรับจาก env `AQUAPONICS_SECRET_KEY` เพื่อไม่ให้ทุก session หลุดทันทีหลัง service restart
+  - ตั้งค่า session cookie ให้ explicit มากขึ้นด้วย `HttpOnly`, `SameSite=Lax`, และ `PERMANENT_SESSION_LIFETIME=7 days` พร้อมรองรับ `SESSION_COOKIE_SECURE` ผ่าน env `AQUAPONICS_SESSION_SECURE` สำหรับ deployment ที่อยู่หลัง HTTPS/reverse proxy
+  - เพิ่ม `ProxyFix` และ `PREFERRED_URL_SCHEME='https'` เพื่อให้ Flask ใช้ `X-Forwarded-Proto` จาก Cloudflare Tunnel / reverse proxy ได้ถูกต้อง และตั้งค่า `AQUAPONICS_SESSION_SECURE=1` ใน `pi_server/aquaponics.service` สำหรับ deployment นี้โดยตรง
+
+- **fix: gate destructive log actions by frontend role and reduce render churn (`pi_server/full_logs.html`):**
+  - ซ่อนปุ่ม `Delete All` สำหรับ non-admin ตั้งแต่หน้า UI โดยใช้ `/api/me` เป็น source of truth เดียวกับ shared header และเพิ่มข้อความชัดเจนเมื่อผู้ใช้ที่ไม่ใช่ admin พยายามเรียก action นี้
+  - ปรับหน้า logs ให้ handle `403` จาก backend แบบเจาะจงแทน error รวม และเปลี่ยนการประกอบรายการ log จาก string concat ต่อเนื่องเป็น array + `join()` เพื่อลดงานฝั่ง browser เวลาแสดงหลายร้อยบรรทัด
+
+- **fix: update charts in place and bridge missing samples (`pi_server/graphs.html`, `pi_server/pwa/sw.js`):**
+  - เปลี่ยน refresh ของกราฟจาก destroy/recreate ทุก 60 วินาทีมาเป็น update instance เดิมเพื่อลด redraw churn และคง interaction state ได้ดีขึ้นระหว่าง auto-refresh
+  - ปรับ dataset ทุกชุดให้ `spanGaps: true` เพื่อไม่ให้กราฟขาดช่วงง่ายเกินไปเมื่อฐานข้อมูลมี sample หายเป็นบางจุด
+  - bump `pi_server/pwa/sw.js` cache version เป็น `aquaponics-v9` เพื่อให้ browser/PWA ดึงหน้า Graphs และ Logs เวอร์ชันล่าสุดหลัง deploy
+
+## [2026-04-20] - pH Calibration Buffer Update
+
+### Changed
+
+- **feat: upgrade pH calibration to 3-point buffer set (`include/config.h`, `include/phSensor.h`, `src/phSensor.cpp`, `src/localMqtt.cpp`, `src/netpie.cpp`, `src/commandHandler.cpp`):**
+  - เปลี่ยน firmware จาก calibration 2 จุดแบบ pH 4.0/7.0 ไปเป็น 3 จุด pH 4.01, 6.86, 9.18 และคำนวณค่า pH แบบ piecewise interpolation เพื่อให้ช่วงกรด-กลาง-ด่างตรงกับน้ำยาบัฟเฟอร์มาตรฐานที่ใช้งานจริงมากขึ้น
+  - เพิ่มการเก็บสถานะ calibration รายจุดใน NVS พร้อม migrate ค่า legacy `pH 4.0/7.0` เดิมเข้าช่องใหม่แบบ best-effort และคง alias คำสั่ง `cal4`/`cal7` กับ shadow keys เดิมไว้เพื่อลด breaking change ตอนอัปเดต
+  - ให้ Local MQTT ส่งสถานะ `cal401_done`, `cal686_done`, `cal918_done` กลับ Pi เพื่อให้ dashboard เห็นความครบของแต่ละ buffer point จริงแทนการเดาสถานะจาก action ล่าสุด
+
+- **feat: align Pi pH calibration flow with 4.01/6.86/9.18 (`pi_server/settings.html`, `pi_server/app.py`, `README.md`, `PROJECT_REFERENCE.md`):**
+  - ปรับหน้า Settings และ API ให้ใช้ action `cal401`, `cal686`, `cal918` และแสดง 3 ขั้นตอน calibration ตาม buffer ใหม่ พร้อมล้างสถานะครบทั้งสามจุดเมื่อ clear
+  - อัปเดต README และ PROJECT_REFERENCE ให้คำอธิบาย pH sensor, คำสั่ง CLI, และ calibration procedure ตรงกับ buffer set ใหม่
+  - bump `pi_server/pwa/sw.js` cache version เป็น `aquaponics-v8` เพื่อให้ browser/PWA ดึงหน้า Settings เวอร์ชันใหม่หลัง deploy
+
+- **fix: smooth pH calibration voltage display (`include/phSensor.h`, `src/phSensor.cpp`):**
+  - เปลี่ยนค่า `phReadVoltage()` จากการคำนวณ median ดิบทุกครั้งมาเป็น cached EMA-filtered voltage เพื่อให้ตัวเลข mV ในหน้า calibration แกว่งน้อยลงและอ่านจังหวะ stabilize ได้ง่ายขึ้น
+  - คง validation เดิมสำหรับกรณี input หลุดช่วง แต่ให้ค่าที่แสดงใน dashboard เป็น filtered reading เดียวกับรอบ sensor loop แทนการ recompute ใหม่ทุกครั้ง
+  - refactor รอบอ่าน pH เพิ่ม oversampling ต่อรอบ, invalid-streak guard, voltage deadband, pH deadband, และ step limit เพื่อกด jitter จาก analog front-end และทำให้ค่าหน้า dashboard/calibration นิ่งขึ้นโดยไม่ต้องลดความเร็ว publish ของระบบ
+
 ## [2026-04-20] - Task WDT Hardening
 
 ### Changed
@@ -19,7 +62,12 @@ All notable changes to the **Smart Aquaponics AI** project will be documented in
   - ปรับ `localMqttLoop()` ให้ stagger การ publish status ของ water/light/feeder/fan ทีละหัวข้อแทนยิงหลาย topic ติดกันในรอบเดียว และลดการระบาย log queue ต่อรอบ เพื่อกัน publish burst ยาวจน `TaskNetworking` ไม่ได้ feed WDT ทัน
   - ให้ `systemCheckTaskHealth()` latch การบันทึก stuck-task เพียงครั้งเดียวต่อเหตุการณ์ พร้อมเก็บ `stage` ล่าสุดลง NVS และแสดง stage ใน crash report/stack info เพื่อระบุได้ชัดขึ้นว่าค้างตอนทำอะไร
   - feed watchdog ระหว่าง `wifiSetup()` ที่รอเชื่อมต่อช่วง boot เพื่อลด risk จาก startup wait path
+  - เพิ่ม boot report สำหรับ `last crash` และ cache ข้อมูล crash ไว้ใน RAM หลัง report เพื่อให้ยังดูซ้ำได้ในคำสั่ง `crash`, `health`, และ `test` ตลอดบูตรอบเดียวกัน แม้ NVS record จะถูก clear หลังแสดงครั้งแรก
+  - เพิ่ม RTC fallback snapshot ของ heartbeat/stage ล่าสุดต่อ task เพื่อให้กรณี WDT รีเซ็ตก่อน `systemCheckTaskHealth()` จะเขียน NVS ยังพอระบุ task/stage สุดท้ายได้จาก boot ถัดไป และตัดการเรียก boot crash report ซ้ำใน `setup()`
   - นับ `watchdog_resets` ตาม reset reason จริงตอนบูต แทนการมี counter ที่ประกาศไว้แต่ไม่ถูกเพิ่มค่าเมื่อเกิด WDT จริง
+  - แก้ false positive ใน stuck-task detector: เดิม monitor snapshot `millis()` ครั้งเดียวแล้ว task อื่นอัปเดต heartbeat หลังจากนั้น ทำให้ `now - hb` underflow เป็นค่า ~4294967 วินาที; ตอนนี้กันกรณี `hb > now` และอ่านเวลาใหม่ต่อ task ก่อนคำนวณ age
+  - harden `telnetPrintf()` ให้เขียนแบบ non-blocking ตาม `availableForWrite()` และเปิด `setNoDelay(true)` กับ client ใหม่ เพื่อลดความเสี่ยงที่การ log ไป telnet จาก task ใดก็ตามจะ block จนลากไปชน WDT เมื่อ client ช้าหรือเครือข่ายฝั่ง debug ตัน
+  - แยก Telnet output เป็น 2 แบบ: `telnetPrintf()` สำหรับ command response แบบ reliable และ `telnetPrintfNonBlocking()` สำหรับ log แบบ best-effort เพื่อแก้อาการคำสั่งเข้าได้แต่ผลลัพธ์หาย ขณะยังคงลดโอกาสที่ log จะ block task จนชน WDT
 
 ## [2026-04-18] - Hardware Test Page Alignment
 

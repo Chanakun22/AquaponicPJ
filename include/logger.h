@@ -42,7 +42,7 @@
 #if LOG_LEVEL >= LOG_LEVEL_ERROR
 #define LOG_ERROR(fmt, ...) { \
     Serial.printf("[ERROR] " fmt "\n", ##__VA_ARGS__); \
-    telnetPrintf("[ERROR] " fmt "\r\n", ##__VA_ARGS__); \
+    telnetPrintfNonBlocking("[ERROR] " fmt "\r\n", ##__VA_ARGS__); \
     LOG_TO_MQTT("[ERROR] " fmt, ##__VA_ARGS__); \
 }
 #else
@@ -52,7 +52,7 @@
 #if LOG_LEVEL >= LOG_LEVEL_WARN
 #define LOG_WARN(fmt, ...) { \
     Serial.printf("[WARN] " fmt "\n", ##__VA_ARGS__); \
-    telnetPrintf("[WARN] " fmt "\r\n", ##__VA_ARGS__); \
+    telnetPrintfNonBlocking("[WARN] " fmt "\r\n", ##__VA_ARGS__); \
     LOG_TO_MQTT("[WARN] " fmt, ##__VA_ARGS__); \
 }
 #else
@@ -62,7 +62,7 @@
 #if LOG_LEVEL >= LOG_LEVEL_INFO
 #define LOG_INFO(fmt, ...) { \
     Serial.printf("[INFO] " fmt "\n", ##__VA_ARGS__); \
-    telnetPrintf("[INFO] " fmt "\r\n", ##__VA_ARGS__); \
+    telnetPrintfNonBlocking("[INFO] " fmt "\r\n", ##__VA_ARGS__); \
     LOG_TO_MQTT("[INFO] " fmt, ##__VA_ARGS__); \
 }
 #else
@@ -72,7 +72,7 @@
 #if LOG_LEVEL >= LOG_LEVEL_DEBUG
 #define LOG_DEBUG(fmt, ...) { \
     Serial.printf("[DEBUG] " fmt "\n", ##__VA_ARGS__); \
-    telnetPrintf("[DEBUG] " fmt "\r\n", ##__VA_ARGS__); \
+    telnetPrintfNonBlocking("[DEBUG] " fmt "\r\n", ##__VA_ARGS__); \
      /* Optional: Don't send DEBUG to MQTT to save bandwidth, or uncomment if needed */ \
      /* LOG_TO_MQTT("[DEBUG] " fmt, ##__VA_ARGS__); */ \
 }

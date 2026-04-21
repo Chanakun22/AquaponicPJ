@@ -16,6 +16,11 @@
 
 #if defined(ESP32)
 #include <ESP.h>
+
+#define RTC_CRASH_SNAPSHOT_MAGIC 0x43524153UL
+RTC_NOINIT_ATTR static unsigned long _rtcTaskHeartbeat[TASK_ID_COUNT];
+RTC_NOINIT_ATTR static char _rtcTaskProgress[TASK_ID_COUNT][32];
+RTC_NOINIT_ATTR static unsigned long _rtcCrashSnapshotMagic;
 #endif
 
 // ============================================================================
@@ -30,6 +35,46 @@ static unsigned int _mqttReconnects = 0;
 static bool _systemInitialized = false;
 
 static Preferences _prefs;
+static char _lastCrashInfoCache[160] = "";
+static bool _hasLastCrashInfoCache = false;
+
+#if defined(ESP32)
+static void _clearRtcCrashSnapshot(void) {
+    memset(_rtcTaskHeartbeat, 0, sizeof(_rtcTaskHeartbeat));
+    memset(_rtcTaskProgress, 0, sizeof(_rtcTaskProgress));
+    _rtcCrashSnapshotMagic = 0;
+}
+
+static void _captureRtcCrashSnapshotFallback(void) {
+    if (_rtcCrashSnapshotMagic != RTC_CRASH_SNAPSHOT_MAGIC) {
+        return;
+    }
+
+    int oldestTask = -1;
+    unsigned long oldestHeartbeat = ULONG_MAX;
+
+    for (int i = 0; i < TASK_ID_COUNT; i++) {
+        if (_rtcTaskHeartbeat[i] == 0) {
+            continue;
+        }
+
+        if (_rtcTaskHeartbeat[i] < oldestHeartbeat) {
+            oldestHeartbeat = _rtcTaskHeartbeat[i];
+            oldestTask = i;
+        }
+    }
+
+    if (oldestTask >= 0) {
+        const char* stage = _rtcTaskProgress[oldestTask][0] != '\0' ? _rtcTaskProgress[oldestTask] : "unknown";
+        snprintf(_lastCrashInfoCache, sizeof(_lastCrashInfoCache),
+                 "WDT fallback: oldest task '%s' last checkpoint at %lus (stage=%s)",
+                 TASK_NAMES[oldestTask], oldestHeartbeat / 1000, stage);
+        _hasLastCrashInfoCache = true;
+    }
+
+    _clearRtcCrashSnapshot();
+}
+#endif
 
 // ============================================================================
 // PRIVATE FUNCTIONS
@@ -84,6 +129,12 @@ void systemInit(void) {
         _watchdogResets++;
         _savePersistedStats();
         LOG_WARN("Previous boot ended with watchdog reset (%s)", systemGetResetReasonString());
+
+        if (!_hasLastCrashInfoCache) {
+            _captureRtcCrashSnapshotFallback();
+        }
+    } else {
+        _clearRtcCrashSnapshot();
     }
     #endif
     
@@ -389,7 +440,13 @@ static bool _taskStuckLatched[TASK_ID_COUNT] = {false, false, false};
 
 void systemTaskHeartbeat(TaskId_t taskId) {
     if (taskId >= 0 && taskId < TASK_ID_COUNT) {
-        _taskHeartbeat[taskId] = millis();
+        unsigned long now = millis();
+        _taskHeartbeat[taskId] = now;
+
+        #if defined(ESP32)
+        _rtcTaskHeartbeat[taskId] = now;
+        _rtcCrashSnapshotMagic = RTC_CRASH_SNAPSHOT_MAGIC;
+        #endif
     }
 }
 
@@ -399,6 +456,11 @@ void systemSetTaskProgress(TaskId_t taskId, const char* stage) {
     }
 
     snprintf(_taskProgress[taskId], sizeof(_taskProgress[taskId]), "%s", stage);
+
+    #if defined(ESP32)
+    snprintf(_rtcTaskProgress[taskId], sizeof(_rtcTaskProgress[taskId]), "%s", stage);
+    _rtcCrashSnapshotMagic = RTC_CRASH_SNAPSHOT_MAGIC;
+    #endif
 }
 
 const char* systemGetTaskProgress(TaskId_t taskId) {
@@ -419,17 +481,27 @@ unsigned long systemGetTaskHeartbeatAge(TaskId_t taskId) {
     if (taskId < 0 || taskId >= TASK_ID_COUNT) return 0;
     unsigned long hb = _taskHeartbeat[taskId];
     if (hb == 0) return 0;  // Not started yet
-    return millis() - hb;
+
+    unsigned long now = millis();
+    if (hb > now) {
+        return 0;
+    }
+
+    return now - hb;
 }
 
 bool systemCheckTaskHealth(void) {
     bool allOk = true;
-    unsigned long now = millis();
     
     for (int i = 0; i < TASK_ID_COUNT; i++) {
         unsigned long hb = _taskHeartbeat[i];
         if (hb == 0) continue;  // Task not started yet
-        
+
+        unsigned long now = millis();
+        if (hb > now) {
+            continue;
+        }
+
         unsigned long age = now - hb;
         if (age > TASK_STUCK_THRESHOLD_MS) {
             if (!_taskStuckLatched[i]) {
@@ -469,6 +541,11 @@ void systemPrintStackInfo(void) {
 }
 
 bool systemGetLastCrashInfo(char* buf, size_t bufSize) {
+    if (_hasLastCrashInfoCache) {
+        snprintf(buf, bufSize, "%s", _lastCrashInfoCache);
+        return true;
+    }
+
     Preferences crashPrefs;
     crashPrefs.begin("crash", true);  // Read-only
     
@@ -485,12 +562,17 @@ bool systemGetLastCrashInfo(char* buf, size_t bufSize) {
     
     snprintf(buf, bufSize, "Task '%s' stuck %lus (uptime was %lus, stage=%s)",
              taskName.c_str(), age, uptime, stage.c_str());
+    snprintf(_lastCrashInfoCache, sizeof(_lastCrashInfoCache), "%s", buf);
+    _hasLastCrashInfoCache = true;
     return true;
 }
 
 void systemReportLastCrash(void) {
     char crashInfo[128];
     if (systemGetLastCrashInfo(crashInfo, sizeof(crashInfo))) {
+        snprintf(_lastCrashInfoCache, sizeof(_lastCrashInfoCache), "%s", crashInfo);
+        _hasLastCrashInfoCache = true;
+
         LOG_WARN("=== LAST CRASH INFO ===");
         LOG_WARN("%s", crashInfo);
         LOG_WARN("Reset reason: %s", systemGetResetReasonString());

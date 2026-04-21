@@ -274,6 +274,23 @@
             lightChart = null;
         }
 
+        function upsertLineChart(chart, canvasId, labels, datasets, options) {
+            if (chart) {
+                chart.data.labels = labels;
+                chart.data.datasets = datasets;
+                chart.options = options;
+                chart.update('none');
+                return chart;
+            }
+
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            return new Chart(ctx, {
+                type: 'line',
+                data: { labels: labels, datasets: datasets },
+                options: options
+            });
+        }
+
         async function loadCharts(options = {}) {
             const silent = options.silent === true;
             if (!silent || !chartsHaveData) {
@@ -317,61 +334,37 @@
         setInterval(() => loadCharts({ silent: true }), 60000);
 
         function renderEnvChart(data) {
-            const ctx = document.getElementById('envChart').getContext('2d');
-            if(envChart) envChart.destroy();
-            
-            envChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: data.labels,
-                    datasets: [
-                        { label: 'Water Temp (°C)', data: data.datasets.water_temp, borderColor: '#38bdf8', tension: 0.4, spanGaps: false },
-                        { label: 'Air Temp (°C)', data: data.datasets.air_temp, borderColor: '#f472b6', tension: 0.4, spanGaps: false },
-                        { label: 'Humidity (%)', data: data.datasets.humidity, borderColor: '#a78bfa', tension: 0.4, hidden: true, spanGaps: false }
-                    ]
-                },
-                options: getChartOptions()
-            });
+            const datasets = [
+                { label: 'Water Temp (°C)', data: data.datasets.water_temp, borderColor: '#38bdf8', tension: 0.4, spanGaps: true },
+                { label: 'Air Temp (°C)', data: data.datasets.air_temp, borderColor: '#f472b6', tension: 0.4, spanGaps: true },
+                { label: 'Humidity (%)', data: data.datasets.humidity, borderColor: '#a78bfa', tension: 0.4, hidden: true, spanGaps: true }
+            ];
+
+            envChart = upsertLineChart(envChart, 'envChart', data.labels, datasets, getChartOptions());
         }
 
         function renderWaterChart(data) {
-            const ctx = document.getElementById('waterChart').getContext('2d');
-            if(waterChart) waterChart.destroy();
+            const datasets = [
+                { label: 'pH Level', data: data.datasets.ph, borderColor: '#34d399', yAxisID: 'y', tension: 0.4, spanGaps: true },
+                { label: 'TDS (ppm)', data: data.datasets.tds, borderColor: '#fbbf24', yAxisID: 'y1', tension: 0.4, spanGaps: true }
+            ];
 
-            waterChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: data.labels,
-                    datasets: [
-                        { label: 'pH Level', data: data.datasets.ph, borderColor: '#34d399', yAxisID: 'y', tension: 0.4, spanGaps: false },
-                        { label: 'TDS (ppm)', data: data.datasets.tds, borderColor: '#fbbf24', yAxisID: 'y1', tension: 0.4, spanGaps: false }
-                    ]
-                },
-                options: {
-                    ...getChartOptions(),
-                    scales: {
-                        y: { position: 'left', grid: { color: 'rgba(255,255,255,0.1)' } },
-                        y1: { position: 'right', grid: { drawOnChartArea: false } },
-                        x: { grid: { display: false } }
-                    }
+            waterChart = upsertLineChart(waterChart, 'waterChart', data.labels, datasets, {
+                ...getChartOptions(),
+                scales: {
+                    y: { position: 'left', grid: { color: 'rgba(255,255,255,0.1)' } },
+                    y1: { position: 'right', grid: { drawOnChartArea: false } },
+                    x: { grid: { display: false } }
                 }
             });
         }
 
         function renderLightChart(data) {
-            const ctx = document.getElementById('lightChart').getContext('2d');
-            if(lightChart) lightChart.destroy();
+            const datasets = [
+                { label: 'Light (lux)', data: data.datasets.light, borderColor: '#facc15', backgroundColor: 'rgba(250, 204, 21, 0.1)', fill: true, tension: 0.4, spanGaps: true }
+            ];
 
-            lightChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: data.labels,
-                    datasets: [
-                        { label: 'Light (lux)', data: data.datasets.light, borderColor: '#facc15', backgroundColor: 'rgba(250, 204, 21, 0.1)', fill: true, tension: 0.4, spanGaps: false }
-                    ]
-                },
-                options: getChartOptions()
-            });
+            lightChart = upsertLineChart(lightChart, 'lightChart', data.labels, datasets, getChartOptions());
         }
 
         function getChartOptions() {

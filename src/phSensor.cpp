@@ -16,6 +16,7 @@
 
 static Preferences _prefs; // NVS storage
 static float _lastPh = -1.0;
+static float _lastVoltageMv = -1.0;
 static bool _sensorReady = false;
 static unsigned long _lastReadTime = 0;
 static int _sampleBuffer[PH_SAMPLE_COUNT];
@@ -23,12 +24,21 @@ static int _sampleIndex = 0;
 static bool _bufferFull = false;
 
 // Calibration values (stored in NVS)
-static int _calibVoltage7 = PH_VOLTAGE_AT_7; // ADC value at pH 7.0
-static int _calibVoltage4 = 0;               // ADC value at pH 4.0
-static float _calibSlope = 0;                // Calculated slope (mV/pH)
+static int _calibVoltage401 = 0;
+static int _calibVoltage686 = PH_VOLTAGE_AT_686;
+static int _calibVoltage918 = 0;
+static bool _hasCalib401 = false;
+static bool _hasCalib686 = false;
+static bool _hasCalib918 = false;
+static uint8_t _invalidReadStreak = 0;
 
 // Temperature for compensation
 static float _waterTemperature = 25.0; // Default 25°C
+
+struct PhCalibrationPoint {
+  float ph;
+  float voltage;
+};
 
 // ============================================================================
 // PRIVATE FUNCTIONS
@@ -70,42 +80,153 @@ static int _getMedianValue(void) {
   return count > 0 ? (sum / count) : tempBuffer[PH_SAMPLE_COUNT / 2];
 }
 
+static float _adcToMillivolts(int adcValue) {
+  return (adcValue / 4095.0f) * 3300.0f;
+}
+
+static bool _isAdcReadingValid(int adcValue) {
+  return adcValue >= 10 && adcValue <= 4085;
+}
+
+static float _applyDeadband(float previousValue, float candidateValue,
+                            float deadband) {
+  if (previousValue < 0 || isnan(previousValue)) {
+    return candidateValue;
+  }
+
+  return fabsf(candidateValue - previousValue) < deadband ? previousValue
+                                                          : candidateValue;
+}
+
+static float _limitStep(float previousValue, float candidateValue,
+                        float maxStep) {
+  if (previousValue < 0 || isnan(previousValue)) {
+    return candidateValue;
+  }
+
+  float delta = candidateValue - previousValue;
+  if (delta > maxStep) {
+    return previousValue + maxStep;
+  }
+  if (delta < -maxStep) {
+    return previousValue - maxStep;
+  }
+  return candidateValue;
+}
+
+static int _readOversampledAdc(void) {
+  long sum = 0;
+
+  for (int i = 0; i < PH_OVERSAMPLE_COUNT; i++) {
+    sum += analogRead(PH_SENSOR_PIN);
+  }
+
+  return static_cast<int>(sum / PH_OVERSAMPLE_COUNT);
+}
+
+static void _sortCalibrationPoints(PhCalibrationPoint points[], int count) {
+  for (int i = 0; i < count - 1; i++) {
+    for (int j = 0; j < count - i - 1; j++) {
+      if (points[j].ph > points[j + 1].ph) {
+        PhCalibrationPoint temp = points[j];
+        points[j] = points[j + 1];
+        points[j + 1] = temp;
+      }
+    }
+  }
+}
+
+static float _compensateSlope(float slope, float temperature) {
+  return slope * (temperature + 273.15f) / 298.15f;
+}
+
+static float _calculatePhFromSegment(float voltage, float referenceVoltage,
+                                     float referencePh, float slope) {
+  float compensatedSlope = _compensateSlope(slope, _waterTemperature);
+  return referencePh + ((voltage - referenceVoltage) / compensatedSlope);
+}
+
+static int _collectCalibrationPoints(PhCalibrationPoint points[]) {
+  int count = 0;
+
+  if (_hasCalib401 && _calibVoltage401 > 0) {
+    points[count++] = {PH_CAL_POINT_401, _adcToMillivolts(_calibVoltage401)};
+  }
+
+  points[count++] = {PH_CAL_POINT_686, _adcToMillivolts(_calibVoltage686)};
+
+  if (_hasCalib918 && _calibVoltage918 > 0) {
+    points[count++] = {PH_CAL_POINT_918, _adcToMillivolts(_calibVoltage918)};
+  }
+
+  _sortCalibrationPoints(points, count);
+  return count;
+}
+
+static float _calculateSlope(float voltage1, float ph1, float voltage2,
+                             float ph2) {
+  if (ph1 == ph2) {
+    return PH_VOLTAGE_SLOPE;
+  }
+  return (voltage2 - voltage1) / (ph2 - ph1);
+}
+
+static void _logCalibrationState(void) {
+  LOG_INFO("Loaded pH calibration from NVS:");
+  if (_hasCalib401) {
+    LOG_INFO("  Voltage@pH%.2f: %d (%.1f mV)", PH_CAL_POINT_401,
+             _calibVoltage401, _adcToMillivolts(_calibVoltage401));
+  } else {
+    LOG_INFO("  pH %.2f not calibrated yet", PH_CAL_POINT_401);
+  }
+
+  LOG_INFO("  Voltage@pH%.2f: %d (%.1f mV)%s", PH_CAL_POINT_686,
+           _calibVoltage686, _adcToMillivolts(_calibVoltage686),
+           _hasCalib686 ? "" : " [default]");
+
+  if (_hasCalib918) {
+    LOG_INFO("  Voltage@pH%.2f: %d (%.1f mV)", PH_CAL_POINT_918,
+             _calibVoltage918, _adcToMillivolts(_calibVoltage918));
+  } else {
+    LOG_INFO("  pH %.2f not calibrated yet", PH_CAL_POINT_918);
+  }
+}
+
 /**
  * @brief คำนวณ slope ตาม Nernst Equation พร้อม Temperature Compensation
  * @param temperature อุณหภูมิน้ำ (°C)
  * @return slope (mV/pH)
  */
 static float _getTemperatureCompensatedSlope(float temperature) {
-  // Nernst Equation: slope = -2.303 * R * T / (n * F)
-  // At 25°C (298.15K): slope = -59.16 mV/pH
-  // At T°C: slope = -59.16 * (T + 273.15) / 298.15
-
-  float baseSlope = (_calibSlope != 0) ? _calibSlope : PH_VOLTAGE_SLOPE;
-
-  // ถ้าใช้ calibrated slope ให้ปรับตามอุณหภูมิ
-  // (calibrated slope คือค่าที่ได้ที่อุณหภูมิ calibration ~25°C)
-  float compensatedSlope = baseSlope * (temperature + 273.15) / 298.15;
-
-  return compensatedSlope;
+  return _compensateSlope(PH_VOLTAGE_SLOPE, temperature);
 }
 
 /**
- * @brief แปลง ADC value เป็น pH พร้อม Temperature Compensation
+ * @brief แปลงแรงดันเป็น pH พร้อม Temperature Compensation
  */
-static float _voltageToPhNeutral(int adcValue) {
-  // Hardware-in-the-Loop Validation: Detect wire disconnects (0V) or shorts
-  // (3.3V)
-  if (adcValue < 10 || adcValue > 4085) {
-    return NAN;
+static float _millivoltsToPh(float voltage) {
+  PhCalibrationPoint points[3];
+  int pointCount = _collectCalibrationPoints(points);
+  float ph = NAN;
+
+  if (pointCount >= 3) {
+    bool useLowSegment = (voltage >= points[1].voltage && voltage <= points[0].voltage) ||
+                         (voltage <= points[1].voltage && voltage >= points[0].voltage) ||
+                         (voltage > points[0].voltage);
+    int startIndex = useLowSegment ? 0 : 1;
+    float slope = _calculateSlope(points[startIndex].voltage, points[startIndex].ph,
+                                  points[startIndex + 1].voltage, points[startIndex + 1].ph);
+    ph = _calculatePhFromSegment(voltage, points[startIndex].voltage,
+                                 points[startIndex].ph, slope);
+  } else if (pointCount == 2) {
+    float slope = _calculateSlope(points[0].voltage, points[0].ph,
+                                  points[1].voltage, points[1].ph);
+    ph = _calculatePhFromSegment(voltage, points[0].voltage, points[0].ph, slope);
+  } else {
+    float referenceVoltage = _adcToMillivolts(_calibVoltage686);
+    float slope = _getTemperatureCompensatedSlope(_waterTemperature);
+    ph = PH_CAL_POINT_686 + ((voltage - referenceVoltage) / slope);
   }
-
-  float voltage = (adcValue / 4095.0) * 3300.0; // Convert to mV
-  float voltageAt7 = (_calibVoltage7 / 4095.0) * 3300.0;
-
-  // Get temperature-compensated slope
-  float slope = _getTemperatureCompensatedSlope(_waterTemperature);
-
-  float ph = 7.0 + ((voltage - voltageAt7) / slope);
 
   // Clamp to valid pH range from config.h
   if (ph < PH_MIN)
@@ -121,9 +242,27 @@ static float _voltageToPhNeutral(int adcValue) {
  */
 static void _saveCalibrationToNVS(void) {
   _prefs.begin("phSensor", false); // Open read-write
-  _prefs.putInt("volt7", _calibVoltage7);
-  _prefs.putInt("volt4", _calibVoltage4);
-  _prefs.putFloat("slope", _calibSlope);
+  if (_hasCalib401 && _calibVoltage401 > 0) {
+    _prefs.putInt("v401", _calibVoltage401);
+  } else {
+    _prefs.remove("v401");
+  }
+
+  if (_hasCalib686) {
+    _prefs.putInt("v686", _calibVoltage686);
+  } else {
+    _prefs.remove("v686");
+  }
+
+  if (_hasCalib918 && _calibVoltage918 > 0) {
+    _prefs.putInt("v918", _calibVoltage918);
+  } else {
+    _prefs.remove("v918");
+  }
+
+  _prefs.remove("volt7");
+  _prefs.remove("volt4");
+  _prefs.remove("slope");
   _prefs.end(); // Close to flush data to flash
   LOG_INFO("pH calibration saved to NVS");
 }
@@ -133,21 +272,33 @@ static void _saveCalibrationToNVS(void) {
  */
 static void _loadCalibrationFromNVS(void) {
   _prefs.begin("phSensor", true); // Open read-only
-  _calibVoltage7 = _prefs.getInt("volt7", PH_VOLTAGE_AT_7);
-  _calibVoltage4 = _prefs.getInt("volt4", 0);
-  _calibSlope = _prefs.getFloat("slope", 0);
+  _hasCalib401 = _prefs.isKey("v401");
+  _hasCalib686 = _prefs.isKey("v686");
+  _hasCalib918 = _prefs.isKey("v918");
+
+  _calibVoltage401 = _prefs.getInt("v401", 0);
+  _calibVoltage686 = _prefs.getInt("v686", PH_VOLTAGE_AT_686);
+  _calibVoltage918 = _prefs.getInt("v918", 0);
+
+  bool hasLegacy4 = _prefs.isKey("volt4");
+  bool hasLegacy7 = _prefs.isKey("volt7");
+  int legacyVoltage4 = _prefs.getInt("volt4", 0);
+  int legacyVoltage7 = _prefs.getInt("volt7", PH_VOLTAGE_AT_686);
   _prefs.end(); // Close after reading
 
-  LOG_INFO("Loaded pH calibration from NVS:");
-  LOG_INFO("  Voltage@pH7: %d (%.1f mV)", _calibVoltage7,
-           (_calibVoltage7 / 4095.0) * 3300.0);
-  if (_calibVoltage4 != 0) {
-    LOG_INFO("  Voltage@pH4: %d (%.1f mV)", _calibVoltage4,
-             (_calibVoltage4 / 4095.0) * 3300.0);
-    LOG_INFO("  Slope: %.2f mV/pH", _calibSlope);
-  } else {
-    LOG_INFO("  pH 4.0 not calibrated yet");
+  if (!_hasCalib401 && hasLegacy4 && legacyVoltage4 > 0) {
+    _calibVoltage401 = legacyVoltage4;
+    _hasCalib401 = true;
+    LOG_WARN("Migrated legacy pH 4.0 calibration into pH 4.01 slot. Recalibrate with pH 4.01 buffer for best accuracy.");
   }
+
+  if (!_hasCalib686 && hasLegacy7) {
+    _calibVoltage686 = legacyVoltage7;
+    _hasCalib686 = true;
+    LOG_WARN("Migrated legacy pH 7.0 calibration into pH 6.86 slot. Recalibrate with pH 6.86 buffer for best accuracy.");
+  }
+
+  _logCalibrationState();
 }
 
 // ============================================================================
@@ -169,6 +320,9 @@ void phSetup(void) {
   _sampleIndex = 0;
   _bufferFull = false;
   _sensorReady = false;
+  _lastPh = -1.0f;
+  _lastVoltageMv = -1.0f;
+  _invalidReadStreak = 0;
 
   LOG_INFO("pH sensor PIN: %d", PH_SENSOR_PIN);
   LOG_INFO("Warming up... (%d samples needed)", PH_SAMPLE_COUNT);
@@ -181,8 +335,8 @@ void phLoop(void) {
   if (currentTime - _lastReadTime >= PH_READ_INTERVAL) {
     _lastReadTime = currentTime;
 
-    // อ่านค่า ADC
-    int rawValue = analogRead(PH_SENSOR_PIN);
+    // อ่านค่า ADC หลายครั้งต่อรอบเพื่อลด noise จาก analog front-end
+    int rawValue = _readOversampledAdc();
 
     // เก็บลง buffer
     _sampleBuffer[_sampleIndex] = rawValue;
@@ -200,18 +354,45 @@ void phLoop(void) {
       }
 
       int medianValue = _getMedianValue();
-      float rawPh = _voltageToPhNeutral(medianValue);
-
-      // EMA Filter (Alpha 0.15) for smooth display across cycles
       static float _phMovingAverage = -1.0f;
-      if (isnan(rawPh)) {
-        _lastPh = NAN;
-      } else if (_phMovingAverage < 0) {
-        _phMovingAverage = rawPh;
-        _lastPh = rawPh;
+      static float _voltageMovingAverage = -1.0f;
+
+      if (!_isAdcReadingValid(medianValue)) {
+        _invalidReadStreak++;
+        if (_invalidReadStreak >= PH_INVALID_STREAK_LIMIT) {
+          _lastPh = NAN;
+          _lastVoltageMv = _adcToMillivolts(medianValue);
+          _voltageMovingAverage = _lastVoltageMv;
+        }
       } else {
-        _phMovingAverage = (rawPh * 0.15f) + (_phMovingAverage * 0.85f);
-        _lastPh = _phMovingAverage;
+        _invalidReadStreak = 0;
+        float rawVoltage = _adcToMillivolts(medianValue);
+
+        if (_voltageMovingAverage < 0 || isnan(_voltageMovingAverage)) {
+          _voltageMovingAverage = rawVoltage;
+        } else {
+          _voltageMovingAverage =
+              (rawVoltage * PH_VOLTAGE_FILTER_ALPHA) +
+              (_voltageMovingAverage * (1.0f - PH_VOLTAGE_FILTER_ALPHA));
+        }
+
+        _lastVoltageMv = _applyDeadband(_lastVoltageMv, _voltageMovingAverage,
+                                        PH_VOLTAGE_DEADBAND_MV);
+
+        float rawPh = _millivoltsToPh(_lastVoltageMv);
+        if (isnan(rawPh)) {
+          _lastPh = NAN;
+        } else if (_phMovingAverage < 0 || isnan(_phMovingAverage)) {
+          _phMovingAverage = rawPh;
+          _lastPh = rawPh;
+        } else {
+          _phMovingAverage = (rawPh * PH_PH_FILTER_ALPHA) +
+                             (_phMovingAverage * (1.0f - PH_PH_FILTER_ALPHA));
+          float stabilizedPh = _applyDeadband(_lastPh, _phMovingAverage,
+                                              PH_PH_DEADBAND);
+          _lastPh = _limitStep(_lastPh, stabilizedPh, PH_PH_MAX_STEP);
+          _phMovingAverage = _lastPh;
+        }
       }
     }
   }
@@ -222,8 +403,7 @@ float phRead(void) { return _sensorReady ? _lastPh : -1.0; }
 float phReadVoltage(void) {
   if (!_bufferFull)
     return -1.0;
-  int medianValue = _getMedianValue();
-  return (medianValue / 4095.0) * 3300.0; // mV
+  return _lastVoltageMv;
 }
 
 bool phIsReady(void) { return _sensorReady; }
@@ -235,67 +415,59 @@ void phSetTemperature(float temperature) {
   }
 }
 
-void phCalibratePh7(void) {
+static void _calibratePoint(float targetPh, int* storage, bool* hasCalibration,
+                            const char* label) {
   if (!_bufferFull) {
     LOG_ERROR("Need more samples. Wait for sensor ready.");
     return;
   }
 
-  _calibVoltage7 = _getMedianValue();
-  float voltage = (_calibVoltage7 / 4095.0) * 3300.0;
+  *storage = _getMedianValue();
+  *hasCalibration = true;
+  float voltage = _adcToMillivolts(*storage);
 
-  LOG_INFO("===== CALIBRATION pH 7.0 =====");
-  LOG_INFO("ADC Value: %d", _calibVoltage7);
+  LOG_INFO("===== CALIBRATION %s =====", label);
+  LOG_INFO("ADC Value: %d", *storage);
   LOG_INFO("Voltage: %.1f mV", voltage);
+  LOG_INFO("Target pH: %.2f", targetPh);
   LOG_INFO("Temperature: %.1f °C", _waterTemperature);
 
-  // Recalculate slope if pH 4 calibration exists
-  if (_calibVoltage4 != 0) {
-    float voltage4 = (_calibVoltage4 / 4095.0) * 3300.0;
-    float voltage7 = voltage;
-    _calibSlope = (voltage4 - voltage7) / (4.0 - 7.0);
-    LOG_INFO("Calculated slope: %.2f mV/pH", _calibSlope);
-  }
-
-  // บันทึกลง NVS
   _saveCalibrationToNVS();
   LOG_INFO("================================");
 }
 
-void phCalibratePh4(void) {
-  if (!_bufferFull) {
-    LOG_ERROR("Need more samples. Wait for sensor ready.");
-    return;
-  }
-
-  _calibVoltage4 = _getMedianValue();
-  float voltage = (_calibVoltage4 / 4095.0) * 3300.0;
-
-  LOG_INFO("===== CALIBRATION pH 4.0 =====");
-  LOG_INFO("ADC Value: %d", _calibVoltage4);
-  LOG_INFO("Voltage: %.1f mV", voltage);
-  LOG_INFO("Temperature: %.1f °C", _waterTemperature);
-
-  // Calculate slope if pH 7 calibration exists
-  if (_calibVoltage7 != 0) {
-    float voltage4 = voltage;
-    float voltage7 = (_calibVoltage7 / 4095.0) * 3300.0;
-    _calibSlope = (voltage4 - voltage7) / (4.0 - 7.0);
-    LOG_INFO("Calculated slope: %.2f mV/pH", _calibSlope);
-  }
-
-  // บันทึกลง NVS
-  _saveCalibrationToNVS();
-  LOG_INFO("================================");
+void phCalibratePh686(void) {
+  _calibratePoint(PH_CAL_POINT_686, &_calibVoltage686, &_hasCalib686,
+                  "pH 6.86");
 }
+
+void phCalibratePh401(void) {
+  _calibratePoint(PH_CAL_POINT_401, &_calibVoltage401, &_hasCalib401,
+                  "pH 4.01");
+}
+
+void phCalibratePh918(void) {
+  _calibratePoint(PH_CAL_POINT_918, &_calibVoltage918, &_hasCalib918,
+                  "pH 9.18");
+}
+
+bool phHasCalibration401(void) { return _hasCalib401; }
+
+bool phHasCalibration686(void) { return _hasCalib686; }
+
+bool phHasCalibration918(void) { return _hasCalib918; }
 
 void phClearCalibration(void) {
   _prefs.begin("phSensor", false); // Open read-write
   _prefs.clear();
   _prefs.end(); // Close to flush
 
-  _calibVoltage7 = PH_VOLTAGE_AT_7;
-  _calibVoltage4 = 0;
-  _calibSlope = 0;
+  _calibVoltage401 = 0;
+  _calibVoltage686 = PH_VOLTAGE_AT_686;
+  _calibVoltage918 = 0;
+  _lastVoltageMv = -1.0;
+  _hasCalib401 = false;
+  _hasCalib686 = false;
+  _hasCalib918 = false;
   LOG_INFO("pH calibration cleared from NVS");
 }

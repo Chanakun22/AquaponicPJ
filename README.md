@@ -45,7 +45,7 @@ Pi ทำหน้าที่เป็น **Access Point (AP)** ชื่อ `A
 | **DS18B20**    | อุณหภูมิน้ำ              | 0-50°C          | Async Non-Blocking                      |
 | **DHT22**      | อุณหภูมิอากาศ + ความชื้น | 0-50°C / 0-100% | —                                       |
 | **TDS Sensor** | ค่า TDS (ppm)            | 0-2000 ppm      | 2-Point Calibration + Temp Compensation |
-| **pH Sensor**  | ค่า pH                   | 0-14            | NVS Calibration (pH 4.0 & 7.0)          |
+| **pH Sensor**  | ค่า pH                   | 0-14            | 3-Point Calibration (pH 4.01 / 6.86 / 9.18) |
 | **BH1750**     | ความเข้มแสง              | 0-65535 lux     | I2C Digital                             |
 
 ### 📡 การเชื่อมต่อ
@@ -234,8 +234,9 @@ Pi ทำหน้าที่เป็น **Access Point (AP)** ชื่อ `A
 **pH Sensor** (ผ่าน Serial/Telnet):
 
 ```
-cal7    → จุ่มในน้ำยาบัฟเฟอร์ pH 7.0 แล้วพิมพ์คำสั่ง
-cal4    → จุ่มในน้ำยาบัฟเฟอร์ pH 4.0 แล้วพิมพ์คำสั่ง
+cal686  → จุ่มในน้ำยาบัฟเฟอร์ pH 6.86 แล้วพิมพ์คำสั่ง
+cal401  → จุ่มในน้ำยาบัฟเฟอร์ pH 4.01 แล้วพิมพ์คำสั่ง
+cal918  → จุ่มในน้ำยาบัฟเฟอร์ pH 9.18 แล้วพิมพ์คำสั่ง
 ```
 
 **TDS Sensor** (ผ่าน Web Dashboard):
@@ -278,8 +279,9 @@ Dashboard รองรับทั้ง Desktop และ Mobile ผ่าน W
 | `wifi`       | แสดงข้อมูล WiFi (SSID, IP, RSSI)          |
 | `mqtt`       | แสดงสถานะ NETPIE MQTT                     |
 | `ph`         | อ่านค่า pH + Voltage ปัจจุบัน             |
-| `cal7`       | Calibrate pH จุด 7.0                      |
-| `cal4`       | Calibrate pH จุด 4.0                      |
+| `cal686`     | Calibrate pH จุด 6.86                     |
+| `cal401`     | Calibrate pH จุด 4.01                     |
+| `cal918`     | Calibrate pH จุด 9.18                     |
 | `light on`   | เปิดไฟปลูกพืช (Manual)                    |
 | `light off`  | ปิดไฟปลูกพืช (Manual)                     |
 | `light auto` | กลับสู่โหมด Schedule                      |

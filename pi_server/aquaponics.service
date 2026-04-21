@@ -5,6 +5,7 @@ After=network.target mosquitto.service
 [Service]
 Type=simple
 User=root
+Environment=AQUAPONICS_SESSION_SECURE=1
 WorkingDirectory=/home/admin/myserver
 ExecStart=/usr/bin/python3 /home/admin/myserver/app.py
 Restart=always

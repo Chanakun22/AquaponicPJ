@@ -14,6 +14,54 @@ bool _isAuthenticated = false;
 static char _inputBuffer[64];
 static size_t _bufferIndex = 0;
 
+static size_t _telnetVprintfInternal(bool bestEffort, const char *format, va_list args) {
+    if (!_telnetClient || !_telnetClient.connected() || !_isAuthenticated) return 0;
+
+    char buf[256];
+    vsnprintf(buf, sizeof(buf), format, args);
+
+    size_t len = strnlen(buf, sizeof(buf));
+    if (len == 0) {
+        return 0;
+    }
+
+    size_t sent = 0;
+    unsigned long start = millis();
+
+    while (sent < len) {
+        if (!_telnetClient || !_telnetClient.connected() || !_isAuthenticated) {
+            break;
+        }
+
+        int writable = _telnetClient.availableForWrite();
+        if (writable <= 0) {
+            if (bestEffort || millis() - start >= 25) {
+                break;
+            }
+            yield();
+            continue;
+        }
+
+        size_t chunk = len - sent;
+        if ((size_t)writable < chunk) {
+            chunk = (size_t)writable;
+        }
+
+        size_t wrote = _telnetClient.write((const uint8_t*)buf + sent, chunk);
+        if (wrote == 0) {
+            if (bestEffort || millis() - start >= 25) {
+                break;
+            }
+            yield();
+            continue;
+        }
+
+        sent += wrote;
+    }
+
+    return sent;
+}
+
 
 
 void telnetSetup(void) {
@@ -29,6 +77,7 @@ void telnetLoop(void) {
         if (!_telnetClient || !_telnetClient.connected()) {
             if (_telnetClient) _telnetClient.stop();
             _telnetClient = _telnetServer.available();
+            _telnetClient.setNoDelay(true);
             _isAuthenticated = false;
             memset(_inputBuffer, 0, sizeof(_inputBuffer));
             _bufferIndex = 0;
@@ -110,14 +159,23 @@ void telnetLoop(void) {
 
 size_t telnetPrintf(const char *format, ...) {
     if (!_telnetClient || !_telnetClient.connected() || !_isAuthenticated) return 0;
-    
+
     char buf[256];
     va_list args;
     va_start(args, format);
     vsnprintf(buf, sizeof(buf), format, args);
     va_end(args);
-    
+
     return _telnetClient.print(buf);
+}
+
+size_t telnetPrintfNonBlocking(const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    size_t written = _telnetVprintfInternal(true, format, args);
+    va_end(args);
+
+    return written;
 }
 
 bool telnetIsConnected(void) {

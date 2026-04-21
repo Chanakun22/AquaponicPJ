@@ -49,43 +49,11 @@ static const unsigned long MAX_RECONNECT_INTERVAL = 60000; // สูงสุด
 static const uint16_t LOCAL_MQTT_PACKET_BUFFER_SIZE = 2048;
 static const uint8_t LOCAL_MQTT_MAX_LOGS_PER_LOOP = 1;
 
-// HW Test: one-shot FreeRTOS task for guaranteed pump auto-off
-static TaskHandle_t _hwTestTaskHandle = NULL;
-static volatile bool _hwTestCompleted = false;  // Flag: task finished, tick should publish
+// HW Test: deadline-based pump auto-off handled in TaskNetworking tick.
+static bool _hwTestPumpActive = false;
+static int _hwTestPumpPin = -1;
+static unsigned long _hwTestPumpStopAt = 0;
 static char _hwTestCompletedCmd[16] = {0};
-
-struct HwTestParams {
-    uint8_t pin;
-    unsigned long durationMs;
-    char cmd[16];
-};
-
-/**
- * @brief One-shot task: wait duration, turn off pump, set flag, self-delete
- * @note Only does digitalWrite (thread-safe). MQTT publish done in tick.
- */
-static void _hwTestAutoOffTask(void* param) {
-    HwTestParams* p = (HwTestParams*)param;
-    uint8_t pin = p->pin;
-    unsigned long dur = p->durationMs;
-    strncpy(_hwTestCompletedCmd, p->cmd, sizeof(_hwTestCompletedCmd) - 1);
-    delete p;
-    
-    LOG_INFO("[HW TEST] Auto-off task started: Pin=%d, Wait=%lu ms", pin, dur);
-    
-    // Wait for the duration (blocking in own task = safe)
-    vTaskDelay(pdMS_TO_TICKS(dur));
-    
-    // TURN OFF PUMP — this is just a register write, thread-safe
-    digitalWrite(pin, PUMP_OFF);
-    LOG_INFO("[HW TEST] Auto-off task: Pin %d -> OFF", pin);
-    
-    // Set flag for tick to handle MQTT publish + automator resume
-    _hwTestCompleted = true;
-    
-    _hwTestTaskHandle = NULL;
-    vTaskDelete(NULL);
-}
 
 static void _onMqttMessage(char* topic, byte* payload, unsigned int length);
 static bool _reconnect(void);
@@ -114,14 +82,22 @@ static CommandSource _parseCommandSource(const char* sourceValue, CommandSource 
     return fallback;
 }
 
+static void _armHwTestPumpAutoOff(uint8_t pin, unsigned long durationMs, const char* cmd) {
+    _hwTestPumpPin = pin;
+    _hwTestPumpStopAt = millis() + durationMs;
+    _hwTestPumpActive = true;
+    strncpy(_hwTestCompletedCmd, cmd, sizeof(_hwTestCompletedCmd) - 1);
+    _hwTestCompletedCmd[sizeof(_hwTestCompletedCmd) - 1] = '\0';
+    LOG_INFO("[HW TEST] Auto-off armed: Pin=%d, Dur=%lu ms", pin, durationMs);
+}
+
 static void _stopHwTestPumpOutputs(bool resumeAutomator) {
     digitalWrite(PUMP_NUTRIENT_A_PIN, PUMP_OFF);
     digitalWrite(PUMP_NUTRIENT_B_PIN, PUMP_OFF);
 
-    if (_hwTestTaskHandle != NULL) {
-        vTaskDelete(_hwTestTaskHandle);
-        _hwTestTaskHandle = NULL;
-    }
+    _hwTestPumpActive = false;
+    _hwTestPumpPin = -1;
+    _hwTestPumpStopAt = 0;
 
     if (resumeAutomator) {
         automatorResume();
@@ -263,18 +239,26 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
     if (strcmp(topic, "aquaponics/config/ph_cal") == 0) {
         const char* action = doc["action"] | "";
         
-        if (strcmp(action, "cal7") == 0) {
+        if (strcmp(action, "cal686") == 0 || strcmp(action, "cal7") == 0) {
             if (phIsReady()) {
-                phCalibratePh7();
-                LOG_INFO("pH 7.0 Calibration triggered from Pi Dashboard!");
+                phCalibratePh686();
+                LOG_INFO("pH 6.86 Calibration triggered from Pi Dashboard!");
                 _publishPhCalibrationStatus();
             } else {
                 LOG_ERROR("pH sensor not ready for calibration");
             }
-        } else if (strcmp(action, "cal4") == 0) {
+        } else if (strcmp(action, "cal401") == 0 || strcmp(action, "cal4") == 0) {
             if (phIsReady()) {
-                phCalibratePh4();
-                LOG_INFO("pH 4.0 Calibration triggered from Pi Dashboard!");
+                phCalibratePh401();
+                LOG_INFO("pH 4.01 Calibration triggered from Pi Dashboard!");
+                _publishPhCalibrationStatus();
+            } else {
+                LOG_ERROR("pH sensor not ready for calibration");
+            }
+        } else if (strcmp(action, "cal918") == 0) {
+            if (phIsReady()) {
+                phCalibratePh918();
+                LOG_INFO("pH 9.18 Calibration triggered from Pi Dashboard!");
                 _publishPhCalibrationStatus();
             } else {
                 LOG_ERROR("pH sensor not ready for calibration");
@@ -560,29 +544,7 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
 
             
             if (pin > 0) {
-                // Allocate params for the task
-                HwTestParams* params = new HwTestParams();
-                params->pin = pin;
-                params->durationMs = duration;
-                strncpy(params->cmd, cmd, sizeof(params->cmd) - 1);
-                
-                // Create one-shot auto-off task (runs on any core)
-                BaseType_t ok = xTaskCreate(
-                    _hwTestAutoOffTask,
-                    "hwTestOff",
-                    4096,
-                    (void*)params,
-                    2,   // Priority 2 (above normal)
-                    &_hwTestTaskHandle
-                );
-                
-                if (ok == pdPASS) {
-                    LOG_INFO("[HW TEST] Auto-off task created: Pin=%d, Dur=%lu ms", pin, duration);
-                } else {
-                    LOG_ERROR("[HW TEST] xTaskCreate FAILED!");
-                    delete params;
-                    digitalWrite(pin, PUMP_OFF);
-                }
+                _armHwTestPumpAutoOff(pin, duration, cmd);
             }
         }
     }
@@ -699,12 +661,24 @@ void localMqttLoop(void) {
  * @note Called from main.cpp TaskNetworking every loop iteration
  */
 void localMqttHwTestTick(void) {
-    if (!_hwTestCompleted) return;
-    _hwTestCompleted = false;
-    
+    if (!_hwTestPumpActive) return;
+
+    if ((long)(millis() - _hwTestPumpStopAt) < 0) {
+        return;
+    }
+
+    if (_hwTestPumpPin >= 0) {
+        digitalWrite(_hwTestPumpPin, PUMP_OFF);
+        LOG_INFO("[HW TEST] Auto-off: Pin %d -> OFF", _hwTestPumpPin);
+    }
+
+    _hwTestPumpActive = false;
+    _hwTestPumpPin = -1;
+    _hwTestPumpStopAt = 0;
+
     // Resume automator (safe from Core 0, automator checks volatile flag)
     automatorResume();
-    
+
     // Publish completed via MQTT (thread-safe: same task as PubSubClient)
     if (_localMqtt.connected()) {
         StaticJsonDocument<128> result;
@@ -875,7 +849,10 @@ static void _publishPhCalibrationStatus(void) {
     StaticJsonDocument<256> doc;
     doc["ph_voltage"] = round(phReadVoltage() * 10) / 10.0;
     doc["ph_value"] = round(phRead() * 100) / 100.0;
-    doc["calibrated"] = true;
+    doc["calibrated"] = phHasCalibration401() || phHasCalibration686() || phHasCalibration918();
+    doc["cal401_done"] = phHasCalibration401();
+    doc["cal686_done"] = phHasCalibration686();
+    doc["cal918_done"] = phHasCalibration918();
     
     char buffer[256];
     serializeJson(doc, buffer);

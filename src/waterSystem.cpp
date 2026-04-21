@@ -119,7 +119,18 @@ static void _writeRouteValve(WaterRefillRoute route) {
                  route == WATER_REFILL_ROUTE_SUMP_DIRECT ? REFILL_ROUTE_TO_SUMP_STATE : REFILL_ROUTE_TO_FISH_STATE);
 }
 
+static void _sanitizeConfig(void) {
+    if (_config.refillMaxRuntimeMs == 0 || _config.refillMaxRuntimeMs > WATER_REFILL_MAX_RUNTIME_MS) {
+        _config.refillMaxRuntimeMs = WATER_REFILL_MAX_RUNTIME_MS;
+    }
+
+    if (_config.preferredRoute < WATER_REFILL_ROUTE_AUTO || _config.preferredRoute > WATER_REFILL_ROUTE_NONE) {
+        _config.preferredRoute = (WaterRefillRoute)WATER_REFILL_ROUTE_DEFAULT;
+    }
+}
+
 static void _saveConfig(void) {
+    _sanitizeConfig();
     _prefs.begin("waterSystem", false);
     _prefs.putBool("circEn", _config.circulationEnabled);
     _prefs.putBool("refillEn", _config.refillEnabled);
@@ -198,6 +209,7 @@ void waterSystemSetup(void) {
     _config.preferredRoute = (WaterRefillRoute)_prefs.getUChar("route", WATER_REFILL_ROUTE_DEFAULT);
     _config.allowDirectSumpRefill = _prefs.getBool("allowDir", WATER_ALLOW_DIRECT_SUMP_REFILL_DEFAULT);
     _prefs.end();
+    _sanitizeConfig();
 
 #if PUMP_CIRCULATION_PIN >= 0
     pinMode(PUMP_CIRCULATION_PIN, OUTPUT);
@@ -249,6 +261,7 @@ void waterSystemSetConfig(bool circulationEnabled,
     _config.refillMaxRuntimeMs = refillMaxRuntimeMs;
     _config.preferredRoute = preferredRoute;
     _config.allowDirectSumpRefill = allowDirectSumpRefill;
+    _sanitizeConfig();
     _saveConfig();
 }
 
@@ -272,6 +285,7 @@ void waterSystemSetCirculationEnabled(bool enabled) {
 
 void waterSystemSetPreferredRoute(WaterRefillRoute route) {
     _config.preferredRoute = route;
+    _sanitizeConfig();
     _saveConfig();
 }
 

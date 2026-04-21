@@ -200,6 +200,11 @@ unsigned long systemGetTaskHeartbeatAge(TaskId_t taskId);
 bool systemGetLastCrashInfo(char* buf, size_t bufSize);
 
 /**
+ * @brief Print last persisted crash info to logs and clear it
+ */
+void systemReportLastCrash(void);
+
+/**
  * @brief Report last crash info to Serial/logs (call once after boot)
  */
 void systemReportLastCrash(void);

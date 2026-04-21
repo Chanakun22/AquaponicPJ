@@ -48,7 +48,7 @@
 #endif
 
 #ifndef EXHAUST_FAN_PIN
-#define EXHAUST_FAN_PIN     -1       // พัดลมระบายอากาศ/ดูดอากาศ
+#define EXHAUST_FAN_PIN     -1      // พัดลมระบายอากาศ/ดูดอากาศ
 #endif
 
 // Automation Pumps (Dosing & Water)
@@ -57,7 +57,7 @@
 
 // Water System (set GPIO when hardware wiring is finalized)
 #ifndef PUMP_CIRCULATION_PIN
-#define PUMP_CIRCULATION_PIN -1     // ปั๊มน้ำวนหลัก
+#define PUMP_CIRCULATION_PIN 16     // ปั๊มน้ำวนหลัก
 #endif
 
 #ifndef PUMP_REFILL_PIN
@@ -107,6 +107,9 @@
 
 #define PH_MIN              0.0f    // pH ต่ำสุด
 #define PH_MAX              14.0f   // pH สูงสุด
+#define PH_CAL_POINT_401    4.01f   // จุด buffer กรด
+#define PH_CAL_POINT_686    6.86f   // จุด buffer กลาง
+#define PH_CAL_POINT_918    9.18f   // จุด buffer ด่าง
 
 #define TEMP_MIN            0.0f    // อุณหภูมิต่ำสุด (°C)
 #define TEMP_MAX            50.0f   // อุณหภูมิสูงสุด (°C)

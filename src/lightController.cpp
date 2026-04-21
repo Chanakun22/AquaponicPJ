@@ -35,14 +35,38 @@ static LightControlStatus _status = {false, false, true, "Light controller not i
 // PRIVATE FUNCTIONS
 // ============================================================================
 
-static void _parseTime(const char* timeStr, int* hour, int* minute) {
-    if (timeStr && strlen(timeStr) >= 4) {
-        *hour = atoi(timeStr);
-        const char* colonPos = strchr(timeStr, ':');
-        if (colonPos) {
-            *minute = atoi(colonPos + 1);
-        }
+static void _sanitizeSchedule(void) {
+    if (_commandSource != COMMAND_SOURCE_NETPIE && _commandSource != COMMAND_SOURCE_LOCAL_WEB) {
+        _commandSource = LIGHT_DEFAULT_COMMAND_SOURCE;
     }
+
+    _onDay = constrain(_onDay, 0, 7);
+    _offDay = constrain(_offDay, 0, 7);
+    _onHour = constrain(_onHour, 0, 23);
+    _offHour = constrain(_offHour, 0, 23);
+    _onMinute = constrain(_onMinute, 0, 59);
+    _offMinute = constrain(_offMinute, 0, 59);
+}
+
+static bool _parseTime(const char* timeStr, int* hour, int* minute) {
+    int parsedHour = 0;
+    int parsedMinute = 0;
+
+    if (timeStr == NULL || hour == NULL || minute == NULL) {
+        return false;
+    }
+
+    if (sscanf(timeStr, "%d:%d", &parsedHour, &parsedMinute) != 2) {
+        return false;
+    }
+
+    if (parsedHour < 0 || parsedHour > 23 || parsedMinute < 0 || parsedMinute > 59) {
+        return false;
+    }
+
+    *hour = parsedHour;
+    *minute = parsedMinute;
+    return true;
 }
 
 /**
@@ -78,6 +102,7 @@ static void _loadSchedule(void) {
     _offHour = _lightPrefs.getInt("offHour", 18);
     _offMinute = _lightPrefs.getInt("offMin", 0);
     _lightPrefs.end();
+    _sanitizeSchedule();
     LOG_INFO("Loaded Light Schedule from NVS");
 }
 
@@ -324,6 +349,7 @@ void lightCtrlSetManualState(bool state) {
 
 void lightCtrlSetCommandSource(CommandSource source) {
     _commandSource = source;
+    _sanitizeSchedule();
     _saveSchedule();
     _setReason(source == COMMAND_SOURCE_NETPIE ? "Control source set to NETPIE" : "Control source set to Local Web");
 }
@@ -339,7 +365,10 @@ void lightCtrlSetOnDay(int day) {
 
 void lightCtrlSetOnTime(const char* onTime) {
     if (onTime && strlen(onTime) >= 4) {
-        _parseTime(onTime, &_onHour, &_onMinute);
+        if (!_parseTime(onTime, &_onHour, &_onMinute)) {
+            LOG_WARN("Ignoring invalid light ON time: %s", onTime);
+            return;
+        }
         LOG_INFO("Light ON Time: %02d:%02d", _onHour, _onMinute);
         _saveSchedule();
     }
@@ -356,7 +385,10 @@ void lightCtrlSetOffDay(int day) {
 
 void lightCtrlSetOffTime(const char* offTime) {
     if (offTime && strlen(offTime) >= 4) {
-        _parseTime(offTime, &_offHour, &_offMinute);
+        if (!_parseTime(offTime, &_offHour, &_offMinute)) {
+            LOG_WARN("Ignoring invalid light OFF time: %s", offTime);
+            return;
+        }
         LOG_INFO("Light OFF Time: %02d:%02d", _offHour, _offMinute);
         _saveSchedule();
     }

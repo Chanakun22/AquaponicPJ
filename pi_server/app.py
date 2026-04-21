@@ -9,13 +9,14 @@ from datetime import datetime, timedelta
 import os
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24).hex()  # Session encryption key
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 # === Authentication Config ===
 AUTH_FILE = "auth_config.json"
+SESSION_SECRET_ENV = "AQUAPONICS_SECRET_KEY"
+SESSION_SECURE_ENV = "AQUAPONICS_SESSION_SECURE"
 
 def load_auth_config():
     """Load user credentials from auth config file"""
@@ -50,7 +51,40 @@ def save_auth_config(config):
     except Exception as e:
         print(f"Error saving auth config: {e}")
 
+def env_flag_enabled(name):
+    value = os.environ.get(name, "").strip().lower()
+    return value in ("1", "true", "yes", "on")
+
+def ensure_session_secret(config):
+    env_secret = os.environ.get(SESSION_SECRET_ENV, "").strip()
+    if env_secret:
+        return env_secret
+
+    secret_key = config.get("session_secret", "")
+    if isinstance(secret_key, str):
+        secret_key = secret_key.strip()
+    else:
+        secret_key = ""
+
+    if secret_key:
+        return secret_key
+
+    secret_key = os.urandom(32).hex()
+    config["session_secret"] = secret_key
+    save_auth_config(config)
+    return secret_key
+
 auth_config = load_auth_config()
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+app.secret_key = ensure_session_secret(auth_config)
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SECURE=env_flag_enabled(SESSION_SECURE_ENV),
+    PREFERRED_URL_SCHEME='https',
+    PERMANENT_SESSION_LIFETIME=timedelta(days=7)
+)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 def login_required(f):
     """Decorator to protect routes — redirects to /login if not authenticated"""
@@ -171,8 +205,9 @@ def load_settings():
             "calibrated": False
         },
         "ph_calibration": {
-            "cal7_done": False,
-            "cal4_done": False,
+            "cal401_done": False,
+            "cal686_done": False,
+            "cal918_done": False,
             "last_voltage": 0.0,
             "last_ph": 0.0
         },
@@ -502,8 +537,18 @@ def on_message(client, userdata, msg):
                 app_settings.setdefault("ph_calibration", {})
                 app_settings["ph_calibration"]["last_voltage"] = ph_status.get("ph_voltage", 0)
                 app_settings["ph_calibration"]["last_ph"] = ph_status.get("ph_value", 0)
-                if ph_status.get("calibrated"):
-                    app_settings["ph_calibration"]["cal7_done"] = True
+                app_settings["ph_calibration"]["cal401_done"] = ph_status.get(
+                    "cal401_done",
+                    app_settings["ph_calibration"].get("cal401_done", False)
+                )
+                app_settings["ph_calibration"]["cal686_done"] = ph_status.get(
+                    "cal686_done",
+                    ph_status.get("calibrated", app_settings["ph_calibration"].get("cal686_done", False))
+                )
+                app_settings["ph_calibration"]["cal918_done"] = ph_status.get(
+                    "cal918_done",
+                    app_settings["ph_calibration"].get("cal918_done", False)
+                )
                 save_settings(app_settings)
                 print(f"🔄 pH Calibration status updated: {ph_status}")
                 save_log(f"pH Calibration updated: voltage={ph_status.get('ph_voltage')}mV, pH={ph_status.get('ph_value')}")
@@ -997,9 +1042,14 @@ def post_ph_calibrate():
     try:
         data = request.get_json()
         action = data.get("action", "")
+        action_aliases = {
+            "cal4": "cal401",
+            "cal7": "cal686"
+        }
+        action = action_aliases.get(action, action)
         
-        if action not in ["cal7", "cal4", "clear"]:
-            return jsonify({"status": "error", "message": "Invalid action. Use cal7, cal4, or clear"}), 400
+        if action not in ["cal401", "cal686", "cal918", "clear"]:
+            return jsonify({"status": "error", "message": "Invalid action. Use cal401, cal686, cal918, or clear"}), 400
         
         # Publish to ESP32 via MQTT
         if mqtt_client and mqtt_client.is_connected():
@@ -1011,13 +1061,15 @@ def post_ph_calibrate():
             
             # Update local settings
             app_settings.setdefault("ph_calibration", {})
-            if action == "cal7":
-                app_settings["ph_calibration"]["cal7_done"] = True
-            elif action == "cal4":
-                app_settings["ph_calibration"]["cal4_done"] = True
+            if action == "cal686":
+                app_settings["ph_calibration"]["cal686_done"] = True
+            elif action == "cal401":
+                app_settings["ph_calibration"]["cal401_done"] = True
+            elif action == "cal918":
+                app_settings["ph_calibration"]["cal918_done"] = True
             elif action == "clear":
                 app_settings["ph_calibration"] = {
-                    "cal7_done": False, "cal4_done": False,
+                    "cal401_done": False, "cal686_done": False, "cal918_done": False,
                     "last_voltage": 0, "last_ph": 0
                 }
             save_settings(app_settings)

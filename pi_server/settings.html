@@ -1323,24 +1323,35 @@
             <hr class="divider">
 
             <div class="cal-step">
-                <div class="cal-step-title"><i class="fas fa-flask"></i> Step 1: Calibrate pH 7.0 (Neutral)</div>
-                <div class="cal-step-desc">จุ่ม probe ใน buffer solution pH 7.0 → รอค่า stabilize (30 วิ) → กดปุ่ม</div>
+                <div class="cal-step-title"><i class="fas fa-flask"></i> Step 1: Calibrate pH 6.86 (Neutral)</div>
+                <div class="cal-step-desc">จุ่ม probe ใน buffer solution pH 6.86 → รอค่า stabilize (30 วิ) → กดปุ่ม</div>
                 <div style="display:flex; gap:10px; align-items:center;">
-                    <button class="btn btn-primary" onclick="calibratePh('cal7')" style="flex:1;">
-                        <i class="fas fa-bullseye"></i> Calibrate pH 7.0
+                    <button class="btn btn-primary" onclick="calibratePh('cal686')" style="flex:1;">
+                        <i class="fas fa-bullseye"></i> Calibrate pH 6.86
                     </button>
-                    <span id="ph_cal7_status" style="font-size:0.85rem; color:#888;">—</span>
+                    <span id="ph_cal686_status" style="font-size:0.85rem; color:#888;">—</span>
                 </div>
             </div>
 
             <div class="cal-step">
-                <div class="cal-step-title"><i class="fas fa-flask"></i> Step 2: Calibrate pH 4.0 (Acid)</div>
-                <div class="cal-step-desc">ล้าง probe ด้วยน้ำสะอาด → จุ่มใน buffer solution pH 4.0 → รอค่า stabilize → กดปุ่ม</div>
+                <div class="cal-step-title"><i class="fas fa-flask"></i> Step 2: Calibrate pH 4.01 (Acid)</div>
+                <div class="cal-step-desc">ล้าง probe ด้วยน้ำสะอาด → จุ่มใน buffer solution pH 4.01 → รอค่า stabilize → กดปุ่ม</div>
                 <div style="display:flex; gap:10px; align-items:center;">
-                    <button class="btn btn-primary" onclick="calibratePh('cal4')" style="flex:1;">
-                        <i class="fas fa-bullseye"></i> Calibrate pH 4.0
+                    <button class="btn btn-primary" onclick="calibratePh('cal401')" style="flex:1;">
+                        <i class="fas fa-bullseye"></i> Calibrate pH 4.01
                     </button>
-                    <span id="ph_cal4_status" style="font-size:0.85rem; color:#888;">—</span>
+                    <span id="ph_cal401_status" style="font-size:0.85rem; color:#888;">—</span>
+                </div>
+            </div>
+
+            <div class="cal-step">
+                <div class="cal-step-title"><i class="fas fa-flask"></i> Step 3: Calibrate pH 9.18 (Alkaline)</div>
+                <div class="cal-step-desc">ล้าง probe ด้วยน้ำสะอาด → จุ่มใน buffer solution pH 9.18 → รอค่า stabilize → กดปุ่ม</div>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <button class="btn btn-primary" onclick="calibratePh('cal918')" style="flex:1;">
+                        <i class="fas fa-bullseye"></i> Calibrate pH 9.18
+                    </button>
+                    <span id="ph_cal918_status" style="font-size:0.85rem; color:#888;">—</span>
                 </div>
             </div>
 
@@ -2128,8 +2139,18 @@
         }
 
         async function calibratePh(action) {
-            const label = action === 'cal7' ? 'pH 7.0 (Neutral)' : 'pH 4.0 (Acid)';
-            const statusId = action === 'cal7' ? 'ph_cal7_status' : 'ph_cal4_status';
+            const phCalibrationMeta = {
+                cal401: { label: 'pH 4.01 (Acid)', statusId: 'ph_cal401_status' },
+                cal686: { label: 'pH 6.86 (Neutral)', statusId: 'ph_cal686_status' },
+                cal918: { label: 'pH 9.18 (Alkaline)', statusId: 'ph_cal918_status' }
+            };
+            const meta = phCalibrationMeta[action];
+            if (!meta) {
+                showToast('Unknown pH calibration action', true);
+                return;
+            }
+            const label = meta.label;
+            const statusId = meta.statusId;
             
             if (!confirm(`⚠️ ยืนยันการ Calibrate ${label}?\n\nตรวจสอบให้แน่ใจว่า:\n1. Probe จุ่มอยู่ใน buffer solution ${label}\n2. ค่า voltage เสถียรแล้ว (รอ 30 วินาที)\n\nกดตกลงเพื่อ Calibrate`)) {
                 return;
@@ -2179,10 +2200,12 @@
                 
                 if (result.status === 'ok') {
                     showToast('pH Calibration cleared ✅');
-                    document.getElementById('ph_cal7_status').textContent = '—';
-                    document.getElementById('ph_cal7_status').style.color = '#888';
-                    document.getElementById('ph_cal4_status').textContent = '—';
-                    document.getElementById('ph_cal4_status').style.color = '#888';
+                    document.getElementById('ph_cal401_status').textContent = '—';
+                    document.getElementById('ph_cal401_status').style.color = '#888';
+                    document.getElementById('ph_cal686_status').textContent = '—';
+                    document.getElementById('ph_cal686_status').style.color = '#888';
+                    document.getElementById('ph_cal918_status').textContent = '—';
+                    document.getElementById('ph_cal918_status').style.color = '#888';
                     setTimeout(refreshPhVoltage, 2000);
                 } else {
                     showToast('Error: ' + result.message, true);
@@ -2194,10 +2217,12 @@
 
         function populatePhCalibration() {
             const phCal = settings.ph_calibration || {};
-            document.getElementById('ph_cal7_status').textContent = phCal.cal7_done ? 'Done ✅' : '—';
-            document.getElementById('ph_cal7_status').style.color = phCal.cal7_done ? '#10b981' : '#888';
-            document.getElementById('ph_cal4_status').textContent = phCal.cal4_done ? 'Done ✅' : '—';
-            document.getElementById('ph_cal4_status').style.color = phCal.cal4_done ? '#10b981' : '#888';
+            document.getElementById('ph_cal401_status').textContent = phCal.cal401_done ? 'Done ✅' : '—';
+            document.getElementById('ph_cal401_status').style.color = phCal.cal401_done ? '#10b981' : '#888';
+            document.getElementById('ph_cal686_status').textContent = phCal.cal686_done ? 'Done ✅' : '—';
+            document.getElementById('ph_cal686_status').style.color = phCal.cal686_done ? '#10b981' : '#888';
+            document.getElementById('ph_cal918_status').textContent = phCal.cal918_done ? 'Done ✅' : '—';
+            document.getElementById('ph_cal918_status').style.color = phCal.cal918_done ? '#10b981' : '#888';
             
             // Initial pH reading
             refreshPhVoltage();

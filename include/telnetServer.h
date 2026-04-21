@@ -11,6 +11,7 @@
 void telnetSetup(void);
 void telnetLoop(void);
 size_t telnetPrintf(const char *format, ...);
+size_t telnetPrintfNonBlocking(const char *format, ...);
 bool telnetIsConnected(void);
 
 #endif // TELNET_SERVER_H

@@ -176,11 +176,15 @@ static void _showHelp(CommandOutput_t out) {
     commandPrintf(out, "  test     - รันระบบ Self-Test\r\n");
     commandPrintf(out, "  health   - แสดงสุขภาพระบบ\r\n");
     commandPrintf(out, "  tasks    - แสดงสถานะ Task (heartbeat + stack)\r\n");
+    commandPrintf(out, "  crash    - แสดง last crash/task stage ล่าสุด\r\n");
     commandPrintf(out, "  wifi     - แสดงข้อมูล WiFi\r\n");
     commandPrintf(out, "  mqtt     - แสดงสถานะ NETPIE\r\n");
     commandPrintf(out, "  ph       - อ่านค่า pH ปัจจุบัน\r\n");
-    commandPrintf(out, "  cal7     - Calibrate pH 7.0\r\n");
-    commandPrintf(out, "  cal4     - Calibrate pH 4.0\r\n");
+    commandPrintf(out, "  cal686   - Calibrate pH 6.86\r\n");
+    commandPrintf(out, "  cal401   - Calibrate pH 4.01\r\n");
+    commandPrintf(out, "  cal918   - Calibrate pH 9.18\r\n");
+    commandPrintf(out, "  cal7     - Alias ของ cal686\r\n");
+    commandPrintf(out, "  cal4     - Alias ของ cal401\r\n");
     commandPrintf(out, "  light    - สถานะ light controller\r\n");
     commandPrintf(out, "  light on - เปิดไฟปลูกพืช\r\n");
     commandPrintf(out, "  light off- ปิดไฟปลูกพืช\r\n");
@@ -245,7 +249,26 @@ static void _showHealth(CommandOutput_t out) {
     commandPrintf(out, "  Min Free Heap  : %lu B\r\n", health.minFreeHeap);
     commandPrintf(out, "  Watchdog Resets: %u\r\n", health.watchdogResets);
     commandPrintf(out, "  WiFi Reconnects: %u\r\n", health.wifiReconnects);
+    char crashInfo[160];
+    if (systemGetLastCrashInfo(crashInfo, sizeof(crashInfo))) {
+        commandPrintf(out, "  Last Crash     : %s\r\n", crashInfo);
+    } else {
+        commandPrintf(out, "  Last Crash     : None\r\n");
+    }
     commandPrintf(out, "===================================\r\n");
+}
+
+static void _showCrashInfo(CommandOutput_t out) {
+    char crashInfo[160];
+
+    commandPrintf(out, "\r\n");
+    commandPrintf(out, "========== LAST CRASH ==========%s", "\r\n");
+    if (systemGetLastCrashInfo(crashInfo, sizeof(crashInfo))) {
+        commandPrintf(out, "  %s\r\n", crashInfo);
+    } else {
+        commandPrintf(out, "  No persisted crash info\r\n");
+    }
+    commandPrintf(out, "===============================\r\n");
 }
 
 /**
@@ -490,6 +513,12 @@ static void _runSystemTest(CommandOutput_t out) {
         commandPrintf(out, "  WDT Resets   : %u %s\r\n", health.watchdogResets, health.watchdogResets > 0 ? "⚠️" : "✅");
         commandPrintf(out, "  Reconnects   : WiFi=%u, MQTT=%u\r\n", health.wifiReconnects, health.mqttReconnects);
         commandPrintf(out, "  Reset Reason : %s\r\n", health.resetReason);
+        char crashInfo[160];
+        if (systemGetLastCrashInfo(crashInfo, sizeof(crashInfo))) {
+            commandPrintf(out, "  Last Crash   : %s\r\n", crashInfo);
+        } else {
+            commandPrintf(out, "  Last Crash   : None\r\n");
+        }
     }
     
     // ─── 8. NTP TIME SYNC ───────────────────────────────────
@@ -566,6 +595,9 @@ void commandProcess(char* cmd, CommandOutput_t output) {
     else if (strcmp(cleanCmd, "health") == 0) {
         _showHealth(output);
     }
+    else if (strcmp(cleanCmd, "crash") == 0) {
+        _showCrashInfo(output);
+    }
     else if (strcmp(cleanCmd, "wifi") == 0) {
         _showWifi(output);
     }
@@ -575,14 +607,19 @@ void commandProcess(char* cmd, CommandOutput_t output) {
     else if (strcmp(cleanCmd, "ph") == 0) {
         commandPrintf(output, "[PH] pH: %.2f, Voltage: %.1f mV\r\n", phRead(), phReadVoltage());
     }
-    else if (strcmp(cleanCmd, "cal7") == 0) {
-        commandPrintf(output, "[PH] Calibrating pH 7.0...\r\n");
-        phCalibratePh7();
+    else if (strcmp(cleanCmd, "cal686") == 0 || strcmp(cleanCmd, "cal7") == 0) {
+        commandPrintf(output, "[PH] Calibrating pH 6.86...\r\n");
+        phCalibratePh686();
         commandPrintf(output, "[PH] Calibration complete!\r\n");
     }
-    else if (strcmp(cleanCmd, "cal4") == 0) {
-        commandPrintf(output, "[PH] Calibrating pH 4.0...\r\n");
-        phCalibratePh4();
+    else if (strcmp(cleanCmd, "cal401") == 0 || strcmp(cleanCmd, "cal4") == 0) {
+        commandPrintf(output, "[PH] Calibrating pH 4.01...\r\n");
+        phCalibratePh401();
+        commandPrintf(output, "[PH] Calibration complete!\r\n");
+    }
+    else if (strcmp(cleanCmd, "cal918") == 0) {
+        commandPrintf(output, "[PH] Calibrating pH 9.18...\r\n");
+        phCalibratePh918();
         commandPrintf(output, "[PH] Calibration complete!\r\n");
     }
     else if (strcmp(cleanCmd, "light") == 0) {

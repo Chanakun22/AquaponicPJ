@@ -146,16 +146,24 @@ static void _parseShadowData(const char* json) {
         _lastFeedNowShadow = data.containsKey("feedNow") ? feedNowShadow : false;
         
         // pH Calibration Commands
-        if (data.containsKey("phCal7")) {
-            if (data["phCal7"].as<int>() == 1) {
-                LOG_INFO("pH Calibration 7.0 triggered via NETPIE");
-                phCalibratePh7();
+        if (data.containsKey("phCal686") || data.containsKey("phCal7")) {
+            int phCal686 = data.containsKey("phCal686") ? data["phCal686"].as<int>() : data["phCal7"].as<int>();
+            if (phCal686 == 1) {
+                LOG_INFO("pH Calibration 6.86 triggered via NETPIE");
+                phCalibratePh686();
             }
         }
-        if (data.containsKey("phCal4")) {
-            if (data["phCal4"].as<int>() == 1) {
-                LOG_INFO("pH Calibration 4.0 triggered via NETPIE");
-                phCalibratePh4();
+        if (data.containsKey("phCal401") || data.containsKey("phCal4")) {
+            int phCal401 = data.containsKey("phCal401") ? data["phCal401"].as<int>() : data["phCal4"].as<int>();
+            if (phCal401 == 1) {
+                LOG_INFO("pH Calibration 4.01 triggered via NETPIE");
+                phCalibratePh401();
+            }
+        }
+        if (data.containsKey("phCal918")) {
+            if (data["phCal918"].as<int>() == 1) {
+                LOG_INFO("pH Calibration 9.18 triggered via NETPIE");
+                phCalibratePh918();
             }
         }
     }
