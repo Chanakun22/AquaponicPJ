@@ -12,6 +12,27 @@ All notable changes to the **Smart Aquaponics AI** project will be documented in
   - เพิ่ม schedule sanitization ให้ light controller ทั้งตอนโหลดจาก NVS และตอนรับ `on_time`/`off_time` จาก MQTT โดย reject เวลา format ผิดหรือเกินช่วง `00:00-23:59`
   - เพิ่ม water system config sanitization เพื่อกัน `refillMaxRuntimeMs` ที่เป็นศูนย์/เกินค่าสูงสุด และ route enum ที่หลุดช่วงก่อนบันทึกหรือใช้งานจริง
 
+- **refactor: make water system roles explicit for mix-tank control automation (`include/waterSystem.h`, `src/waterSystem.cpp`, `src/automator.cpp`):**
+  - เพิ่ม status roles แยกให้ชัดว่า output ปัจจุบันเป็น `circulation`, `fish tank refill`, หรือ `mix tank refill` โดยยังคง field เดิมไว้เพื่อไม่ให้ surface ที่ publish status ไป Pi/CLI พัง
+  - เพิ่ม flag กลาง `waterDilutionActive` และ `mixTankSettlingActive` ใน water system เพื่อบอกว่าถังน้ำผสมยังอยู่ในช่วงเจือจางหรือช่วงรอให้น้ำเข้ากัน แม้การเติมจะเข้าผ่านตู้ปลาก็ตาม
+  - ปรับ automator ให้ยึด `mix tank control zone` เป็นจุดตัดสินใจเดียว และหยุด evaluate/dose ทุกครั้งที่ circulation ไม่เดิน, มี refill เข้าระบบ, หรือ mix tank ยัง settling หลัง refill แทนการเช็กเฉพาะ direct sump refill แบบเดิม
+
+- **feat: expose mix-tank dilution status to Pi pages and localize HW Test (`src/localMqtt.cpp`, `pi_server/app.py`, `pi_server/settings.html`, `pi_server/hardware_test.html`):**
+  - เพิ่ม field `water_dilution_active`, `mix_tank_settling_active`, `fish_tank_refill_output`, `mix_tank_refill_output`, `mix_tank_control_zone`, และ `dilution_hold_remaining_ms` ลงทั้ง sensor payload และ water-system status payload เพื่อให้หน้า Pi เห็นสถานะโซนควบคุมใหม่ตรงกับ firmware
+  - อัปเดต default state ฝั่ง Pi และหน้า Settings ให้แสดงสถานะใหม่ของระบบน้ำได้ทันทีโดยไม่ต้องเดาจาก route/output เดิมเพียงอย่างเดียว
+  - แปลหน้า `hardware_test.html` เป็นภาษาไทยในส่วนหัวข้อ, ปุ่ม, state cards, และข้อความ runtime/log หลัก พร้อมเพิ่มการ์ดสถานะใหม่สำหรับ fish refill, mix refill, dilution, settling, และเวลารอให้น้ำคงตัว
+  - เพิ่ม widget `Mix Tank Control Zone` บนหน้า `index.html` ให้หน้า dashboard หลักเห็น state, route, circulation, fish/mix refill outputs, dilution, settling, control-zone stability, hold time, และ reason ได้จากหน้าแรกทันที พร้อม map workflow wait states ใหม่ของ mix tank ให้อ่านได้ตรงกับ firmware
+
+- **fix: make WDT fallback checkpoints less misleading (`src/main.cpp`):**
+  - เปลี่ยน `TaskSensors` และ `TaskControl` ให้ใช้ `taskCheckpoint()` ทุก stage แทนการอัปเดตแค่ `stage` โดยไม่ feed heartbeat ระหว่างทาง เพื่อให้ crash fallback/report สะท้อน checkpoint ล่าสุดจริงมากขึ้น
+  - เติม checkpoint ก่อน `idle_delay` ของทั้งสอง task ด้วย เพื่อลดกรณีที่ boot report ชี้ว่า task เดิมเป็น `oldest` ทั้งที่เพิ่งวิ่งมาถึงช่วงท้ายของ loop แล้ว
+
+- **fix: reduce pH drift when TDS shares the same tank (`src/main.cpp`, `include/phSensor.h`, `src/phSensor.cpp`):**
+  - ปรับ `TaskSensors` ให้สลับ pass ระหว่างการอ่าน TDS กับ pH เมื่อสอง sensor เปิดพร้อมกัน เพื่อลดการอ่าน analog สองช่องติดกันเกินไปในรอบเดียว ซึ่งมักทำให้ pH เพี้ยนเมื่อ probe ทั้งสองอยู่ในถังเดียวกัน
+  - เพิ่ม ADC settle delay และ dummy discard reads ก่อนเก็บ sample pH จริง เพื่อให้ input ของ pH sensor มีเวลาคลายจาก channel activity ก่อนหน้าและลดอาการ ADC crosstalk/noise
+  - ปรับรอบถัดมาให้ pH กลับมาวิ่งทุก pass เหมือนเดิม และลดความถี่เฉพาะฝั่ง TDS แทน หลังพบว่าการสลับข้ามรอบของ pH เองทำให้ค่าดูค้างเกินไปบนงานจริง
+  - แยก `voltage` สำหรับโชว์ออกจาก voltage ที่ใช้คำนวณ pH: ฝั่ง dashboard/calibration ใช้ EMA + deadband ที่หนักกว่าเพื่อให้ mV นิ่งขึ้น ส่วนฝั่ง process ใช้การจูนแบบกลาง ๆ ให้ค่า pH ตอบสนองไวขึ้นแต่ยังไม่กระโดดมาก
+
 - **fix: persist Flask session secret and harden cookie defaults (`pi_server/app.py`):**
   - เปลี่ยนจากการสุ่ม `app.secret_key` ใหม่ทุกครั้งที่ process boot มาเป็นการ reuse ค่า `session_secret` ที่เก็บใน `auth_config.json` หรือรับจาก env `AQUAPONICS_SECRET_KEY` เพื่อไม่ให้ทุก session หลุดทันทีหลัง service restart
   - ตั้งค่า session cookie ให้ explicit มากขึ้นด้วย `HttpOnly`, `SameSite=Lax`, และ `PERMANENT_SESSION_LIFETIME=7 days` พร้อมรองรับ `SESSION_COOKIE_SECURE` ผ่าน env `AQUAPONICS_SESSION_SECURE` สำหรับ deployment ที่อยู่หลัง HTTPS/reverse proxy

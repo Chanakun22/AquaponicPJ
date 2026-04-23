@@ -38,6 +38,13 @@ typedef struct {
     bool circulationOutput;
     bool refillOutput;
     bool routeValveOutput;
+    bool circulationPumpOutput;
+    bool fishTankRefillOutput;
+    bool mixTankRefillOutput;
+    bool waterDilutionActive;
+    bool mixTankSettlingActive;
+    bool mixTankControlZone;
+    unsigned long dilutionHoldRemainingMs;
     bool levelLow;
     bool levelHigh;
     bool overflowAlarm;

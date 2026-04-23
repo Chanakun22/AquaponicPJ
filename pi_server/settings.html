@@ -940,11 +940,17 @@
             </div>
 
             <div class="form-group" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 18px;">
-                State: <strong id="water_state_text">UNKNOWN</strong><br>
-                Route: <strong id="water_active_route_text">NONE</strong><br>
-                Route Blocked: <strong id="water_route_blocked_text">NO</strong><br>
-                Valve Output: <strong id="water_route_valve_text">FISH TANK</strong><br>
-                Reason: <span id="water_reason_text">-</span>
+                สถานะ: <strong id="water_state_text">UNKNOWN</strong><br>
+                เส้นทางที่ใช้: <strong id="water_active_route_text">NONE</strong><br>
+                เส้นทางถูกบล็อก: <strong id="water_route_blocked_text">NO</strong><br>
+                เอาต์พุตวาล์วเติม: <strong id="water_route_valve_text">FISH TANK</strong><br>
+                กำลังเจือจางน้ำ: <strong id="water_dilution_text">NO</strong><br>
+                ถังผสมกำลังนิ่งค่า: <strong id="water_settling_text">NO</strong><br>
+                เติมผ่านตู้ปลา: <strong id="water_fish_refill_text">NO</strong><br>
+                เติมเข้าถังผสม: <strong id="water_mix_refill_text">NO</strong><br>
+                โซนควบคุมหลัก: <strong id="water_mix_zone_text">YES</strong><br>
+                เวลารอค่าน้ำคงตัว: <strong id="water_dilution_hold_text">0s</strong><br>
+                เหตุผล: <span id="water_reason_text">-</span>
                 <span class="field-tip">ส่วนนี้คือสถานะจริงที่ ESP32 รายงานกลับมา ใช้ดูว่าตอนนี้ระบบกำลังทำอะไร, ใช้ route ไหน, route ถูก block หรือไม่, และ block เพราะอะไร</span>
             </div>
 
@@ -1432,6 +1438,38 @@
             }
         }
 
+        function formatWaterBool(value) {
+            return value ? 'ใช่' : 'ไม่';
+        }
+
+        function formatWaterRoute(route) {
+            const labels = {
+                AUTO: 'อัตโนมัติ',
+                FISH_TANK: 'ผ่านตู้ปลา',
+                SUMP_DIRECT: 'เข้าถังผสมตรง',
+                NONE: 'ไม่มี',
+                UNKNOWN: 'ไม่ทราบ'
+            };
+            return labels[route] || route || 'ไม่ทราบ';
+        }
+
+        function formatWaterState(state) {
+            const labels = {
+                DISABLED: 'ปิดระบบ',
+                CIRCULATION: 'หมุนน้ำ',
+                REFILLING: 'กำลังเติมน้ำ',
+                BLOCKED: 'ถูกบล็อก',
+                ALARM: 'แจ้งเตือน',
+                UNKNOWN: 'ไม่ทราบ'
+            };
+            return labels[state] || state || 'ไม่ทราบ';
+        }
+
+        function formatHoldMs(ms) {
+            const totalSeconds = Math.max(0, Math.round((ms || 0) / 1000));
+            return `${totalSeconds}s`;
+        }
+
         function populateForm() {
             // Automation
             document.getElementById('auto_enabled').checked = settings.automation?.enabled ?? false;
@@ -1478,10 +1516,16 @@
             document.getElementById('water_refill_max_runtime_ms').value = settings.water_system?.refill_max_runtime_ms ?? 120000;
             document.getElementById('water_preferred_route').value = settings.water_system?.preferred_route ?? 'AUTO';
             document.getElementById('water_allow_direct_sump_refill').checked = settings.water_system?.allow_direct_sump_refill ?? true;
-            document.getElementById('water_state_text').textContent = settings.water_system?.state ?? 'UNKNOWN';
-            document.getElementById('water_active_route_text').textContent = settings.water_system?.active_route ?? 'NONE';
-            document.getElementById('water_route_blocked_text').textContent = settings.water_system?.route_blocked ? 'YES' : 'NO';
-            document.getElementById('water_route_valve_text').textContent = settings.water_system?.route_valve_output ? 'DIRECT SUMP' : 'FISH TANK';
+            document.getElementById('water_state_text').textContent = formatWaterState(settings.water_system?.state ?? 'UNKNOWN');
+            document.getElementById('water_active_route_text').textContent = formatWaterRoute(settings.water_system?.active_route ?? 'NONE');
+            document.getElementById('water_route_blocked_text').textContent = formatWaterBool(settings.water_system?.route_blocked ?? false);
+            document.getElementById('water_route_valve_text').textContent = settings.water_system?.route_valve_output ? 'เข้าถังผสมตรง' : 'ผ่านตู้ปลา';
+            document.getElementById('water_dilution_text').textContent = formatWaterBool(settings.water_system?.water_dilution_active ?? false);
+            document.getElementById('water_settling_text').textContent = formatWaterBool(settings.water_system?.mix_tank_settling_active ?? false);
+            document.getElementById('water_fish_refill_text').textContent = formatWaterBool(settings.water_system?.fish_tank_refill_output ?? false);
+            document.getElementById('water_mix_refill_text').textContent = formatWaterBool(settings.water_system?.mix_tank_refill_output ?? false);
+            document.getElementById('water_mix_zone_text').textContent = formatWaterBool(settings.water_system?.mix_tank_control_zone ?? true);
+            document.getElementById('water_dilution_hold_text').textContent = formatHoldMs(settings.water_system?.dilution_hold_remaining_ms ?? 0);
             document.getElementById('water_reason_text').textContent = settings.water_system?.reason ?? '-';
 
             // Thresholds
@@ -1679,6 +1723,13 @@
                     active_route: settings.water_system?.active_route ?? 'NONE',
                     reason: settings.water_system?.reason ?? '-',
                     alarm_active: settings.water_system?.alarm_active ?? false,
+                    circulation_pump_output: settings.water_system?.circulation_pump_output ?? false,
+                    fish_tank_refill_output: settings.water_system?.fish_tank_refill_output ?? false,
+                    mix_tank_refill_output: settings.water_system?.mix_tank_refill_output ?? false,
+                    water_dilution_active: settings.water_system?.water_dilution_active ?? false,
+                    mix_tank_settling_active: settings.water_system?.mix_tank_settling_active ?? false,
+                    mix_tank_control_zone: settings.water_system?.mix_tank_control_zone ?? true,
+                    dilution_hold_remaining_ms: settings.water_system?.dilution_hold_remaining_ms ?? 0,
                     route_blocked: settings.water_system?.route_blocked ?? false,
                     route_valve_output: settings.water_system?.route_valve_output ?? false,
                     has_route_valve: settings.water_system?.has_route_valve ?? false,

@@ -21,6 +21,58 @@ static volatile bool _paused = false;  // HW Test pause flag (volatile for cross
 static AutomatorConfig _config;
 static Preferences _prefs;
 
+static bool _automatorBlockedByWaterSystem(const WaterSystemStatus* waterStatus, const char** reason, const char** nextState) {
+    if (waterStatus == NULL) {
+        return false;
+    }
+
+    if (waterStatus->alarmActive) {
+        if (reason) {
+            *reason = "Blocked by water system alarm";
+        }
+        if (nextState) {
+            *nextState = "WAIT_CLEAR_CONDITION";
+        }
+        return true;
+    }
+
+    if (!waterStatus->circulationPumpOutput) {
+        if (reason) {
+            *reason = "Blocked: mix tank circulation pump is not running";
+        }
+        if (nextState) {
+            *nextState = "WAIT_CIRCULATION";
+        }
+        return true;
+    }
+
+    if (waterStatus->waterDilutionActive) {
+        const char* dilutionReason = "Blocked: mix tank dilution is active";
+        const char* dilutionNextState = "WAIT_MIX_SETTLING";
+
+        if (waterStatus->mixTankRefillOutput) {
+            dilutionReason = "Blocked: mix tank refill is active";
+            dilutionNextState = "WAIT_MIX_REFILL_COMPLETE";
+        } else if (waterStatus->fishTankRefillOutput) {
+            dilutionReason = "Blocked: fish tank refill is active";
+            dilutionNextState = "WAIT_FISH_REFILL_MIXING";
+        } else if (waterStatus->mixTankSettlingActive) {
+            dilutionReason = "Blocked: mix tank is settling after dilution";
+            dilutionNextState = "WAIT_MIX_SETTLING";
+        }
+
+        if (reason) {
+            *reason = dilutionReason;
+        }
+        if (nextState) {
+            *nextState = dilutionNextState;
+        }
+        return true;
+    }
+
+    return false;
+}
+
 static void _updateReason(const char* reason) {
     if (strncmp(_actionReason, reason, sizeof(_actionReason)) != 0) {
         snprintf(_actionReason, sizeof(_actionReason), "%s", reason);
@@ -120,20 +172,15 @@ const char* automatorGetNextStateString(void) {
     WaterSystemStatus waterStatus;
     waterSystemGetStatus(&waterStatus);
 
+    const char* blockedReason = NULL;
+    const char* blockedNextState = NULL;
+
     if (!_config.enabled) {
         return "ENABLE_AUTOMATION";
     }
 
-    if (waterStatus.alarmActive) {
-        return "WAIT_CLEAR_CONDITION";
-    }
-
-    if (!waterStatus.circulationOutput) {
-        return "WAIT_CIRCULATION";
-    }
-
-    if (waterStatus.refillOutput && waterStatus.activeRoute == WATER_REFILL_ROUTE_SUMP_DIRECT) {
-        return "WAIT_REFILL_COMPLETE";
+    if (_automatorBlockedByWaterSystem(&waterStatus, &blockedReason, &blockedNextState)) {
+        return blockedNextState ? blockedNextState : "WAIT_CONTROL_ZONE";
     }
 
     switch (_currentState) {
@@ -224,29 +271,13 @@ void automatorLoop(void) {
     WaterSystemStatus waterStatus;
     waterSystemGetStatus(&waterStatus);
 
-    if (waterStatus.alarmActive) {
+    const char* blockedReason = NULL;
+    const char* blockedNextState = NULL;
+    if (_automatorBlockedByWaterSystem(&waterStatus, &blockedReason, &blockedNextState)) {
         if (_currentState != AUTO_STATE_IDLE && _currentState != AUTO_STATE_DISABLED) {
-            _changeState(AUTO_STATE_IDLE, "Blocked by water system alarm");
+            _changeState(AUTO_STATE_IDLE, blockedReason ? blockedReason : "Blocked by control zone state");
         } else {
-            _updateReason("Blocked by water system alarm");
-        }
-        return;
-    }
-
-    if (!waterStatus.circulationOutput) {
-        if (_currentState != AUTO_STATE_IDLE && _currentState != AUTO_STATE_DISABLED) {
-            _changeState(AUTO_STATE_IDLE, "Blocked: circulation pump is not running");
-        } else {
-            _updateReason("Blocked: circulation pump is not running");
-        }
-        return;
-    }
-
-    if (waterStatus.refillOutput && waterStatus.activeRoute == WATER_REFILL_ROUTE_SUMP_DIRECT) {
-        if (_currentState != AUTO_STATE_IDLE && _currentState != AUTO_STATE_DISABLED) {
-            _changeState(AUTO_STATE_IDLE, "Blocked: direct sump refill is active");
-        } else {
-            _updateReason("Blocked: direct sump refill is active");
+            _updateReason(blockedReason ? blockedReason : "Blocked by control zone state");
         }
         return;
     }
@@ -269,7 +300,7 @@ void automatorLoop(void) {
         case AUTO_STATE_IDLE:
             if (now - _lastCheckTime >= AUTOMATOR_CHECK_INTERVAL) {
                 _lastCheckTime = now;
-                _changeState(AUTO_STATE_EVALUATING, "Checking Sensor Thresholds");
+                _changeState(AUTO_STATE_EVALUATING, "Checking mix tank control zone");
             }
             break;
 
@@ -279,19 +310,23 @@ void automatorLoop(void) {
             
             // Validate sensor read (don't act on NAN or 0)
             if (isnan(tds) || tds <= 5.0f) {
-                _changeState(AUTO_STATE_IDLE, "Sensors Data Invalid. Waiting.");
+                _changeState(AUTO_STATE_IDLE, "Mix tank sensor data invalid. Waiting.");
                 break;
             }
 
-            // Logic 1: TDS is too low
+            // Current automation controls only the mix tank TDS path.
             if (tds < _config.targetTds) {
                 char reason[128];
-                snprintf(reason, sizeof(reason), "TDS Low (%.1f < %.1f) - Pumping A", tds, _config.targetTds);
+                snprintf(reason,
+                         sizeof(reason),
+                         "Mix tank TDS low (%.1f < %.1f) - Pumping A",
+                         tds,
+                         _config.targetTds);
                 _changeState(AUTO_STATE_DOSING_A, reason);
                 digitalWrite(PUMP_NUTRIENT_A_PIN, PUMP_ON);
             } 
             else {
-                _changeState(AUTO_STATE_IDLE, "All parameters normal");
+                _changeState(AUTO_STATE_IDLE, "Mix tank parameters normal");
             }
             break;
         }

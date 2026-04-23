@@ -31,6 +31,13 @@ static WaterSystemStatus _status = {
     false,
     false,
     false,
+    true,
+    0,
+    false,
+    false,
+    false,
+    false,
+    false,
     false,
     false,
     false,
@@ -41,6 +48,10 @@ static WaterSystemStatus _status = {
 
 static bool _alarmLatched = false;
 static unsigned long _refillStartMs = 0;
+static unsigned long _lastDilutionEventMs = 0;
+static WaterRefillRoute _lastDilutionRoute = WATER_REFILL_ROUTE_NONE;
+
+static const unsigned long WATER_MIX_SETTLING_MS = 120000UL;
 
 static bool _hasCirculationPump(void) {
 #if PUMP_CIRCULATION_PIN >= 0
@@ -117,6 +128,31 @@ static void _writeRouteValve(WaterRefillRoute route) {
     }
     digitalWrite(REFILL_ROUTE_VALVE_PIN,
                  route == WATER_REFILL_ROUTE_SUMP_DIRECT ? REFILL_ROUTE_TO_SUMP_STATE : REFILL_ROUTE_TO_FISH_STATE);
+}
+
+static bool _routeFeedsMixTank(WaterRefillRoute route) {
+    return route == WATER_REFILL_ROUTE_FISH_TANK || route == WATER_REFILL_ROUTE_SUMP_DIRECT;
+}
+
+static void _updateDerivedStatus(unsigned long now) {
+    bool settlingActive = false;
+    unsigned long dilutionHoldRemainingMs = 0;
+
+    if (_lastDilutionEventMs != 0) {
+        unsigned long dilutionElapsedMs = now - _lastDilutionEventMs;
+        if (dilutionElapsedMs < WATER_MIX_SETTLING_MS) {
+            settlingActive = !_status.refillOutput;
+            dilutionHoldRemainingMs = WATER_MIX_SETTLING_MS - dilutionElapsedMs;
+        }
+    }
+
+    _status.circulationPumpOutput = _status.circulationOutput;
+    _status.fishTankRefillOutput = _status.refillOutput && _status.activeRoute == WATER_REFILL_ROUTE_FISH_TANK;
+    _status.mixTankRefillOutput = _status.refillOutput && _status.activeRoute == WATER_REFILL_ROUTE_SUMP_DIRECT;
+    _status.mixTankSettlingActive = settlingActive;
+    _status.waterDilutionActive = _status.refillOutput || settlingActive;
+    _status.mixTankControlZone = true;
+    _status.dilutionHoldRemainingMs = dilutionHoldRemainingMs;
 }
 
 static void _sanitizeConfig(void) {
@@ -297,6 +333,8 @@ void waterSystemSetAllowDirectSumpRefill(bool enabled) {
 void waterSystemClearAlarm(void) {
     _alarmLatched = false;
     _refillStartMs = 0;
+    _lastDilutionEventMs = 0;
+    _lastDilutionRoute = WATER_REFILL_ROUTE_NONE;
     _status.activeRoute = WATER_REFILL_ROUTE_NONE;
     _status.routeBlocked = false;
     _setState(WATER_STATE_DISABLED, "Alarm cleared");
@@ -309,6 +347,7 @@ void waterSystemGetStatus(WaterSystemStatus* status) {
 }
 
 void waterSystemLoop(void) {
+    unsigned long now = millis();
     char stateReason[96];
     stateReason[0] = '\0';
 
@@ -323,6 +362,13 @@ void waterSystemLoop(void) {
     _status.routeBlocked = false;
     _status.activeRoute = WATER_REFILL_ROUTE_NONE;
     _status.routeValveOutput = false;
+    _status.circulationPumpOutput = false;
+    _status.fishTankRefillOutput = false;
+    _status.mixTankRefillOutput = false;
+    _status.waterDilutionActive = false;
+    _status.mixTankSettlingActive = false;
+    _status.mixTankControlZone = true;
+    _status.dilutionHoldRemainingMs = 0;
 
     if (_status.overflowAlarm) {
         _alarmLatched = true;
@@ -368,7 +414,7 @@ void waterSystemLoop(void) {
 
     if (refillDesired) {
         if (_refillStartMs == 0) {
-            _refillStartMs = millis();
+            _refillStartMs = now;
         }
 
         const char* routeBlockedReason = NULL;
@@ -380,7 +426,7 @@ void waterSystemLoop(void) {
             _setState(WATER_STATE_BLOCKED, routeBlockedReason ? routeBlockedReason : "No valid refill route available");
         }
 
-        if ((millis() - _refillStartMs) >= _config.refillMaxRuntimeMs) {
+        if ((now - _refillStartMs) >= _config.refillMaxRuntimeMs) {
             _alarmLatched = true;
             refillDesired = false;
             _config.manualRefill = false;
@@ -400,6 +446,13 @@ void waterSystemLoop(void) {
     _status.routeValveOutput = _status.activeRoute == WATER_REFILL_ROUTE_SUMP_DIRECT;
     _status.alarmActive = _alarmLatched;
 
+    if (_status.refillOutput && _routeFeedsMixTank(_status.activeRoute)) {
+        _lastDilutionEventMs = now;
+        _lastDilutionRoute = _status.activeRoute;
+    }
+
+    _updateDerivedStatus(now);
+
     _writeRouteValve(_status.activeRoute);
     _writePumpOutput(PUMP_CIRCULATION_PIN, _status.circulationOutput);
     _writePumpOutput(PUMP_REFILL_PIN, _status.refillOutput);
@@ -414,18 +467,25 @@ void waterSystemLoop(void) {
     }
 
     if (_status.refillOutput) {
+        const char* refillTarget = _status.mixTankRefillOutput ? "mix tank" : "fish tank";
         if (_config.manualRefill) {
-            snprintf(stateReason, sizeof(stateReason), "Manual refill is active via %s", waterSystemGetRouteString(_status.activeRoute));
+            snprintf(stateReason, sizeof(stateReason), "Manual %s refill is active", refillTarget);
         } else {
-            if (_status.activeRoute == WATER_REFILL_ROUTE_SUMP_DIRECT) {
-                snprintf(stateReason, sizeof(stateReason), "Sump still low - switched refill route to direct sump");
-            } else {
-                snprintf(stateReason, sizeof(stateReason), "Sump low level detected - refilling via fish tank");
-            }
+            snprintf(stateReason, sizeof(stateReason), "Control zone dilution active: refilling via %s", refillTarget);
         }
         _setState(WATER_STATE_REFILLING, stateReason);
+    } else if (_status.mixTankSettlingActive) {
+        const char* settledFrom = _lastDilutionRoute == WATER_REFILL_ROUTE_SUMP_DIRECT ? "mix tank refill" :
+                                  _lastDilutionRoute == WATER_REFILL_ROUTE_FISH_TANK ? "fish tank refill" :
+                                  "recent refill";
+        snprintf(stateReason,
+                 sizeof(stateReason),
+                 "Mix tank settling after %s (%lu s left)",
+                 settledFrom,
+                 _status.dilutionHoldRemainingMs / 1000UL);
+        _setState(WATER_STATE_CIRCULATION, stateReason);
     } else if (_status.circulationOutput) {
-        _setState(WATER_STATE_CIRCULATION, "Circulation pump is running");
+        _setState(WATER_STATE_CIRCULATION, "Mix tank control zone is circulating");
     } else {
         _setState(WATER_STATE_DISABLED, "Water system idle");
     }

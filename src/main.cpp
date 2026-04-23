@@ -168,6 +168,7 @@ void TaskNetworking(void *pvParameters) {
 
 void TaskSensors(void *pvParameters) {
     (void) pvParameters;
+    static bool preferTdsThisPass = true;
     
     #if defined(ESP32) && WATCHDOG_ENABLED
     esp_task_wdt_add(NULL); // Subscribe this task to Watchdog Timer
@@ -178,7 +179,7 @@ void TaskSensors(void *pvParameters) {
         
         // Water Temp (OneWire is slow, blocking)
         if (systemGetSensorEnabled(SENSOR_WATER_TEMP)) {
-            systemSetTaskProgress(TASK_SENSORS, "water_temp");
+            taskCheckpoint(TASK_SENSORS, "water_temp");
             float rawWaterTemp = tempRead();
             currentWaterTemp = validateTemperature(rawWaterTemp);
             tempLoop(); // Maintains sensor state if needed
@@ -188,7 +189,7 @@ void TaskSensors(void *pvParameters) {
         
         // Air Temp & Humidity
         if (systemGetSensorEnabled(SENSOR_AIR_TEMP)) {
-            systemSetTaskProgress(TASK_SENSORS, "air_temp_humidity");
+            taskCheckpoint(TASK_SENSORS, "air_temp_humidity");
             float rawAirTemp = dhtReadTemperature();
             float rawHumidity = dhtReadHumidity();
             currentAirTemp = validateTemperature(rawAirTemp);
@@ -199,22 +200,27 @@ void TaskSensors(void *pvParameters) {
             currentHumidity = NAN;
         }
         
+        bool tdsEnabled = systemGetSensorEnabled(SENSOR_TDS);
+        bool phEnabled = systemGetSensorEnabled(SENSOR_PH);
+        bool runTdsThisPass = tdsEnabled && (!phEnabled || preferTdsThisPass);
+        bool runPhThisPass = phEnabled;
+
         // TDS (Average/Filtering)
-        // tdsLoop() เก็บ sample ภายใน (เรียก tdsRead ให้แล้ว)
-        // ดึงค่าจาก tdsRead เฉพาะตอนที่ buffer พร้อม
-        if (systemGetSensorEnabled(SENSOR_TDS)) {
-            systemSetTaskProgress(TASK_SENSORS, "tds");
+        // ถ้า pH อยู่ถังเดียวกับ TDS จะลดความถี่ TDS ลง แต่ยังปล่อยให้ pH วิ่งทุก pass
+        // เพื่อไม่ให้ค่า pH ดูค้างจากการข้ามรอบอ่านของ pH เอง
+        if (runTdsThisPass) {
+            taskCheckpoint(TASK_SENSORS, "tds");
             tdsLoop(currentWaterTemp);
             if (tdsIsReady()) {
                 currentTds = validateTds(tdsGetLastValue());
             }
-        } else {
+        } else if (!tdsEnabled) {
             currentTds = -1;
         }
         
         // Light
         if (systemGetSensorEnabled(SENSOR_LIGHT)) {
-            systemSetTaskProgress(TASK_SENSORS, "light");
+            taskCheckpoint(TASK_SENSORS, "light");
             if (lightIsReady()) {
                 currentLight = validateLight(lightRead());
             }
@@ -224,8 +230,8 @@ void TaskSensors(void *pvParameters) {
         }
         
         // pH
-        if (systemGetSensorEnabled(SENSOR_PH)) {
-            systemSetTaskProgress(TASK_SENSORS, "ph");
+        if (runPhThisPass) {
+            taskCheckpoint(TASK_SENSORS, "ph");
             if (!isnan(currentWaterTemp)) {
                 phSetTemperature(currentWaterTemp);
             }
@@ -233,10 +239,15 @@ void TaskSensors(void *pvParameters) {
             if (phIsReady()) {
                 currentPh = validatePh(phRead());
             }
-        } else {
+        } else if (!phEnabled) {
             currentPh = -1;
         }
+
+        if (tdsEnabled && phEnabled) {
+            preferTdsThisPass = !preferTdsThisPass;
+        }
         
+        taskCheckpoint(TASK_SENSORS, "idle_delay");
         vTaskDelay(pdMS_TO_TICKS(100)); // Run at 10Hz approx.
     }
 }
@@ -252,43 +263,43 @@ void TaskControl(void *pvParameters) {
         taskCheckpoint(TASK_CONTROL, "loop_start");
 
         // System Management (Button checks etc)
-        systemSetTaskProgress(TASK_CONTROL, "system_loop");
+        taskCheckpoint(TASK_CONTROL, "system_loop");
         systemLoop();
 
         // Water circulation / refill controller
-        systemSetTaskProgress(TASK_CONTROL, "water_system");
+        taskCheckpoint(TASK_CONTROL, "water_system");
         waterSystemLoop();
         
         // Light Controller Schedule
-        systemSetTaskProgress(TASK_CONTROL, "light_control");
+        taskCheckpoint(TASK_CONTROL, "light_control");
         lightCtrlLoop();
 
         // Fish feeder schedule
-        systemSetTaskProgress(TASK_CONTROL, "fish_feeder");
+        taskCheckpoint(TASK_CONTROL, "fish_feeder");
         fishFeederLoop();
 
         // Exhaust fan controller
-        systemSetTaskProgress(TASK_CONTROL, "fan_control");
+        taskCheckpoint(TASK_CONTROL, "fan_control");
         fanCtrlLoop();
         
         // Automation Engine (Process State Machine)
-        systemSetTaskProgress(TASK_CONTROL, "automator");
+        taskCheckpoint(TASK_CONTROL, "automator");
         automatorLoop();
         
         // Check task heartbeats (detect stuck tasks)
-        systemSetTaskProgress(TASK_CONTROL, "task_health_check");
+        taskCheckpoint(TASK_CONTROL, "task_health_check");
         if (!systemCheckTaskHealth()) {
             LOG_ERROR("Task stuck detected! Printing stack info...");
             systemPrintStackInfo();
         }
         
         // System Health / Heap Check
-        systemSetTaskProgress(TASK_CONTROL, "system_health_check");
+        taskCheckpoint(TASK_CONTROL, "system_health_check");
         if (!systemIsHealthy()) {
              LOG_ERROR("System unhealthy! Free heap: %lu", ESP.getFreeHeap());
         }
         
-        systemSetTaskProgress(TASK_CONTROL, "idle_delay");
+        taskCheckpoint(TASK_CONTROL, "idle_delay");
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }

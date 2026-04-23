@@ -332,6 +332,59 @@
         font-size: 1rem;
       }
 
+      .water-zone-card {
+        position: relative;
+        overflow: hidden;
+      }
+
+      .water-zone-card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(circle at top right, rgba(0, 200, 255, 0.12), transparent 38%),
+          linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 55%);
+        pointer-events: none;
+      }
+
+      .water-zone-grid {
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 12px;
+      }
+
+      .water-zone-item {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-sm);
+        padding: 12px 14px;
+      }
+
+      .water-zone-item.wide {
+        grid-column: 1 / -1;
+      }
+
+      .water-zone-label {
+        font-size: 0.72rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 6px;
+      }
+
+      .water-zone-value {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--text-main);
+        line-height: 1.4;
+      }
+
+      .water-zone-value.reason {
+        font-weight: 500;
+        color: #cbd5e1;
+      }
+
       /* Progress Bar Modern */
       .prog-track {
         background: rgba(255,255,255,0.1);
@@ -860,6 +913,56 @@
            </div>
         </div>
 
+        <div class="device-card water-zone-card">
+          <div class="device-header">
+            <i class="fa-solid fa-faucet-drip" style="color: var(--secondary);"></i>
+            Mix Tank Control Zone
+          </div>
+
+          <div class="water-zone-grid">
+            <div class="water-zone-item">
+              <div class="water-zone-label">State</div>
+              <div class="water-zone-value" id="waterZoneState">Unknown</div>
+            </div>
+            <div class="water-zone-item">
+              <div class="water-zone-label">Route</div>
+              <div class="water-zone-value" id="waterZoneRoute">Unknown</div>
+            </div>
+            <div class="water-zone-item">
+              <div class="water-zone-label">Circulation Pump</div>
+              <div class="water-zone-value" id="waterZoneCirculation">Unknown</div>
+            </div>
+            <div class="water-zone-item">
+              <div class="water-zone-label">Fish Tank Refill</div>
+              <div class="water-zone-value" id="waterZoneFishRefill">Unknown</div>
+            </div>
+            <div class="water-zone-item">
+              <div class="water-zone-label">Mix Tank Refill</div>
+              <div class="water-zone-value" id="waterZoneMixRefill">Unknown</div>
+            </div>
+            <div class="water-zone-item">
+              <div class="water-zone-label">Dilution</div>
+              <div class="water-zone-value" id="waterZoneDilution">Unknown</div>
+            </div>
+            <div class="water-zone-item">
+              <div class="water-zone-label">Settling</div>
+              <div class="water-zone-value" id="waterZoneSettling">Unknown</div>
+            </div>
+            <div class="water-zone-item">
+              <div class="water-zone-label">Control Zone</div>
+              <div class="water-zone-value" id="waterZoneControl">Unknown</div>
+            </div>
+            <div class="water-zone-item">
+              <div class="water-zone-label">Hold Remaining</div>
+              <div class="water-zone-value" id="waterZoneHold">--</div>
+            </div>
+            <div class="water-zone-item wide">
+              <div class="water-zone-label">Reason</div>
+              <div class="water-zone-value reason" id="waterZoneReason">Waiting for water system status</div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <!-- Logs & Info -->
@@ -971,11 +1074,50 @@
           ENABLE_AUTOMATION: "Enable Automation",
           WAIT_CLEAR_CONDITION: "Wait for Clear Condition",
           WAIT_CIRCULATION: "Wait for Circulation",
+          WAIT_CONTROL_ZONE: "Wait for Mix Tank Control Zone",
           WAIT_REFILL_COMPLETE: "Wait for Refill Complete",
+          WAIT_MIX_REFILL_COMPLETE: "Wait for Mix Tank Refill Complete",
+          WAIT_FISH_REFILL_MIXING: "Wait for Fish Tank Refill Mixing",
+          WAIT_MIX_SETTLING: "Wait for Mix Tank Settling",
           WAIT_HW_TEST_END: "Wait for HW Test End",
           UNKNOWN: "Unknown"
         };
         return labels[state] || state || "Unknown";
+      }
+
+      function formatWaterRoute(route) {
+        const labels = {
+          AUTO: "Auto",
+          FISH_TANK: "Via Fish Tank",
+          SUMP_DIRECT: "Direct to Mix Tank",
+          NONE: "None",
+          UNKNOWN: "Unknown"
+        };
+        return labels[route] || route || "Unknown";
+      }
+
+      function formatWaterState(state) {
+        const labels = {
+          DISABLED: "Disabled",
+          CIRCULATION: "Circulating",
+          REFILLING: "Refilling",
+          BLOCKED: "Blocked",
+          ALARM: "Alarm",
+          UNKNOWN: "Unknown"
+        };
+        return labels[state] || state || "Unknown";
+      }
+
+      function formatWaterBool(value, truthyLabel, falsyLabel) {
+        return value ? truthyLabel : falsyLabel;
+      }
+
+      function formatHoldMs(ms) {
+        const totalSeconds = Math.max(0, Math.round((ms || 0) / 1000));
+        if (totalSeconds < 60) return `${totalSeconds}s`;
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
       }
 
       function addLog(type, message) {
@@ -1079,7 +1221,21 @@
         document.getElementById("lightState").textContent = data.light_state ? "DAY MODE" : "NIGHT MODE";
         document.getElementById("lastUpdate").textContent = new Date().toLocaleTimeString("en-US", {hour12: false});
         
+        updateWaterControlZone(data);
         updateWorkflow(data);
+      }
+
+      function updateWaterControlZone(data) {
+        document.getElementById("waterZoneState").textContent = formatWaterState(data.water_state);
+        document.getElementById("waterZoneRoute").textContent = formatWaterRoute(data.active_route);
+        document.getElementById("waterZoneCirculation").textContent = formatWaterBool(data.circulation_pump_output, "Running", "Stopped");
+        document.getElementById("waterZoneFishRefill").textContent = formatWaterBool(data.fish_tank_refill_output, "Active", "Idle");
+        document.getElementById("waterZoneMixRefill").textContent = formatWaterBool(data.mix_tank_refill_output, "Active", "Idle");
+        document.getElementById("waterZoneDilution").textContent = formatWaterBool(data.water_dilution_active, "Active", "Clear");
+        document.getElementById("waterZoneSettling").textContent = formatWaterBool(data.mix_tank_settling_active, "Settling", "Stable");
+        document.getElementById("waterZoneControl").textContent = formatWaterBool(data.mix_tank_control_zone, "Stable", "Unstable");
+        document.getElementById("waterZoneHold").textContent = formatHoldMs(data.dilution_hold_remaining_ms);
+        document.getElementById("waterZoneReason").textContent = data.water_reason || "Waiting for water system status";
       }
 
       function toggleWorkflow() {

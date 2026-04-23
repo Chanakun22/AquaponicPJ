@@ -17,6 +17,7 @@
 static Preferences _prefs; // NVS storage
 static float _lastPh = -1.0;
 static float _lastVoltageMv = -1.0;
+static float _displayVoltageMv = -1.0;
 static bool _sensorReady = false;
 static unsigned long _lastReadTime = 0;
 static int _sampleBuffer[PH_SAMPLE_COUNT];
@@ -117,7 +118,13 @@ static float _limitStep(float previousValue, float candidateValue,
 static int _readOversampledAdc(void) {
   long sum = 0;
 
+  for (int i = 0; i < PH_ADC_DUMMY_READS; i++) {
+    delayMicroseconds(PH_ADC_SETTLE_US);
+    (void)analogRead(PH_SENSOR_PIN);
+  }
+
   for (int i = 0; i < PH_OVERSAMPLE_COUNT; i++) {
+    delayMicroseconds(PH_ADC_SETTLE_US);
     sum += analogRead(PH_SENSOR_PIN);
   }
 
@@ -322,6 +329,7 @@ void phSetup(void) {
   _sensorReady = false;
   _lastPh = -1.0f;
   _lastVoltageMv = -1.0f;
+  _displayVoltageMv = -1.0;
   _invalidReadStreak = 0;
 
   LOG_INFO("pH sensor PIN: %d", PH_SENSOR_PIN);
@@ -356,13 +364,16 @@ void phLoop(void) {
       int medianValue = _getMedianValue();
       static float _phMovingAverage = -1.0f;
       static float _voltageMovingAverage = -1.0f;
+      static float _displayVoltageMovingAverage = -1.0f;
 
       if (!_isAdcReadingValid(medianValue)) {
         _invalidReadStreak++;
         if (_invalidReadStreak >= PH_INVALID_STREAK_LIMIT) {
           _lastPh = NAN;
           _lastVoltageMv = _adcToMillivolts(medianValue);
+          _displayVoltageMv = _lastVoltageMv;
           _voltageMovingAverage = _lastVoltageMv;
+          _displayVoltageMovingAverage = _lastVoltageMv;
         }
       } else {
         _invalidReadStreak = 0;
@@ -378,6 +389,18 @@ void phLoop(void) {
 
         _lastVoltageMv = _applyDeadband(_lastVoltageMv, _voltageMovingAverage,
                                         PH_VOLTAGE_DEADBAND_MV);
+
+        if (_displayVoltageMovingAverage < 0 || isnan(_displayVoltageMovingAverage)) {
+          _displayVoltageMovingAverage = _lastVoltageMv;
+        } else {
+          _displayVoltageMovingAverage =
+              (_lastVoltageMv * PH_VOLTAGE_DISPLAY_FILTER_ALPHA) +
+              (_displayVoltageMovingAverage * (1.0f - PH_VOLTAGE_DISPLAY_FILTER_ALPHA));
+        }
+
+        _displayVoltageMv = _applyDeadband(_displayVoltageMv,
+                                           _displayVoltageMovingAverage,
+                                           PH_VOLTAGE_DISPLAY_DEADBAND_MV);
 
         float rawPh = _millivoltsToPh(_lastVoltageMv);
         if (isnan(rawPh)) {
@@ -403,7 +426,7 @@ float phRead(void) { return _sensorReady ? _lastPh : -1.0; }
 float phReadVoltage(void) {
   if (!_bufferFull)
     return -1.0;
-  return _lastVoltageMv;
+  return _displayVoltageMv;
 }
 
 bool phIsReady(void) { return _sensorReady; }

@@ -18,11 +18,15 @@
 #define PH_READ_INTERVAL    1000    // อ่านค่าทุก (ms)
 #define PH_OVERSAMPLE_COUNT 8       // จำนวน analogRead ต่อ 1 รอบ sampling
 #define PH_INVALID_STREAK_LIMIT 3   // ต้อง invalid ติดต่อกันกี่รอบจึง mark ว่าหลุดช่วง
-#define PH_VOLTAGE_FILTER_ALPHA 0.10f // EMA smoothing for calibration voltage display
-#define PH_PH_FILTER_ALPHA    0.10f // EMA smoothing for pH display
-#define PH_VOLTAGE_DEADBAND_MV 5.0f // Ignore tiny voltage jitter on dashboard/calibration
-#define PH_PH_DEADBAND        0.02f // Ignore tiny pH jitter on dashboard
-#define PH_PH_MAX_STEP        0.08f // Maximum pH step per sensor cycle for display smoothing
+#define PH_VOLTAGE_FILTER_ALPHA 0.18f // Processing EMA for pH calculation: faster but still damped
+#define PH_VOLTAGE_DISPLAY_FILTER_ALPHA 0.06f // Extra smoothing just for displayed voltage (mV)
+#define PH_PH_FILTER_ALPHA    0.18f // Balanced pH EMA: quicker response without going fully raw
+#define PH_VOLTAGE_DEADBAND_MV 3.0f // Smaller process deadband so pH value moves sooner
+#define PH_VOLTAGE_DISPLAY_DEADBAND_MV 8.0f // Larger display deadband so calibration voltage looks steadier
+#define PH_PH_DEADBAND        0.01f // Allow smaller visible pH movement before holding value
+#define PH_PH_MAX_STEP        0.12f // Let pH catch up faster per cycle while still limiting jumps
+#define PH_ADC_SETTLE_US      250   // Quiet time before each pH ADC sample after analog channel activity
+#define PH_ADC_DUMMY_READS    2     // Discard initial ADC reads so pH sampling starts after channel settles
 
 // Calibration values (ต้อง calibrate ใหม่ตาม sensor จริง)
 #define PH_VOLTAGE_AT_686   2058    // ADC value ที่ pH 6.86 (neutral-ish)

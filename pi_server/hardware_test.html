@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hardware Test - Smart Aquaponics</title>
+    <title>ทดสอบฮาร์ดแวร์ - Smart Aquaponics</title>
     <link rel="manifest" href="/pwa/manifest.json">
     <meta name="theme-color" content="#00f2aa">
     <link href="/static/fonts/fonts.css" rel="stylesheet">
@@ -433,80 +433,80 @@
 <body>
     <div class="header">
         <div class="header-top">
-            <div class="brand"><i class="fas fa-vial"></i><h1>Hardware Test</h1></div>
+            <div class="brand"><i class="fas fa-vial"></i><h1>ทดสอบฮาร์ดแวร์</h1></div>
         </div>
     </div>
 
     <div class="container">
         <div class="page-stack">
             <div class="intro">
-                ใช้หน้านี้สำหรับทดสอบ <strong>ของที่ firmware รองรับจริงตอนนี้</strong>: อ่านเซ็นเซอร์, ทดสอบปั๊มโดส A/B, เปิดปิดไฟผ่านรีเลย์, และทดสอบระบบน้ำตาม flow ปัจจุบันของ route, manual refill, circulation และ alarm.<br>
+                ใช้หน้านี้สำหรับทดสอบ <strong>ของที่ firmware รองรับจริงตอนนี้</strong>: อ่านเซ็นเซอร์, ทดสอบปั๊มโดส A/B, เปิดปิดไฟผ่านรีเลย์, และทดสอบระบบน้ำตาม flow ปัจจุบันของเส้นทางเติม, การเติมน้ำด้วยมือ, ปั๊มหมุนน้ำ, และ alarm.<br>
                 ระหว่างทดสอบปั๊มโดส ระบบ automation จะ pause ชั่วคราวและ resume เองหลัง test จบ.
             </div>
 
             <div class="summary-grid">
                 <div class="summary-card">
-                    <div class="summary-label">ESP Status</div>
-                    <div class="summary-value" id="sumEspStatus">Unknown</div>
-                    <div class="summary-sub" id="sumEspSub">Waiting for live dashboard data</div>
+                    <div class="summary-label">สถานะ ESP</div>
+                    <div class="summary-value" id="sumEspStatus">ไม่ทราบ</div>
+                    <div class="summary-sub" id="sumEspSub">กำลังรอข้อมูลสดจาก dashboard</div>
                 </div>
                 <div class="summary-card">
-                    <div class="summary-label">Automation</div>
-                    <div class="summary-value" id="sumAutoState">Unknown</div>
-                    <div class="summary-sub" id="sumAutoSub">No automation state yet</div>
+                    <div class="summary-label">ออโตเมชัน</div>
+                    <div class="summary-value" id="sumAutoState">ไม่ทราบ</div>
+                    <div class="summary-sub" id="sumAutoSub">ยังไม่มีสถานะ automation</div>
                 </div>
                 <div class="summary-card">
-                    <div class="summary-label">Water System</div>
-                    <div class="summary-value" id="sumWaterState">Unknown</div>
-                    <div class="summary-sub" id="sumWaterSub">No water status yet</div>
+                    <div class="summary-label">ระบบน้ำ</div>
+                    <div class="summary-value" id="sumWaterState">ไม่ทราบ</div>
+                    <div class="summary-sub" id="sumWaterSub">ยังไม่มีสถานะระบบน้ำ</div>
                 </div>
                 <div class="summary-card">
-                    <div class="summary-label">Active Route</div>
-                    <div class="summary-value" id="sumRouteState">None</div>
-                    <div class="summary-sub" id="sumRouteSub">Preferred route not loaded yet</div>
+                    <div class="summary-label">เส้นทางที่ใช้งาน</div>
+                    <div class="summary-value" id="sumRouteState">ไม่มี</div>
+                    <div class="summary-sub" id="sumRouteSub">ยังไม่ได้โหลดค่าเส้นทางที่ต้องการ</div>
                 </div>
             </div>
 
             <div class="notice-banner" id="safeStopBanner" role="status" aria-live="polite">
                 <i class="fas fa-triangle-exclamation"></i>
                 <div>
-                    <strong>Safe Stop active:</strong> หน้า test นี้ได้ปิด <strong>auto refill</strong> ไว้เพื่อกันปั๊มเติมกลับมาทำงานเองหลัง stop.
-                    ถ้าจะกลับไปทดสอบ flow เติมน้ำต่อ ให้กด <strong>Enable Auto Refill</strong> อีกครั้งเมื่อพร้อม.
+                    <strong>โหมดหยุดอย่างปลอดภัยกำลังทำงาน:</strong> หน้านี้ได้ปิด <strong>การเติมน้ำอัตโนมัติ</strong> ไว้เพื่อกันปั๊มเติมกลับมาทำงานเองหลังสั่งหยุด.
+                    ถ้าจะกลับไปทดสอบ flow เติมน้ำต่อ ให้กด <strong>เปิดการเติมน้ำอัตโนมัติ</strong> อีกครั้งเมื่อพร้อม.
                 </div>
             </div>
 
             <div class="split-grid">
                 <div class="card">
                     <div class="section-head">
-                        <div class="section-title"><i class="fas fa-wave-square"></i> Sensor Snapshot</div>
-                        <button class="test-btn primary" id="btnReadSensors" onclick="runSensorRead()"><i class="fas fa-rotate"></i> Read All Sensors</button>
+                        <div class="section-title"><i class="fas fa-wave-square"></i> สแนปช็อตเซ็นเซอร์</div>
+                        <button class="test-btn primary" id="btnReadSensors" onclick="runSensorRead()"><i class="fas fa-rotate"></i> อ่านทุกเซ็นเซอร์</button>
                     </div>
                     <div class="section-note">สั่ง ESP32 อ่านค่า sensor ณ ตอนนั้นทันที และแสดง snapshot แยกจาก live dashboard ปกติ</div>
                     <div class="sensor-grid" id="sensorResults">
-                        <div class="sensor-item"><div class="sensor-label">Water Temp</div><div class="sensor-value" id="srWater">-</div></div>
-                        <div class="sensor-item"><div class="sensor-label">Air Temp</div><div class="sensor-value" id="srAir">-</div></div>
-                        <div class="sensor-item"><div class="sensor-label">Humidity</div><div class="sensor-value" id="srHumid">-</div></div>
+                        <div class="sensor-item"><div class="sensor-label">อุณหภูมิน้ำ</div><div class="sensor-value" id="srWater">-</div></div>
+                        <div class="sensor-item"><div class="sensor-label">อุณหภูมิอากาศ</div><div class="sensor-value" id="srAir">-</div></div>
+                        <div class="sensor-item"><div class="sensor-label">ความชื้น</div><div class="sensor-value" id="srHumid">-</div></div>
                         <div class="sensor-item"><div class="sensor-label">TDS</div><div class="sensor-value" id="srTds">-</div></div>
                         <div class="sensor-item"><div class="sensor-label">pH</div><div class="sensor-value" id="srPh">-</div></div>
-                        <div class="sensor-item"><div class="sensor-label">Light</div><div class="sensor-value" id="srLight">-</div></div>
+                        <div class="sensor-item"><div class="sensor-label">แสง</div><div class="sensor-value" id="srLight">-</div></div>
                     </div>
                     <div class="action-group">
-                        <div class="group-label">Last Sensor Test</div>
-                        <div class="result-line" id="sensorStatusLine">Idle</div>
+                        <div class="group-label">การทดสอบเซ็นเซอร์ล่าสุด</div>
+                        <div class="result-line" id="sensorStatusLine">พร้อม</div>
                     </div>
                 </div>
 
                 <div class="card">
                     <div class="section-head">
-                        <div class="section-title"><i class="fas fa-circle-info"></i> Test Safety</div>
+                        <div class="section-title"><i class="fas fa-circle-info"></i> ขอบเขตการทดสอบ</div>
                     </div>
-                    <div class="section-note">หน้าทดสอบนี้ตั้งใจให้ตรงกับ feature ปัจจุบันของ firmware: ไม่มี water pump test แบบเก่าแล้ว เพราะ flow น้ำตอนนี้ควบคุมผ่าน water system state machine ไม่ใช่ command test แยกตัว</div>
+                    <div class="section-note">หน้าทดสอบนี้ตั้งใจให้ตรงกับความสามารถปัจจุบันของ firmware: ไม่มี water pump test แบบเก่าแล้ว เพราะ flow น้ำตอนนี้ควบคุมผ่าน water system state machine ไม่ใช่ command test แยกตัว</div>
                     <div class="water-status-grid">
-                        <div class="water-stat"><div class="water-stat-label">Dosing Test</div><div class="water-stat-value">Pump A / B only</div></div>
-                        <div class="water-stat"><div class="water-stat-label">Light Test</div><div class="water-stat-value">Relay ON / OFF</div></div>
-                        <div class="water-stat"><div class="water-stat-label">Fan Test</div><div class="water-stat-value">Manual ON / OFF / AUTO</div></div>
-                        <div class="water-stat"><div class="water-stat-label">Water Test</div><div class="water-stat-value">Config + Manual Actions</div></div>
-                        <div class="water-stat"><div class="water-stat-label">Safe Stop</div><div class="water-stat-value">Pump Stop + Light Off + Fan OFF + Refill OFF</div></div>
+                        <div class="water-stat"><div class="water-stat-label">ปั๊มโดส</div><div class="water-stat-value">เฉพาะ Pump A / B</div></div>
+                        <div class="water-stat"><div class="water-stat-label">ไฟ</div><div class="water-stat-value">รีเลย์ เปิด / ปิด</div></div>
+                        <div class="water-stat"><div class="water-stat-label">พัดลม</div><div class="water-stat-value">Manual เปิด / ปิด / AUTO</div></div>
+                        <div class="water-stat"><div class="water-stat-label">ระบบน้ำ</div><div class="water-stat-value">Config + สั่งงานด้วยมือ</div></div>
+                        <div class="water-stat"><div class="water-stat-label">หยุดอย่างปลอดภัย</div><div class="water-stat-value">หยุดปั๊ม + ปิดไฟ + ปิดพัดลม + ปิดเติมน้ำ</div></div>
                     </div>
                 </div>
             </div>
@@ -515,19 +515,19 @@
                 <div class="test-tile" id="tilePumpA">
                     <div class="tile-head">
                         <div>
-                            <div class="tile-title"><i class="fas fa-flask"></i> Pump A Test</div>
+                            <div class="tile-title"><i class="fas fa-flask"></i> ทดสอบปั๊ม A</div>
                             <div class="tile-subtitle" id="pumpASubtitle">ทดสอบปั๊มโดส Nutrient A ตามสเปกปั๊มจริงผ่าน GPIO 10</div>
                         </div>
-                        <div class="state-pill" id="pumpAState">Idle</div>
+                        <div class="state-pill" id="pumpAState">พร้อม</div>
                     </div>
                     <div class="progress-wrap">
-                        <div class="progress-meta"><span>Remaining</span><span id="pumpATime">--</span></div>
+                        <div class="progress-meta"><span>เวลาที่เหลือ</span><span id="pumpATime">--</span></div>
                         <div class="progress-bar"><span id="pumpABar"></span></div>
                     </div>
-                    <div class="result-line" id="pumpAResult">Ready</div>
+                    <div class="result-line" id="pumpAResult">พร้อม</div>
                     <div class="action-group">
                         <div class="action-row">
-                            <button class="test-btn primary" id="btnPumpA" onclick="runPumpTest('pump_a')"><i class="fas fa-play"></i> Run Pump A</button>
+                            <button class="test-btn primary" id="btnPumpA" onclick="runPumpTest('pump_a')"><i class="fas fa-play"></i> เริ่มปั๊ม A</button>
                         </div>
                     </div>
                 </div>
@@ -535,19 +535,19 @@
                 <div class="test-tile" id="tilePumpB">
                     <div class="tile-head">
                         <div>
-                            <div class="tile-title"><i class="fas fa-flask"></i> Pump B Test</div>
+                            <div class="tile-title"><i class="fas fa-flask"></i> ทดสอบปั๊ม B</div>
                             <div class="tile-subtitle" id="pumpBSubtitle">ทดสอบปั๊มโดส Nutrient B ตามสเปกปั๊มจริงผ่าน GPIO 11</div>
                         </div>
-                        <div class="state-pill" id="pumpBState">Idle</div>
+                        <div class="state-pill" id="pumpBState">พร้อม</div>
                     </div>
                     <div class="progress-wrap">
-                        <div class="progress-meta"><span>Remaining</span><span id="pumpBTime">--</span></div>
+                        <div class="progress-meta"><span>เวลาที่เหลือ</span><span id="pumpBTime">--</span></div>
                         <div class="progress-bar"><span id="pumpBBar"></span></div>
                     </div>
-                    <div class="result-line" id="pumpBResult">Ready</div>
+                    <div class="result-line" id="pumpBResult">พร้อม</div>
                     <div class="action-group">
                         <div class="action-row">
-                            <button class="test-btn primary" id="btnPumpB" onclick="runPumpTest('pump_b')"><i class="fas fa-play"></i> Run Pump B</button>
+                            <button class="test-btn primary" id="btnPumpB" onclick="runPumpTest('pump_b')"><i class="fas fa-play"></i> เริ่มปั๊ม B</button>
                         </div>
                     </div>
                 </div>
@@ -555,16 +555,16 @@
                 <div class="test-tile" id="tileLight">
                     <div class="tile-head">
                         <div>
-                            <div class="tile-title"><i class="fas fa-lightbulb"></i> Light Relay Test</div>
+                            <div class="tile-title"><i class="fas fa-lightbulb"></i> ทดสอบรีเลย์ไฟ</div>
                             <div class="tile-subtitle">ทดสอบเปิดปิดรีเลย์ไฟปลูกผ่าน light controller</div>
                         </div>
-                        <div class="state-pill" id="lightState">Unknown</div>
+                        <div class="state-pill" id="lightState">ไม่ทราบ</div>
                     </div>
-                    <div class="result-line" id="lightResult">Waiting for command</div>
+                    <div class="result-line" id="lightResult">รอคำสั่ง</div>
                     <div class="action-group">
                         <div class="action-row">
-                            <button class="test-btn warn" onclick="runLightTest('light_on')"><i class="fas fa-sun"></i> Light ON</button>
-                            <button class="test-btn" onclick="runLightTest('light_off')"><i class="fas fa-moon"></i> Light OFF</button>
+                            <button class="test-btn warn" onclick="runLightTest('light_on')"><i class="fas fa-sun"></i> เปิดไฟ</button>
+                            <button class="test-btn" onclick="runLightTest('light_off')"><i class="fas fa-moon"></i> ปิดไฟ</button>
                         </div>
                     </div>
                 </div>
@@ -572,17 +572,17 @@
                 <div class="test-tile" id="tileFan">
                     <div class="tile-head">
                         <div>
-                            <div class="tile-title"><i class="fas fa-fan"></i> Exhaust Fan Test</div>
+                            <div class="tile-title"><i class="fas fa-fan"></i> ทดสอบพัดลมระบายอากาศ</div>
                             <div class="tile-subtitle">สั่งพัดลมแบบ manual ON/OFF หรือคืนโหมด AUTO เพื่อตรวจ relay และ logic ควบคุม</div>
                         </div>
-                        <div class="state-pill" id="fanState">Unknown</div>
+                        <div class="state-pill" id="fanState">ไม่ทราบ</div>
                     </div>
-                    <div class="result-line" id="fanResult">Waiting for command</div>
+                    <div class="result-line" id="fanResult">รอคำสั่ง</div>
                     <div class="action-group">
                         <div class="action-row">
-                            <button class="test-btn warn" onclick="runFanTest('fan_on')"><i class="fas fa-wind"></i> Fan ON</button>
-                            <button class="test-btn" onclick="runFanTest('fan_off')"><i class="fas fa-stop"></i> Fan OFF</button>
-                            <button class="test-btn" onclick="runFanTest('fan_auto')"><i class="fas fa-rotate"></i> Fan AUTO</button>
+                            <button class="test-btn warn" onclick="runFanTest('fan_on')"><i class="fas fa-wind"></i> เปิดพัดลม</button>
+                            <button class="test-btn" onclick="runFanTest('fan_off')"><i class="fas fa-stop"></i> ปิดพัดลม</button>
+                            <button class="test-btn" onclick="runFanTest('fan_auto')"><i class="fas fa-rotate"></i> โหมด AUTO</button>
                         </div>
                     </div>
                 </div>
@@ -590,15 +590,15 @@
                 <div class="test-tile" id="tileFeeder">
                     <div class="tile-head">
                         <div>
-                            <div class="tile-title"><i class="fas fa-fish"></i> Fish Feeder Test</div>
+                            <div class="tile-title"><i class="fas fa-fish"></i> ทดสอบเครื่องให้อาหารปลา</div>
                             <div class="tile-subtitle">สั่งให้ feeder ทำงาน 1 cycle เพื่อตรวจ output ของชุดให้อาหารปลา</div>
                         </div>
-                        <div class="state-pill" id="feederState">Unknown</div>
+                        <div class="state-pill" id="feederState">ไม่ทราบ</div>
                     </div>
-                    <div class="result-line" id="feederResult">Waiting for command</div>
+                    <div class="result-line" id="feederResult">รอคำสั่ง</div>
                     <div class="action-group">
                         <div class="action-row">
-                            <button class="test-btn warn" onclick="runFeederTest()"><i class="fas fa-bowl-food"></i> Feed Once</button>
+                            <button class="test-btn warn" onclick="runFeederTest()"><i class="fas fa-bowl-food"></i> ให้อาหาร 1 ครั้ง</button>
                         </div>
                     </div>
                 </div>
@@ -606,80 +606,86 @@
 
             <div class="card">
                 <div class="section-head">
-                    <div class="section-title"><i class="fas fa-water"></i> Water System Test</div>
-                    <button class="test-btn" onclick="refreshWaterConfig()"><i class="fas fa-arrows-rotate"></i> Refresh Water Config</button>
+                    <div class="section-title"><i class="fas fa-water"></i> ทดสอบระบบน้ำ</div>
+                    <button class="test-btn" onclick="refreshWaterConfig()"><i class="fas fa-arrows-rotate"></i> รีเฟรชค่าน้ำ</button>
                 </div>
-                <div class="section-note">ส่วนนี้ใช้ route/control เดียวกับหน้า settings: ปรับ config แล้วส่งไป ESP32, ดู state สด, และสั่ง manual refill หรือ clear alarm ได้ตรงจากหน้า test</div>
+                <div class="section-note">ส่วนนี้ใช้ logic เดียวกับหน้า settings: ปรับ config แล้วส่งไป ESP32, ดู state สด, และสั่งเติมน้ำด้วยมือหรือล้าง alarm ได้ตรงจากหน้า test</div>
 
                 <div class="water-status-grid">
-                    <div class="water-stat"><div class="water-stat-label">State</div><div class="water-stat-value" id="waterState">Unknown</div></div>
-                    <div class="water-stat"><div class="water-stat-label">Active Route</div><div class="water-stat-value" id="waterRoute">None</div></div>
-                    <div class="water-stat"><div class="water-stat-label">Alarm</div><div class="water-stat-value" id="waterAlarm">Unknown</div></div>
-                    <div class="water-stat"><div class="water-stat-label">Route Blocked</div><div class="water-stat-value" id="waterBlocked">Unknown</div></div>
-                    <div class="water-stat"><div class="water-stat-label">Circulation Output</div><div class="water-stat-value" id="waterCircOutput">Unknown</div></div>
-                    <div class="water-stat"><div class="water-stat-label">Refill Output</div><div class="water-stat-value" id="waterRefillOutput">Unknown</div></div>
-                    <div class="water-stat"><div class="water-stat-label">Sump Low</div><div class="water-stat-value" id="waterLow">Unknown</div></div>
-                    <div class="water-stat"><div class="water-stat-label">Sump High</div><div class="water-stat-value" id="waterHigh">Unknown</div></div>
-                    <div class="water-stat"><div class="water-stat-label">Overflow Alarm</div><div class="water-stat-value" id="waterOverflow">Unknown</div></div>
-                    <div class="water-stat"><div class="water-stat-label">Route Valve</div><div class="water-stat-value" id="waterValve">Unknown</div></div>
-                    <div class="water-stat wide"><div class="water-stat-label">Reason</div><div class="water-stat-value" id="waterReason">Waiting for water status</div></div>
+                    <div class="water-stat"><div class="water-stat-label">สถานะ</div><div class="water-stat-value" id="waterState">ไม่ทราบ</div></div>
+                    <div class="water-stat"><div class="water-stat-label">เส้นทางที่ใช้งาน</div><div class="water-stat-value" id="waterRoute">ไม่มี</div></div>
+                    <div class="water-stat"><div class="water-stat-label">แจ้งเตือน</div><div class="water-stat-value" id="waterAlarm">ไม่ทราบ</div></div>
+                    <div class="water-stat"><div class="water-stat-label">เส้นทางถูกบล็อก</div><div class="water-stat-value" id="waterBlocked">ไม่ทราบ</div></div>
+                    <div class="water-stat"><div class="water-stat-label">ปั๊มหมุนน้ำ</div><div class="water-stat-value" id="waterCircOutput">ไม่ทราบ</div></div>
+                    <div class="water-stat"><div class="water-stat-label">ปั๊มเติมน้ำรวม</div><div class="water-stat-value" id="waterRefillOutput">ไม่ทราบ</div></div>
+                    <div class="water-stat"><div class="water-stat-label">เติมผ่านตู้ปลา</div><div class="water-stat-value" id="waterFishRefill">ไม่ทราบ</div></div>
+                    <div class="water-stat"><div class="water-stat-label">เติมเข้าถังผสม</div><div class="water-stat-value" id="waterMixRefill">ไม่ทราบ</div></div>
+                    <div class="water-stat"><div class="water-stat-label">กำลังเจือจางน้ำ</div><div class="water-stat-value" id="waterDilution">ไม่ทราบ</div></div>
+                    <div class="water-stat"><div class="water-stat-label">ถังผสมกำลังนิ่งค่า</div><div class="water-stat-value" id="waterSettling">ไม่ทราบ</div></div>
+                    <div class="water-stat"><div class="water-stat-label">โซนควบคุมหลัก</div><div class="water-stat-value" id="waterMixZone">ไม่ทราบ</div></div>
+                    <div class="water-stat"><div class="water-stat-label">เวลารอค่าน้ำนิ่ง</div><div class="water-stat-value" id="waterDilutionHold">-</div></div>
+                    <div class="water-stat"><div class="water-stat-label">ระดับต่ำถังผสม</div><div class="water-stat-value" id="waterLow">ไม่ทราบ</div></div>
+                    <div class="water-stat"><div class="water-stat-label">ระดับสูงถังผสม</div><div class="water-stat-value" id="waterHigh">ไม่ทราบ</div></div>
+                    <div class="water-stat"><div class="water-stat-label">ล้นตู้ปลา</div><div class="water-stat-value" id="waterOverflow">ไม่ทราบ</div></div>
+                    <div class="water-stat"><div class="water-stat-label">วาล์วสลับทางเติม</div><div class="water-stat-value" id="waterValve">ไม่ทราบ</div></div>
+                    <div class="water-stat wide"><div class="water-stat-label">เหตุผล</div><div class="water-stat-value" id="waterReason">กำลังรอสถานะระบบน้ำ</div></div>
                 </div>
 
                 <div class="action-group">
-                    <div class="group-label">Circulation</div>
+                    <div class="group-label">ปั๊มหมุนน้ำ</div>
                     <div class="toggle-row">
-                        <button class="test-btn" id="btnCircOn" onclick="setCirculation(true)"><i class="fas fa-circle-play"></i> Circulation ON</button>
-                        <button class="test-btn" id="btnCircOff" onclick="setCirculation(false)"><i class="fas fa-circle-stop"></i> Circulation OFF</button>
+                        <button class="test-btn" id="btnCircOn" onclick="setCirculation(true)"><i class="fas fa-circle-play"></i> เปิดปั๊มหมุนน้ำ</button>
+                        <button class="test-btn" id="btnCircOff" onclick="setCirculation(false)"><i class="fas fa-circle-stop"></i> ปิดปั๊มหมุนน้ำ</button>
                     </div>
                 </div>
 
                 <div class="action-group">
-                    <div class="group-label">Auto Refill</div>
+                    <div class="group-label">เติมน้ำอัตโนมัติ</div>
                     <div class="toggle-row">
-                        <button class="test-btn" id="btnRefillAutoOn" onclick="setAutoRefill(true)"><i class="fas fa-droplet"></i> Enable Auto Refill</button>
-                        <button class="test-btn" id="btnRefillAutoOff" onclick="setAutoRefill(false)"><i class="fas fa-ban"></i> Disable Auto Refill</button>
+                        <button class="test-btn" id="btnRefillAutoOn" onclick="setAutoRefill(true)"><i class="fas fa-droplet"></i> เปิดการเติมน้ำอัตโนมัติ</button>
+                        <button class="test-btn" id="btnRefillAutoOff" onclick="setAutoRefill(false)"><i class="fas fa-ban"></i> ปิดการเติมน้ำอัตโนมัติ</button>
                     </div>
                 </div>
 
                 <div class="action-group">
-                    <div class="group-label">Preferred Route</div>
+                    <div class="group-label">เส้นทางเติมที่ต้องการ</div>
                     <div class="route-row">
                         <button class="test-btn" id="btnRouteAuto" onclick="setPreferredRoute('AUTO')"><i class="fas fa-wand-magic-sparkles"></i> AUTO</button>
-                        <button class="test-btn" id="btnRouteFish" onclick="setPreferredRoute('FISH_TANK')"><i class="fas fa-fish"></i> FISH TANK</button>
-                        <button class="test-btn" id="btnRouteSump" onclick="setPreferredRoute('SUMP_DIRECT')"><i class="fas fa-arrow-down-short-wide"></i> DIRECT SUMP</button>
+                        <button class="test-btn" id="btnRouteFish" onclick="setPreferredRoute('FISH_TANK')"><i class="fas fa-fish"></i> ผ่านตู้ปลา</button>
+                        <button class="test-btn" id="btnRouteSump" onclick="setPreferredRoute('SUMP_DIRECT')"><i class="fas fa-arrow-down-short-wide"></i> เข้าถังผสมตรง</button>
                     </div>
                 </div>
 
                 <div class="action-group">
-                    <div class="group-label">Direct Sump Fallback</div>
+                    <div class="group-label">อนุญาต fallback เข้าถังผสมตรง</div>
                     <div class="toggle-row">
-                        <button class="test-btn" id="btnDirectOn" onclick="setDirectFallback(true)"><i class="fas fa-check"></i> Allow Direct Fallback</button>
-                        <button class="test-btn" id="btnDirectOff" onclick="setDirectFallback(false)"><i class="fas fa-xmark"></i> Disable Direct Fallback</button>
+                        <button class="test-btn" id="btnDirectOn" onclick="setDirectFallback(true)"><i class="fas fa-check"></i> อนุญาต</button>
+                        <button class="test-btn" id="btnDirectOff" onclick="setDirectFallback(false)"><i class="fas fa-xmark"></i> ไม่อนุญาต</button>
                     </div>
                 </div>
 
                 <div class="action-group">
-                    <div class="group-label">Manual Actions</div>
+                    <div class="group-label">สั่งงานด้วยมือ</div>
                     <div class="action-row">
-                        <button class="test-btn success" onclick="setManualRefill(true)"><i class="fas fa-fill-drip"></i> Manual Refill ON</button>
-                        <button class="test-btn" onclick="setManualRefill(false)"><i class="fas fa-hand"></i> Manual Refill OFF</button>
-                        <button class="test-btn danger" onclick="clearWaterAlarm()"><i class="fas fa-shield"></i> Clear Alarm</button>
+                        <button class="test-btn success" onclick="setManualRefill(true)"><i class="fas fa-fill-drip"></i> เปิดเติมน้ำด้วยมือ</button>
+                        <button class="test-btn" onclick="setManualRefill(false)"><i class="fas fa-hand"></i> ปิดเติมน้ำด้วยมือ</button>
+                        <button class="test-btn danger" onclick="clearWaterAlarm()"><i class="fas fa-shield"></i> ล้าง Alarm</button>
                     </div>
                 </div>
             </div>
 
             <div class="card">
                 <div class="section-head">
-                    <div class="section-title"><i class="fas fa-hand"></i> Safe Stop</div>
+                    <div class="section-title"><i class="fas fa-hand"></i> หยุดอย่างปลอดภัย</div>
                 </div>
-                <div class="section-note">ใช้หยุด output ที่ทดสอบจากหน้า hw test โดยให้ฝั่งน้ำหยุดจริง: หยุดปั๊มโดส, ปิดไฟ, ปิด manual refill, และปิด auto refill เพื่อไม่ให้ปั๊มเติมกลับมาทำงานเอง</div>
+                <div class="section-note">ใช้หยุด output ที่ทดสอบจากหน้า hw test โดยให้ฝั่งน้ำหยุดจริง: หยุดปั๊มโดส, ปิดไฟ, ปิดการเติมน้ำด้วยมือ, และปิดการเติมน้ำอัตโนมัติ เพื่อไม่ให้ปั๊มเติมกลับมาทำงานเอง</div>
                 <div class="footer-actions">
-                    <button class="test-btn danger" onclick="safeStopAll()"><i class="fas fa-octagon-exclamation"></i> Stop Test Outputs</button>
+                    <button class="test-btn danger" onclick="safeStopAll()"><i class="fas fa-octagon-exclamation"></i> หยุด output ที่กำลังทดสอบ</button>
                 </div>
             </div>
 
             <div class="test-log">
-                <div class="test-log-title"><i class="fas fa-scroll"></i> Test Log</div>
+                <div class="test-log-title"><i class="fas fa-scroll"></i> บันทึกการทดสอบ</div>
                 <div id="logEntries"></div>
             </div>
         </div>
@@ -760,7 +766,7 @@
 
         function setPumpDisplay(key, state, result, timeText, progressWidth) {
             const upper = key.toUpperCase();
-            setTileState(`tilePump${upper}`, `pump${upper}State`, state, state === 'running' ? 'Running' : state === 'done' ? 'Done' : state === 'error' ? 'Error' : 'Idle');
+            setTileState(`tilePump${upper}`, `pump${upper}State`, state, formatTileStateLabel(state));
             document.getElementById(`pump${upper}Result`).textContent = result;
             document.getElementById(`pump${upper}Time`).textContent = timeText;
             document.getElementById(`pump${upper}Bar`).style.width = progressWidth;
@@ -799,7 +805,43 @@
         }
 
         function formatBool(value) {
-            return value ? 'YES' : 'NO';
+            return value ? 'ใช่' : 'ไม่';
+        }
+
+        function formatWaterState(value) {
+            const labels = {
+                DISABLED: 'ปิดระบบ',
+                CIRCULATION: 'หมุนน้ำ',
+                REFILLING: 'กำลังเติมน้ำ',
+                BLOCKED: 'ถูกบล็อก',
+                ALARM: 'แจ้งเตือน',
+                UNKNOWN: 'ไม่ทราบ'
+            };
+            return labels[value] || value || 'ไม่ทราบ';
+        }
+
+        function formatWaterRoute(value) {
+            const labels = {
+                AUTO: 'อัตโนมัติ',
+                FISH_TANK: 'ผ่านตู้ปลา',
+                SUMP_DIRECT: 'เข้าถังผสมตรง',
+                NONE: 'ไม่มี',
+                UNKNOWN: 'ไม่ทราบ'
+            };
+            return labels[value] || value || 'ไม่ทราบ';
+        }
+
+        function formatHoldMs(value) {
+            const seconds = Math.max(0, Math.round((value || 0) / 1000));
+            return `${seconds} วินาที`;
+        }
+
+        function formatTileStateLabel(state) {
+            if (state === 'running') return 'กำลังทำงาน';
+            if (state === 'done') return 'เสร็จแล้ว';
+            if (state === 'error') return 'ผิดพลาด';
+            if (state === 'warn') return 'เตือน';
+            return 'พร้อม';
         }
 
         function formatValue(value, suffix = '') {
@@ -819,7 +861,7 @@
         async function fetchSettings() {
             const response = await fetch('/api/settings', { cache: 'no-store' });
             if (!response.ok) {
-                throw new Error(`settings HTTP ${response.status}`);
+                throw new Error(`โหลดค่าตั้งต้นไม่สำเร็จ (HTTP ${response.status})`);
             }
             return response.json();
         }
@@ -849,6 +891,12 @@
                 route_blocked: liveSensors.route_blocked,
                 circ_running: liveSensors.circ_running,
                 refill_running: liveSensors.refill_running,
+                fish_tank_refill_output: liveSensors.fish_tank_refill_output,
+                mix_tank_refill_output: liveSensors.mix_tank_refill_output,
+                water_dilution_active: liveSensors.water_dilution_active,
+                mix_tank_settling_active: liveSensors.mix_tank_settling_active,
+                mix_tank_control_zone: liveSensors.mix_tank_control_zone,
+                dilution_hold_remaining_ms: liveSensors.dilution_hold_remaining_ms,
                 sump_low: liveSensors.sump_low,
                 sump_high: liveSensors.sump_high,
                 fish_overflow: liveSensors.fish_overflow,
@@ -864,11 +912,11 @@
                 const settings = await fetchSettings();
                 applyWaterConfigFromSettings(settings);
                 if (!silent) {
-                    addLog('🔄 Refreshed water config from Pi settings');
+                    addLog('🔄 รีเฟรชค่าน้ำจากการตั้งค่าบน Pi แล้ว');
                 }
             } catch (error) {
                 if (!silent) {
-                    addLog(`❌ Failed to load water config: ${error.message}`);
+                    addLog(`❌ โหลดสถานะระบบน้ำไม่สำเร็จ: ${error.message}`);
                 }
             }
         }
@@ -894,17 +942,23 @@
             const liveWater = getLiveWaterState();
             const status = { ...waterConfig, ...waterStatus };
 
-            const stateText = liveWater.state || status.state || 'Unknown';
-            const activeRoute = liveWater.active_route || status.active_route || liveWater.preferred_route || status.preferred_route || 'NONE';
+            const stateText = formatWaterState(liveWater.state || status.state || 'UNKNOWN');
+            const activeRoute = formatWaterRoute(liveWater.active_route || status.active_route || liveWater.preferred_route || status.preferred_route || 'NONE');
             const alarmActive = liveWater.water_alarm ?? status.alarm_active;
             const routeBlocked = liveWater.route_blocked ?? status.route_blocked;
-            const circOutput = liveWater.circ_running ?? status.circulation_output;
+            const circOutput = liveWater.circ_running ?? status.circulation_output ?? status.circulation_pump_output;
             const refillOutput = liveWater.refill_running ?? status.refill_output;
+            const fishTankRefill = liveWater.fish_tank_refill_output ?? status.fish_tank_refill_output;
+            const mixTankRefill = liveWater.mix_tank_refill_output ?? status.mix_tank_refill_output;
+            const waterDilution = liveWater.water_dilution_active ?? status.water_dilution_active;
+            const mixTankSettling = liveWater.mix_tank_settling_active ?? status.mix_tank_settling_active;
+            const mixTankControlZone = liveWater.mix_tank_control_zone ?? status.mix_tank_control_zone ?? true;
+            const dilutionHold = liveWater.dilution_hold_remaining_ms ?? status.dilution_hold_remaining_ms ?? 0;
             const sumpLow = liveWater.sump_low ?? status.sump_low;
             const sumpHigh = liveWater.sump_high ?? status.sump_high;
             const overflowAlarm = liveWater.fish_overflow ?? status.overflow_alarm;
-            const reasonText = liveWater.reason || status.reason || 'Waiting for water status';
-            const preferredRoute = liveWater.preferred_route || status.preferred_route || waterConfig.preferred_route || 'UNKNOWN';
+            const reasonText = liveWater.reason || status.reason || 'กำลังรอสถานะระบบน้ำ';
+            const preferredRoute = formatWaterRoute(liveWater.preferred_route || status.preferred_route || waterConfig.preferred_route || 'UNKNOWN');
             const directFallback = liveWater.allow_direct_sump_refill ?? status.allow_direct_sump_refill ?? waterConfig.allow_direct_sump_refill;
 
             document.getElementById('waterState').textContent = stateText;
@@ -913,16 +967,22 @@
             document.getElementById('waterBlocked').textContent = formatBool(Boolean(routeBlocked));
             document.getElementById('waterCircOutput').textContent = formatBool(Boolean(circOutput));
             document.getElementById('waterRefillOutput').textContent = formatBool(Boolean(refillOutput));
+            document.getElementById('waterFishRefill').textContent = formatBool(Boolean(fishTankRefill));
+            document.getElementById('waterMixRefill').textContent = formatBool(Boolean(mixTankRefill));
+            document.getElementById('waterDilution').textContent = formatBool(Boolean(waterDilution));
+            document.getElementById('waterSettling').textContent = formatBool(Boolean(mixTankSettling));
+            document.getElementById('waterMixZone').textContent = formatBool(Boolean(mixTankControlZone));
+            document.getElementById('waterDilutionHold').textContent = formatHoldMs(dilutionHold);
             document.getElementById('waterLow').textContent = formatBool(Boolean(sumpLow));
             document.getElementById('waterHigh').textContent = formatBool(Boolean(sumpHigh));
             document.getElementById('waterOverflow').textContent = formatBool(Boolean(overflowAlarm));
-            document.getElementById('waterValve').textContent = status.has_route_valve ? (status.route_valve_output ? 'DIRECT SUMP' : 'FISH TANK') : 'NO VALVE';
+            document.getElementById('waterValve').textContent = status.has_route_valve ? (status.route_valve_output ? 'เข้าถังผสมตรง' : 'ผ่านตู้ปลา') : 'ไม่มีวาล์ว';
             document.getElementById('waterReason').textContent = reasonText;
 
             document.getElementById('sumWaterState').textContent = stateText;
             document.getElementById('sumWaterSub').textContent = reasonText;
             document.getElementById('sumRouteState').textContent = activeRoute;
-            document.getElementById('sumRouteSub').textContent = `Preferred: ${preferredRoute} | Direct fallback: ${directFallback ? 'ON' : 'OFF'}`;
+            document.getElementById('sumRouteSub').textContent = `ต้องการ: ${preferredRoute} | fallback ตรง: ${directFallback ? 'เปิด' : 'ปิด'} | เจือจางน้ำ: ${waterDilution ? 'ใช่' : 'ไม่'}`;
         }
 
         async function getLatestWaterSettings() {
@@ -951,7 +1011,7 @@
             });
             const result = await response.json();
             if (result.status !== 'ok') {
-                throw new Error(result.message || 'Water config failed');
+                throw new Error(result.message || 'บันทึกค่าระบบน้ำไม่สำเร็จ');
             }
 
             waterConfig = {
@@ -971,149 +1031,149 @@
 
         async function setCirculation(enabled) {
             try {
-                await saveWaterConfig({ circulation_enabled: enabled }, `Circulation ${enabled ? 'enabled' : 'disabled'}`);
+                await saveWaterConfig({ circulation_enabled: enabled }, `ปั๊มหมุนน้ำ${enabled ? 'เปิด' : 'ปิด'}แล้ว`);
             } catch (error) {
-                addLog(`❌ Failed to change circulation: ${error.message}`);
+                addLog(`❌ เปลี่ยนสถานะปั๊มหมุนน้ำไม่สำเร็จ: ${error.message}`);
             }
         }
 
         async function setAutoRefill(enabled) {
             try {
-                await saveWaterConfig({ refill_enabled: enabled }, `Auto refill ${enabled ? 'enabled' : 'disabled'}`);
+                await saveWaterConfig({ refill_enabled: enabled }, `การเติมน้ำอัตโนมัติ${enabled ? 'เปิด' : 'ปิด'}แล้ว`);
                 if (enabled) {
                     safeStopNoticeActive = false;
                     renderSafeStopBanner();
                 }
             } catch (error) {
-                addLog(`❌ Failed to change auto refill: ${error.message}`);
+                addLog(`❌ เปลี่ยนสถานะการเติมน้ำอัตโนมัติไม่สำเร็จ: ${error.message}`);
             }
         }
 
         async function setPreferredRoute(route) {
             try {
-                await saveWaterConfig({ preferred_route: route }, `Preferred route set to ${route}`);
+                await saveWaterConfig({ preferred_route: route }, `เปลี่ยนเส้นทางเติมเป็น ${formatWaterRoute(route)}`);
             } catch (error) {
-                addLog(`❌ Failed to change route: ${error.message}`);
+                addLog(`❌ เปลี่ยนเส้นทางเติมไม่สำเร็จ: ${error.message}`);
             }
         }
 
         async function setDirectFallback(enabled) {
             try {
-                await saveWaterConfig({ allow_direct_sump_refill: enabled }, `Direct sump fallback ${enabled ? 'enabled' : 'disabled'}`);
+                await saveWaterConfig({ allow_direct_sump_refill: enabled }, `${enabled ? 'อนุญาต' : 'ปิด'} fallback เข้าถังผสมตรงแล้ว`);
             } catch (error) {
-                addLog(`❌ Failed to change direct fallback: ${error.message}`);
+                addLog(`❌ เปลี่ยน direct fallback ไม่สำเร็จ: ${error.message}`);
             }
         }
 
         async function setManualRefill(enabled) {
             try {
-                await saveWaterConfig({ manual_refill: enabled }, `Manual refill ${enabled ? 'started' : 'stopped'}`);
+                await saveWaterConfig({ manual_refill: enabled }, `เติมน้ำด้วยมือ${enabled ? 'เริ่มทำงาน' : 'หยุดแล้ว'}`);
             } catch (error) {
-                addLog(`❌ Failed to change manual refill: ${error.message}`);
+                addLog(`❌ เปลี่ยนสถานะเติมน้ำด้วยมือไม่สำเร็จ: ${error.message}`);
             }
         }
 
         async function clearWaterAlarm() {
             try {
-                await saveWaterConfig({ manual_refill: false, clear_alarm: true }, 'Clear water alarm sent');
+                await saveWaterConfig({ manual_refill: false, clear_alarm: true }, 'ส่งคำสั่งล้าง alarm ระบบน้ำแล้ว');
             } catch (error) {
-                addLog(`❌ Failed to clear water alarm: ${error.message}`);
+                addLog(`❌ ล้าง alarm ระบบน้ำไม่สำเร็จ: ${error.message}`);
             }
         }
 
         async function runSensorRead() {
             const button = document.getElementById('btnReadSensors');
             button.disabled = true;
-            document.getElementById('sensorStatusLine').textContent = 'Reading sensors...';
-            addLog('📡 Requesting sensor snapshot');
+            document.getElementById('sensorStatusLine').textContent = 'กำลังอ่านค่าเซ็นเซอร์...';
+            addLog('📡 ขออ่านสแนปช็อตเซ็นเซอร์');
 
             try {
                 const result = await sendHwCommand('read_sensors');
                 if (result.status !== 'ok') {
-                    throw new Error(result.message || 'read_sensors failed');
+                    throw new Error(result.message || 'อ่านเซ็นเซอร์ไม่สำเร็จ');
                 }
             } catch (error) {
-                document.getElementById('sensorStatusLine').textContent = `Error: ${error.message}`;
-                addLog(`❌ Sensor read request failed: ${error.message}`);
+                document.getElementById('sensorStatusLine').textContent = `ผิดพลาด: ${error.message}`;
+                addLog(`❌ ขออ่านเซ็นเซอร์ไม่สำเร็จ: ${error.message}`);
                 button.disabled = false;
             }
         }
 
         async function runLightTest(cmd) {
-            setTileState('tileLight', 'lightState', 'running', 'Sending');
-            document.getElementById('lightResult').textContent = `Sending ${cmd}...`;
-            addLog(`💡 Sending ${cmd}`);
+            setTileState('tileLight', 'lightState', 'running', 'กำลังส่ง');
+            document.getElementById('lightResult').textContent = `กำลังส่งคำสั่ง ${cmd}...`;
+            addLog(`💡 กำลังส่ง ${cmd}`);
 
             try {
                 const result = await sendHwCommand(cmd);
                 if (result.status !== 'ok') {
-                    throw new Error(result.message || `${cmd} failed`);
+                    throw new Error(result.message || `ส่งคำสั่ง ${cmd} ไม่สำเร็จ`);
                 }
             } catch (error) {
-                setTileState('tileLight', 'lightState', 'error', 'Error');
+                setTileState('tileLight', 'lightState', 'error', 'ผิดพลาด');
                 document.getElementById('lightResult').textContent = error.message;
-                addLog(`❌ Light command failed: ${error.message}`);
+                addLog(`❌ ส่งคำสั่งไฟไม่สำเร็จ: ${error.message}`);
             }
         }
 
         async function runFanTest(cmd) {
-            setTileState('tileFan', 'fanState', 'running', 'Sending');
-            document.getElementById('fanResult').textContent = `Sending ${cmd}...`;
-            addLog(`🌬️ Sending ${cmd}`);
+            setTileState('tileFan', 'fanState', 'running', 'กำลังส่ง');
+            document.getElementById('fanResult').textContent = `กำลังส่งคำสั่ง ${cmd}...`;
+            addLog(`🌬️ กำลังส่ง ${cmd}`);
 
             try {
                 const result = await sendHwCommand(cmd);
                 if (result.status !== 'ok') {
-                    throw new Error(result.message || `${cmd} failed`);
+                    throw new Error(result.message || `ส่งคำสั่ง ${cmd} ไม่สำเร็จ`);
                 }
             } catch (error) {
-                setTileState('tileFan', 'fanState', 'error', 'Error');
+                setTileState('tileFan', 'fanState', 'error', 'ผิดพลาด');
                 document.getElementById('fanResult').textContent = error.message;
-                addLog(`❌ Fan command failed: ${error.message}`);
+                addLog(`❌ ส่งคำสั่งพัดลมไม่สำเร็จ: ${error.message}`);
             }
         }
 
         async function runFeederTest() {
             const feederDuration = 2000;
-            setTileState('tileFeeder', 'feederState', 'running', 'Sending');
-            document.getElementById('feederResult').textContent = 'Sending feeder_feed...';
-            addLog('🐟 Sending feeder_feed');
+            setTileState('tileFeeder', 'feederState', 'running', 'กำลังส่ง');
+            document.getElementById('feederResult').textContent = 'กำลังส่ง feeder_feed...';
+            addLog('🐟 กำลังส่ง feeder_feed');
 
             try {
                 const result = await sendHwCommand('feeder_feed', feederDuration);
                 if (result.status !== 'ok') {
-                    throw new Error(result.message || 'feeder_feed failed');
+                    throw new Error(result.message || 'สั่งเครื่องให้อาหารปลาไม่สำเร็จ');
                 }
             } catch (error) {
-                setTileState('tileFeeder', 'feederState', 'error', 'Error');
+                setTileState('tileFeeder', 'feederState', 'error', 'ผิดพลาด');
                 document.getElementById('feederResult').textContent = error.message;
-                addLog(`❌ Feeder command failed: ${error.message}`);
+                addLog(`❌ ส่งคำสั่งเครื่องให้อาหารไม่สำเร็จ: ${error.message}`);
             }
         }
 
         async function runPumpTest(cmd) {
             const key = cmd.replace('pump_', '');
             if (activePumpKey) {
-                addLog(`⚠️ Pump ${activePumpKey.toUpperCase()} test is still running`);
+                addLog(`⚠️ การทดสอบปั๊ม ${activePumpKey.toUpperCase()} ยังไม่จบ`);
                 return;
             }
 
             const upper = key.toUpperCase();
             activePumpKey = key;
             setPumpButtonsDisabled(true);
-            setPumpDisplay(key, 'running', 'Pump running...', `${(PUMP_DURATION / 1000).toFixed(1)}s`, '0%');
-            addLog(`🧪 Starting Pump ${upper} test for ${PUMP_DURATION / 1000}s`);
+            setPumpDisplay(key, 'running', 'ปั๊มกำลังทำงาน...', `${(PUMP_DURATION / 1000).toFixed(1)}s`, '0%');
+            addLog(`🧪 เริ่มทดสอบปั๊ม ${upper} เป็นเวลา ${PUMP_DURATION / 1000}s`);
 
             try {
                 const result = await sendHwCommand(cmd, PUMP_DURATION);
                 if (result.status !== 'ok') {
-                    throw new Error(result.message || `${cmd} failed`);
+                    throw new Error(result.message || `ส่งคำสั่ง ${cmd} ไม่สำเร็จ`);
                 }
             } catch (error) {
                 activePumpKey = null;
                 setPumpButtonsDisabled(false);
                 setPumpDisplay(key, 'error', error.message, `${(PUMP_DURATION / 1000).toFixed(1)}s`, '0%');
-                addLog(`❌ Pump ${upper} request failed: ${error.message}`);
+                addLog(`❌ เริ่มทดสอบปั๊ม ${upper} ไม่สำเร็จ: ${error.message}`);
                 return;
             }
 
@@ -1136,20 +1196,20 @@
                     return;
                 }
 
-                addLog(`⚠️ Pump ${upper} did not report completion in time, sending fallback stop`);
-                await stopDosingTests('Fallback stop sent after timeout');
+                addLog(`⚠️ ปั๊ม ${upper} ไม่รายงานการจบงานตามเวลา กำลังส่ง fallback stop`);
+                await stopDosingTests('ส่ง fallback stop หลังหมดเวลาแล้ว');
             }, PUMP_DURATION + 1200);
         }
 
-        async function stopDosingTests(reason = 'Dosing pumps stop requested') {
+        async function stopDosingTests(reason = 'ส่งคำสั่งหยุดปั๊มโดสแล้ว') {
             try {
                 const result = await sendHwCommand('pump_stop');
                 if (result.status !== 'ok') {
-                    throw new Error(result.message || 'pump_stop failed');
+                    throw new Error(result.message || 'สั่งหยุดปั๊มโดสไม่สำเร็จ');
                 }
                 addLog(`🛑 ${reason}`);
             } catch (error) {
-                addLog(`❌ Failed to stop pumps: ${error.message}`);
+                addLog(`❌ หยุดปั๊มโดสไม่สำเร็จ: ${error.message}`);
             }
 
             ['a', 'b'].forEach((key) => {
@@ -1164,12 +1224,12 @@
             setPumpButtonsDisabled(false);
 
             ['a', 'b'].forEach((key) => {
-                setPumpDisplay(key, 'error', 'Stopped by stop command', `${(PUMP_DURATION / 1000).toFixed(1)}s`, '0%');
+                setPumpDisplay(key, 'error', 'หยุดด้วยคำสั่ง stop', `${(PUMP_DURATION / 1000).toFixed(1)}s`, '0%');
             });
         }
 
         async function safeStopAll() {
-            addLog('🛑 Safe stop requested');
+            addLog('🛑 ขอหยุดอย่างปลอดภัยแล้ว');
             await stopDosingTests();
             await runLightTest('light_off');
             await runFanTest('fan_off');
@@ -1177,11 +1237,11 @@
                 await saveWaterConfig({
                     manual_refill: false,
                     refill_enabled: false
-                }, 'Safe stop applied: manual refill OFF and auto refill disabled');
+                }, 'ใช้โหมดหยุดอย่างปลอดภัยแล้ว: ปิดการเติมน้ำด้วยมือและปิดการเติมน้ำอัตโนมัติ');
                 safeStopNoticeActive = true;
                 renderSafeStopBanner();
             } catch (error) {
-                addLog(`❌ Failed to stop water outputs: ${error.message}`);
+                addLog(`❌ หยุด output ฝั่งน้ำไม่สำเร็จ: ${error.message}`);
             }
         }
 
@@ -1191,13 +1251,13 @@
             const espStatus = sensors.esp_status || 'UNKNOWN';
             document.getElementById('sumEspStatus').textContent = espStatus;
             if (espStatus === 'ONLINE') {
-                document.getElementById('sumEspSub').textContent = `Last seen ${sensors.last_seen_sec ?? 0}s ago`;
+                document.getElementById('sumEspSub').textContent = `พบล่าสุดเมื่อ ${(sensors.last_seen_sec ?? 0)} วินาทีก่อน`;
             } else {
-                document.getElementById('sumEspSub').textContent = 'No recent sensor payload from ESP32';
+                document.getElementById('sumEspSub').textContent = 'ยังไม่มี payload ล่าสุดจาก ESP32';
             }
 
             document.getElementById('sumAutoState').textContent = sensors.auto_state || 'UNKNOWN';
-            document.getElementById('sumAutoSub').textContent = sensors.auto_reason || 'No automation reason';
+            document.getElementById('sumAutoSub').textContent = sensors.auto_reason || 'ยังไม่มีเหตุผลจาก automation';
 
             renderWaterStatus();
         }
@@ -1209,7 +1269,7 @@
 
             if (cmd === 'read_sensors' && status === 'ok') {
                 document.getElementById('btnReadSensors').disabled = false;
-                document.getElementById('sensorStatusLine').textContent = 'Snapshot updated';
+                document.getElementById('sensorStatusLine').textContent = 'อัปเดตสแนปช็อตแล้ว';
                 document.getElementById('srWater').textContent = formatValue(data.water_temp, ' C');
                 document.getElementById('srAir').textContent = formatValue(data.air_temp, ' C');
                 document.getElementById('srHumid').textContent = formatValue(data.humidity, '%');
@@ -1226,7 +1286,7 @@
                         clearInterval(pumpTimers[key]);
                         pumpTimers[key] = null;
                     }
-                    setPumpDisplay(key, 'error', 'Stopped', `${(PUMP_DURATION / 1000).toFixed(1)}s`, '0%');
+                    setPumpDisplay(key, 'error', 'หยุดแล้ว', `${(PUMP_DURATION / 1000).toFixed(1)}s`, '0%');
                 });
                 activePumpKey = null;
                 setPumpButtonsDisabled(false);
@@ -1234,42 +1294,42 @@
             }
 
             if (cmd === 'light_on' && status === 'on') {
-                setTileState('tileLight', 'lightState', 'done', 'On');
-                document.getElementById('lightResult').textContent = 'Relay turned ON';
+                setTileState('tileLight', 'lightState', 'done', 'เปิดแล้ว');
+                document.getElementById('lightResult').textContent = 'รีเลย์ไฟเปิดแล้ว';
                 return;
             }
 
             if (cmd === 'light_off' && status === 'off') {
-                setTileState('tileLight', 'lightState', 'done', 'Off');
-                document.getElementById('lightResult').textContent = 'Relay turned OFF';
+                setTileState('tileLight', 'lightState', 'done', 'ปิดแล้ว');
+                document.getElementById('lightResult').textContent = 'รีเลย์ไฟปิดแล้ว';
                 return;
             }
 
             if (cmd === 'fan_on' && status === 'on') {
-                setTileState('tileFan', 'fanState', 'done', 'On');
-                document.getElementById('fanResult').textContent = 'Fan forced to MANUAL ON';
+                setTileState('tileFan', 'fanState', 'done', 'เปิดแล้ว');
+                document.getElementById('fanResult').textContent = 'พัดลมถูกบังคับเป็น MANUAL ON';
                 return;
             }
 
             if (cmd === 'fan_off' && status === 'off') {
-                setTileState('tileFan', 'fanState', 'done', 'Off');
-                document.getElementById('fanResult').textContent = 'Fan forced to MANUAL OFF';
+                setTileState('tileFan', 'fanState', 'done', 'ปิดแล้ว');
+                document.getElementById('fanResult').textContent = 'พัดลมถูกบังคับเป็น MANUAL OFF';
                 return;
             }
 
             if (cmd === 'fan_auto' && status === 'auto') {
-                setTileState('tileFan', 'fanState', 'done', 'Auto');
-                document.getElementById('fanResult').textContent = 'Fan returned to AUTO mode';
+                setTileState('tileFan', 'fanState', 'done', 'AUTO');
+                document.getElementById('fanResult').textContent = 'พัดลมกลับสู่โหมด AUTO แล้ว';
                 return;
             }
 
             if (cmd === 'feeder_feed') {
                 if (status === 'feeding') {
-                    setTileState('tileFeeder', 'feederState', 'done', 'Feeding');
-                    document.getElementById('feederResult').textContent = 'Fish feeder cycle started';
+                    setTileState('tileFeeder', 'feederState', 'done', 'กำลังจ่ายอาหาร');
+                    document.getElementById('feederResult').textContent = 'เริ่มรอบการให้อาหารแล้ว';
                 } else if (status === 'error') {
-                    setTileState('tileFeeder', 'feederState', 'error', 'Error');
-                    document.getElementById('feederResult').textContent = data.message || 'Fish feeder unavailable';
+                    setTileState('tileFeeder', 'feederState', 'error', 'ผิดพลาด');
+                    document.getElementById('feederResult').textContent = data.message || 'ไม่สามารถใช้งานเครื่องให้อาหารปลาได้';
                 }
                 return;
             }
@@ -1277,10 +1337,10 @@
             if (cmd === 'pump_a' || cmd === 'pump_b') {
                 const key = cmd.replace('pump_', '');
                 if (status === 'completed') {
-                    finishPumpTestState(key, 'done', 'Completed normally', '0.0s', '100%');
+                    finishPumpTestState(key, 'done', 'ทำงานครบตามปกติ', '0.0s', '100%');
                 } else if (status === 'running') {
                     const upper = key.toUpperCase();
-                    document.getElementById(`pump${upper}Result`).textContent = `Running on GPIO ${data.gpio ?? '?'}`;
+                    document.getElementById(`pump${upper}Result`).textContent = `กำลังทำงานที่ GPIO ${data.gpio ?? '?'}`;
                 }
             }
         }
@@ -1293,7 +1353,7 @@
             handleHwTestResult(data);
         });
 
-        addLog('🔧 Hardware Test page loaded');
+        addLog('🔧 เปิดหน้าทดสอบฮาร์ดแวร์แล้ว');
         initializePumpTestUi();
         setPumpButtonsDisabled(false);
         refreshWaterConfig(true);

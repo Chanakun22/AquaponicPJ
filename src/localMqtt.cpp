@@ -704,7 +704,7 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
     
     _lastPublishTime = millis();
 
-    StaticJsonDocument<1536> doc;
+    StaticJsonDocument<1792> doc;
     
     // Format same as Netpie for consistency, or simpler flat JSON
     if (!isnan(waterTemp)) doc["water_temp"] = round(waterTemp * 10) / 10.0;
@@ -793,6 +793,13 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
     doc["active_route"] = waterSystemGetRouteString(waterStatus.activeRoute);
     doc["allow_direct_sump_refill"] = waterCfg.allowDirectSumpRefill;
     doc["route_blocked"] = waterStatus.routeBlocked;
+    doc["circulation_pump_output"] = waterStatus.circulationPumpOutput;
+    doc["fish_tank_refill_output"] = waterStatus.fishTankRefillOutput;
+    doc["mix_tank_refill_output"] = waterStatus.mixTankRefillOutput;
+    doc["water_dilution_active"] = waterStatus.waterDilutionActive;
+    doc["mix_tank_settling_active"] = waterStatus.mixTankSettlingActive;
+    doc["mix_tank_control_zone"] = waterStatus.mixTankControlZone;
+    doc["dilution_hold_remaining_ms"] = waterStatus.dilutionHoldRemainingMs;
     doc["sump_low"] = waterStatus.levelLow;
     doc["sump_high"] = waterStatus.levelHigh;
     doc["fish_overflow"] = waterStatus.overflowAlarm;
@@ -868,7 +875,7 @@ static void _publishWaterSystemStatus(void) {
     waterSystemGetConfig(&cfg);
     waterSystemGetStatus(&status);
 
-    StaticJsonDocument<384> doc;
+    StaticJsonDocument<640> doc;
     doc["circulation_enabled"] = cfg.circulationEnabled;
     doc["refill_enabled"] = cfg.refillEnabled;
     doc["manual_refill"] = cfg.manualRefill;
@@ -879,6 +886,13 @@ static void _publishWaterSystemStatus(void) {
     doc["reason"] = status.reason;
     doc["circulation_output"] = status.circulationOutput;
     doc["refill_output"] = status.refillOutput;
+    doc["circulation_pump_output"] = status.circulationPumpOutput;
+    doc["fish_tank_refill_output"] = status.fishTankRefillOutput;
+    doc["mix_tank_refill_output"] = status.mixTankRefillOutput;
+    doc["water_dilution_active"] = status.waterDilutionActive;
+    doc["mix_tank_settling_active"] = status.mixTankSettlingActive;
+    doc["mix_tank_control_zone"] = status.mixTankControlZone;
+    doc["dilution_hold_remaining_ms"] = status.dilutionHoldRemainingMs;
     doc["active_route"] = waterSystemGetRouteString(status.activeRoute);
     doc["route_valve_output"] = status.routeValveOutput;
     doc["sump_low"] = status.levelLow;
@@ -892,7 +906,7 @@ static void _publishWaterSystemStatus(void) {
     doc["has_route_valve"] = status.hasRouteValve;
     doc["route_blocked"] = status.routeBlocked;
 
-    char buffer[384];
+    char buffer[640];
     serializeJson(doc, buffer, sizeof(buffer));
     _localMqtt.publish(LOCAL_MQTT_TOPIC_STATUS_WATER_SYSTEM, buffer);
 }
