@@ -86,13 +86,16 @@ static void _showWaterSystem(CommandOutput_t out) {
 
     commandPrintf(out, "\r\n");
     commandPrintf(out, "========== WATER SYSTEM ==========\r\n");
-    commandPrintf(out, "  State           : %s\r\n", waterSystemGetStateString(status.state));
+    commandPrintf(out, "  State           : %s (%s)\r\n", waterSystemGetStateLabelTh(status.state), waterSystemGetStateString(status.state));
     commandPrintf(out, "  Reason          : %s\r\n", status.reason);
     commandPrintf(out, "  Circulation En  : %s\r\n", cfg.circulationEnabled ? "YES" : "NO");
     commandPrintf(out, "  Refill En       : %s\r\n", cfg.refillEnabled ? "YES" : "NO");
     commandPrintf(out, "  Manual Refill   : %s\r\n", cfg.manualRefill ? "YES" : "NO");
     commandPrintf(out, "  Preferred Route : %s\r\n", waterSystemGetRouteString(cfg.preferredRoute));
     commandPrintf(out, "  Allow Direct    : %s\r\n", cfg.allowDirectSumpRefill ? "YES" : "NO");
+    commandPrintf(out, "  Min Refill Gap  : %lu ms\r\n", cfg.refillMinIntervalMs);
+    commandPrintf(out, "  Fish Interval   : %lu ms\r\n", cfg.fishRefillIntervalMs);
+    commandPrintf(out, "  Fish Max Time   : %lu ms\r\n", cfg.fishRefillMaxRuntimeMs);
     commandPrintf(out, "  Active Route    : %s\r\n", waterSystemGetRouteString(status.activeRoute));
     commandPrintf(out, "  Circ Output     : %s\r\n", status.circulationOutput ? "ON" : "OFF");
     commandPrintf(out, "  Refill Output   : %s\r\n", status.refillOutput ? "ON" : "OFF");
@@ -101,6 +104,8 @@ static void _showWaterSystem(CommandOutput_t out) {
     commandPrintf(out, "  Sump High       : %s\r\n", status.levelHigh ? "TRIGGERED" : "NORMAL");
     commandPrintf(out, "  Overflow Alarm  : %s\r\n", status.overflowAlarm ? "TRIGGERED" : "NORMAL");
     commandPrintf(out, "  Route Blocked   : %s\r\n", status.routeBlocked ? "YES" : "NO");
+    commandPrintf(out, "  Fish Ready      : %s\r\n", status.fishRefillReady ? "YES" : "NO");
+    commandPrintf(out, "  Fish Wait Left  : %lu ms\r\n", status.fishRefillWaitRemainingMs);
     commandPrintf(out, "  Alarm Active    : %s\r\n", status.alarmActive ? "YES" : "NO");
     commandPrintf(out, "  Max Refill Time : %lu ms\r\n", cfg.refillMaxRuntimeMs);
     commandPrintf(out, "===============================\r\n");
@@ -444,13 +449,15 @@ static void _runSystemTest(CommandOutput_t out) {
         commandPrintf(out, "  Pump B (GPIO %2d) : %s\r\n", PUMP_NUTRIENT_B_PIN, 
                       (pinB == PUMP_OFF) ? "✅ OFF (idle)" : "⚠️  ON!");
         
-        if (pinA == PUMP_OFF && pinB == PUMP_OFF) {
+        bool allIdle = (pinA == PUMP_OFF && pinB == PUMP_OFF);
+
+        if (allIdle) {
             pass++;
         } else {
             warn++;
             commandPrintf(out, "  ⚠️  One or more pumps are active!\r\n");
         }
-        commandPrintf(out, "  Use 'pump a/b' to test, 'pump stop' to stop all\r\n");
+        commandPrintf(out, "  Use 'pump a', 'pump b', 'pump stop' to test or stop dosing pumps\r\n");
     }
     
     // ─── 5. AUTOMATOR ───────────────────────────────────────

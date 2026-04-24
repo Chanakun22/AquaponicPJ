@@ -26,8 +26,11 @@ static FishFeederStatus _status = {
     "Feeder not initialized"
 };
 static unsigned long _feedStartMs = 0;
+static unsigned long _feedPendingMs = 0;
 static unsigned long _lastLoopMs = 0;
 static int _lastTriggeredWeekMinute = -1;
+static bool _feedPending = false;
+static char _pendingReason[96] = "";
 
 static bool _hasOutput(void) {
 #if FISH_FEEDER_PIN >= 0
@@ -112,15 +115,16 @@ bool fishFeederStartManualFeed(const char* reason) {
         _setReason("Set FISH_FEEDER_PIN when feeder wiring is finalized");
         return false;
     }
-    if (_status.running) {
+    if (_status.running || _feedPending) {
         _setReason("Feed request ignored because feeder is already running");
         return false;
     }
 
-    _writeOutput(true);
-    _feedStartMs = millis();
+    snprintf(_pendingReason, sizeof(_pendingReason), "%s", reason != NULL ? reason : "Manual feed triggered");
+    _feedPending = true;
+    _feedPendingMs = millis();
     _status.state = FEEDER_STATE_FEEDING;
-    _setReason(reason != NULL ? reason : "Manual feed triggered");
+    _setReason("Feed request accepted, waiting 500 ms before trigger");
     return true;
 }
 
@@ -139,15 +143,23 @@ void fishFeederSetup(void) {
 }
 
 void fishFeederLoop(void) {
-    if (millis() - _lastLoopMs < FEEDER_CHECK_INTERVAL_MS) {
-        return;
-    }
-    _lastLoopMs = millis();
+    unsigned long now = millis();
 
     _status.hasOutput = _hasOutput();
 
+    if (_feedPending) {
+        if (now - _feedPendingMs >= FEEDER_ACTIVE_LOW_DELAY_MS) {
+            _writeOutput(true);
+            _feedStartMs = now;
+            _feedPending = false;
+            _status.state = FEEDER_STATE_FEEDING;
+            _setReason(_pendingReason[0] != '\0' ? _pendingReason : "Manual feed triggered");
+        }
+        return;
+    }
+
     if (_status.running) {
-        if (millis() - _feedStartMs >= _durationMs) {
+        if (now - _feedStartMs >= _durationMs) {
             _writeOutput(false);
             struct tm timeinfo;
             if (getLocalTime(&timeinfo, 10)) {
@@ -158,6 +170,11 @@ void fishFeederLoop(void) {
         }
         return;
     }
+
+    if (now - _lastLoopMs < FEEDER_CHECK_INTERVAL_MS) {
+        return;
+    }
+    _lastLoopMs = now;
 
     if (!_status.hasOutput) {
         _status.state = FEEDER_STATE_BLOCKED;
@@ -229,7 +246,8 @@ bool fishFeederAllowsLocalControl(void) {
 
 void fishFeederSetEnabled(bool enabled) {
     _enabled = enabled;
-    if (!_enabled && _status.running) {
+    if (!_enabled && (_status.running || _feedPending)) {
+        _feedPending = false;
         _writeOutput(false);
     }
     _saveConfig();

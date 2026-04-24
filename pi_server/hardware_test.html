@@ -613,12 +613,12 @@
 
                 <div class="water-status-grid">
                     <div class="water-stat"><div class="water-stat-label">สถานะ</div><div class="water-stat-value" id="waterState">ไม่ทราบ</div></div>
-                    <div class="water-stat"><div class="water-stat-label">เส้นทางที่ใช้งาน</div><div class="water-stat-value" id="waterRoute">ไม่มี</div></div>
+                    <div class="water-stat"><div class="water-stat-label">ช่องทางเติมจริง</div><div class="water-stat-value" id="waterRoute">เข้าถังผสมตรง</div></div>
                     <div class="water-stat"><div class="water-stat-label">แจ้งเตือน</div><div class="water-stat-value" id="waterAlarm">ไม่ทราบ</div></div>
                     <div class="water-stat"><div class="water-stat-label">เส้นทางถูกบล็อก</div><div class="water-stat-value" id="waterBlocked">ไม่ทราบ</div></div>
                     <div class="water-stat"><div class="water-stat-label">ปั๊มหมุนน้ำ</div><div class="water-stat-value" id="waterCircOutput">ไม่ทราบ</div></div>
                     <div class="water-stat"><div class="water-stat-label">ปั๊มเติมน้ำรวม</div><div class="water-stat-value" id="waterRefillOutput">ไม่ทราบ</div></div>
-                    <div class="water-stat"><div class="water-stat-label">เติมผ่านตู้ปลา</div><div class="water-stat-value" id="waterFishRefill">ไม่ทราบ</div></div>
+                    <div class="water-stat"><div class="water-stat-label">โซลินอยด์น้ำเข้าถังผสม</div><div class="water-stat-value" id="waterFishRefill">ไม่ทราบ</div></div>
                     <div class="water-stat"><div class="water-stat-label">เติมเข้าถังผสม</div><div class="water-stat-value" id="waterMixRefill">ไม่ทราบ</div></div>
                     <div class="water-stat"><div class="water-stat-label">กำลังเจือจางน้ำ</div><div class="water-stat-value" id="waterDilution">ไม่ทราบ</div></div>
                     <div class="water-stat"><div class="water-stat-label">ถังผสมกำลังนิ่งค่า</div><div class="water-stat-value" id="waterSettling">ไม่ทราบ</div></div>
@@ -648,20 +648,22 @@
                 </div>
 
                 <div class="action-group">
-                    <div class="group-label">เส้นทางเติมที่ต้องการ</div>
-                    <div class="route-row">
-                        <button class="test-btn" id="btnRouteAuto" onclick="setPreferredRoute('AUTO')"><i class="fas fa-wand-magic-sparkles"></i> AUTO</button>
-                        <button class="test-btn" id="btnRouteFish" onclick="setPreferredRoute('FISH_TANK')"><i class="fas fa-fish"></i> ผ่านตู้ปลา</button>
-                        <button class="test-btn" id="btnRouteSump" onclick="setPreferredRoute('SUMP_DIRECT')"><i class="fas fa-arrow-down-short-wide"></i> เข้าถังผสมตรง</button>
+                    <div class="group-label">เลือกเส้นทางเติมน้ำ</div>
+                    <div class="action-row" style="align-items:center; gap:10px; flex-wrap:wrap;">
+                        <select id="hwWaterPreferredRoute" style="flex:1; min-width:220px; padding:10px 12px; border-radius:12px; border:1px solid rgba(148, 163, 184, 0.24); background:#0c1727; color:#e8eefc;">
+                            <option value="AUTO">อัตโนมัติ</option>
+                            <option value="FISH_TANK">ผ่านตู้ปลา</option>
+                            <option value="SUMP_DIRECT">เข้าถังผสมตรง</option>
+                        </select>
+                        <button class="test-btn primary" onclick="applyWaterRouteConfig()"><i class="fas fa-route"></i> ใช้ route นี้</button>
                     </div>
-                </div>
-
-                <div class="action-group">
-                    <div class="group-label">อนุญาต fallback เข้าถังผสมตรง</div>
-                    <div class="toggle-row">
-                        <button class="test-btn" id="btnDirectOn" onclick="setDirectFallback(true)"><i class="fas fa-check"></i> อนุญาต</button>
-                        <button class="test-btn" id="btnDirectOff" onclick="setDirectFallback(false)"><i class="fas fa-xmark"></i> ไม่อนุญาต</button>
+                    <div class="toggle-row" style="margin-top:10px; align-items:center; gap:12px;">
+                        <label style="display:flex; align-items:center; gap:10px; color:#d9e4ff; font-size:0.95rem;">
+                            <input type="checkbox" id="hwWaterAllowDirectFallback">
+                            อนุญาต fallback เข้าถังผสมตรง
+                        </label>
                     </div>
+                    <div class="hint-box" id="hwWaterRouteHint">ใช้ตอนเลือก `อัตโนมัติ` เท่านั้น ถ้าเปิดไว้ระบบจะยอม fallback ไปทางเข้าถังผสมตรงเมื่อ route ผ่านตู้ปลาไม่พร้อม</div>
                 </div>
 
                 <div class="action-group">
@@ -702,8 +704,11 @@
             refill_enabled: false,
             manual_refill: false,
             refill_max_runtime_ms: 120000,
+            refill_min_interval_ms: 300000,
             preferred_route: 'AUTO',
-            allow_direct_sump_refill: true
+            allow_direct_sump_refill: true,
+            fish_refill_interval_ms: 604800000,
+            fish_refill_max_runtime_ms: 30000
         };
 
         const pumpTimers = { a: null, b: null };
@@ -810,9 +815,11 @@
 
         function formatWaterState(value) {
             const labels = {
-                DISABLED: 'ปิดระบบ',
-                CIRCULATION: 'หมุนน้ำ',
-                REFILLING: 'กำลังเติมน้ำ',
+                IDLE: 'พร้อมทำงาน',
+                MIX_TANK_REFILL: 'เติมถังน้ำผสม',
+                WAIT_REFILL_INTERVAL: 'รอช่วงกันเติมถี่',
+                MIX_TANK_SETTLING: 'รอให้น้ำในถังผสมนิ่ง',
+                FISH_TANK_REFILL: 'เติมผ่านตู้ปลา',
                 BLOCKED: 'ถูกบล็อก',
                 ALARM: 'แจ้งเตือน',
                 UNKNOWN: 'ไม่ทราบ'
@@ -834,6 +841,21 @@
         function formatHoldMs(value) {
             const seconds = Math.max(0, Math.round((value || 0) / 1000));
             return `${seconds} วินาที`;
+        }
+
+        function updateHwWaterRouteControls() {
+            const routeSelect = document.getElementById('hwWaterPreferredRoute');
+            const fallbackToggle = document.getElementById('hwWaterAllowDirectFallback');
+            const hint = document.getElementById('hwWaterRouteHint');
+            if (!routeSelect || !fallbackToggle || !hint) {
+                return;
+            }
+
+            const isAuto = routeSelect.value === 'AUTO';
+            fallbackToggle.disabled = !isAuto;
+            hint.textContent = isAuto
+                ? 'ใช้ตอนเลือก `อัตโนมัติ` เท่านั้น ถ้าเปิดไว้ระบบจะยอม fallback ไปทางเข้าถังผสมตรงเมื่อ route ผ่านตู้ปลาไม่พร้อม'
+                : 'ตอนนี้เลือก route แบบบังคับแล้ว ค่า fallback จะไม่ถูกใช้จนกว่าจะกลับมาเลือกโหมดอัตโนมัติ';
         }
 
         function formatTileStateLabel(state) {
@@ -875,9 +897,15 @@
                 refill_enabled: ws.refill_enabled ?? waterConfig.refill_enabled,
                 manual_refill: ws.manual_refill ?? waterConfig.manual_refill,
                 refill_max_runtime_ms: ws.refill_max_runtime_ms ?? waterConfig.refill_max_runtime_ms,
+                refill_min_interval_ms: ws.refill_min_interval_ms ?? waterConfig.refill_min_interval_ms,
                 preferred_route: ws.preferred_route ?? waterConfig.preferred_route,
-                allow_direct_sump_refill: ws.allow_direct_sump_refill ?? waterConfig.allow_direct_sump_refill
+                allow_direct_sump_refill: ws.allow_direct_sump_refill ?? waterConfig.allow_direct_sump_refill,
+                fish_refill_interval_ms: ws.fish_refill_interval_ms ?? waterConfig.fish_refill_interval_ms,
+                fish_refill_max_runtime_ms: ws.fish_refill_max_runtime_ms ?? waterConfig.fish_refill_max_runtime_ms
             };
+            document.getElementById('hwWaterPreferredRoute').value = waterConfig.preferred_route;
+            document.getElementById('hwWaterAllowDirectFallback').checked = waterConfig.allow_direct_sump_refill;
+            updateHwWaterRouteControls();
             waterStatus = { ...waterStatus, ...ws };
             renderWaterControls();
             renderWaterStatus();
@@ -897,6 +925,8 @@
                 mix_tank_settling_active: liveSensors.mix_tank_settling_active,
                 mix_tank_control_zone: liveSensors.mix_tank_control_zone,
                 dilution_hold_remaining_ms: liveSensors.dilution_hold_remaining_ms,
+                fish_refill_ready: liveSensors.fish_refill_ready,
+                fish_refill_wait_remaining_ms: liveSensors.fish_refill_wait_remaining_ms,
                 sump_low: liveSensors.sump_low,
                 sump_high: liveSensors.sump_high,
                 fish_overflow: liveSensors.fish_overflow,
@@ -926,11 +956,6 @@
             setButtonActive('btnCircOff', waterConfig.circulation_enabled === false);
             setButtonActive('btnRefillAutoOn', waterConfig.refill_enabled === true);
             setButtonActive('btnRefillAutoOff', waterConfig.refill_enabled === false);
-            setButtonActive('btnRouteAuto', waterConfig.preferred_route === 'AUTO');
-            setButtonActive('btnRouteFish', waterConfig.preferred_route === 'FISH_TANK');
-            setButtonActive('btnRouteSump', waterConfig.preferred_route === 'SUMP_DIRECT');
-            setButtonActive('btnDirectOn', waterConfig.allow_direct_sump_refill === true);
-            setButtonActive('btnDirectOff', waterConfig.allow_direct_sump_refill === false);
 
             if (waterConfig.refill_enabled === true) {
                 safeStopNoticeActive = false;
@@ -943,7 +968,9 @@
             const status = { ...waterConfig, ...waterStatus };
 
             const stateText = formatWaterState(liveWater.state || status.state || 'UNKNOWN');
-            const activeRoute = formatWaterRoute(liveWater.active_route || status.active_route || liveWater.preferred_route || status.preferred_route || 'NONE');
+            const activeRoute = formatWaterRoute(liveWater.active_route || status.active_route || 'NONE');
+            const preferredRoute = formatWaterRoute(liveWater.preferred_route || status.preferred_route || waterConfig.preferred_route || 'AUTO');
+            const directFallback = liveWater.allow_direct_sump_refill ?? status.allow_direct_sump_refill ?? waterConfig.allow_direct_sump_refill;
             const alarmActive = liveWater.water_alarm ?? status.alarm_active;
             const routeBlocked = liveWater.route_blocked ?? status.route_blocked;
             const circOutput = liveWater.circ_running ?? status.circulation_output ?? status.circulation_pump_output;
@@ -958,8 +985,6 @@
             const sumpHigh = liveWater.sump_high ?? status.sump_high;
             const overflowAlarm = liveWater.fish_overflow ?? status.overflow_alarm;
             const reasonText = liveWater.reason || status.reason || 'กำลังรอสถานะระบบน้ำ';
-            const preferredRoute = formatWaterRoute(liveWater.preferred_route || status.preferred_route || waterConfig.preferred_route || 'UNKNOWN');
-            const directFallback = liveWater.allow_direct_sump_refill ?? status.allow_direct_sump_refill ?? waterConfig.allow_direct_sump_refill;
 
             document.getElementById('waterState').textContent = stateText;
             document.getElementById('waterRoute').textContent = activeRoute;
@@ -999,8 +1024,11 @@
                 manual_refill: latest.manual_refill ?? false,
                 clear_alarm: false,
                 refill_max_runtime_ms: latest.refill_max_runtime_ms ?? waterConfig.refill_max_runtime_ms,
-                preferred_route: latest.preferred_route ?? waterConfig.preferred_route,
-                allow_direct_sump_refill: latest.allow_direct_sump_refill ?? waterConfig.allow_direct_sump_refill,
+                refill_min_interval_ms: latest.refill_min_interval_ms ?? waterConfig.refill_min_interval_ms,
+                preferred_route: document.getElementById('hwWaterPreferredRoute').value,
+                allow_direct_sump_refill: document.getElementById('hwWaterAllowDirectFallback').checked,
+                fish_refill_interval_ms: latest.fish_refill_interval_ms ?? waterConfig.fish_refill_interval_ms,
+                fish_refill_max_runtime_ms: latest.fish_refill_max_runtime_ms ?? waterConfig.fish_refill_max_runtime_ms,
                 ...extra
             };
 
@@ -1049,19 +1077,12 @@
             }
         }
 
-        async function setPreferredRoute(route) {
+        async function applyWaterRouteConfig() {
             try {
-                await saveWaterConfig({ preferred_route: route }, `เปลี่ยนเส้นทางเติมเป็น ${formatWaterRoute(route)}`);
+                const routeText = formatWaterRoute(document.getElementById('hwWaterPreferredRoute').value);
+                await saveWaterConfig({}, `ตั้งเส้นทางเติมน้ำเป็น ${routeText} แล้ว`);
             } catch (error) {
-                addLog(`❌ เปลี่ยนเส้นทางเติมไม่สำเร็จ: ${error.message}`);
-            }
-        }
-
-        async function setDirectFallback(enabled) {
-            try {
-                await saveWaterConfig({ allow_direct_sump_refill: enabled }, `${enabled ? 'อนุญาต' : 'ปิด'} fallback เข้าถังผสมตรงแล้ว`);
-            } catch (error) {
-                addLog(`❌ เปลี่ยน direct fallback ไม่สำเร็จ: ${error.message}`);
+                addLog(`❌ ตั้งค่าเส้นทางเติมน้ำไม่สำเร็จ: ${error.message}`);
             }
         }
 
@@ -1353,6 +1374,7 @@
             handleHwTestResult(data);
         });
 
+        document.getElementById('hwWaterPreferredRoute').addEventListener('change', updateHwWaterRouteControls);
         addLog('🔧 เปิดหน้าทดสอบฮาร์ดแวร์แล้ว');
         initializePumpTestUi();
         setPumpButtonsDisabled(false);

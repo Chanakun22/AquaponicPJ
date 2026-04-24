@@ -925,16 +925,16 @@
               <div class="water-zone-value" id="waterZoneState">Unknown</div>
             </div>
             <div class="water-zone-item">
-              <div class="water-zone-label">Route</div>
-              <div class="water-zone-value" id="waterZoneRoute">Unknown</div>
+              <div class="water-zone-label">Mix Inlet</div>
+              <div class="water-zone-value" id="waterZoneInlet">Unknown</div>
             </div>
             <div class="water-zone-item">
               <div class="water-zone-label">Circulation Pump</div>
               <div class="water-zone-value" id="waterZoneCirculation">Unknown</div>
             </div>
             <div class="water-zone-item">
-              <div class="water-zone-label">Fish Tank Refill</div>
-              <div class="water-zone-value" id="waterZoneFishRefill">Unknown</div>
+              <div class="water-zone-label">Alarm</div>
+              <div class="water-zone-value" id="waterZoneAlarm">Unknown</div>
             </div>
             <div class="water-zone-item">
               <div class="water-zone-label">Mix Tank Refill</div>
@@ -1098,9 +1098,11 @@
 
       function formatWaterState(state) {
         const labels = {
-          DISABLED: "Disabled",
-          CIRCULATION: "Circulating",
-          REFILLING: "Refilling",
+          IDLE: "Ready",
+          MIX_TANK_REFILL: "Refilling Mix Tank",
+          WAIT_REFILL_INTERVAL: "Waiting Refill Interval",
+          MIX_TANK_SETTLING: "Settling Mix Tank",
+          FISH_TANK_REFILL: "Special Fish Refill",
           BLOCKED: "Blocked",
           ALARM: "Alarm",
           UNKNOWN: "Unknown"
@@ -1226,10 +1228,10 @@
       }
 
       function updateWaterControlZone(data) {
-        document.getElementById("waterZoneState").textContent = formatWaterState(data.water_state);
-        document.getElementById("waterZoneRoute").textContent = formatWaterRoute(data.active_route);
+        document.getElementById("waterZoneState").textContent = data.water_state_label_th || formatWaterState(data.water_state);
+        document.getElementById("waterZoneInlet").textContent = formatWaterBool(data.mix_tank_refill_output, "Active", "Idle");
         document.getElementById("waterZoneCirculation").textContent = formatWaterBool(data.circulation_pump_output, "Running", "Stopped");
-        document.getElementById("waterZoneFishRefill").textContent = formatWaterBool(data.fish_tank_refill_output, "Active", "Idle");
+        document.getElementById("waterZoneAlarm").textContent = formatWaterBool(data.water_alarm, "Alarm", "Normal");
         document.getElementById("waterZoneMixRefill").textContent = formatWaterBool(data.mix_tank_refill_output, "Active", "Idle");
         document.getElementById("waterZoneDilution").textContent = formatWaterBool(data.water_dilution_active, "Active", "Clear");
         document.getElementById("waterZoneSettling").textContent = formatWaterBool(data.mix_tank_settling_active, "Settling", "Stable");

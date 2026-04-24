@@ -403,14 +403,24 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
         bool circulationEnabled = doc.containsKey("circulation_enabled") ? doc["circulation_enabled"].as<bool>() : cfg.circulationEnabled;
         bool refillEnabled = doc.containsKey("refill_enabled") ? doc["refill_enabled"].as<bool>() : cfg.refillEnabled;
         unsigned long refillMaxRuntimeMs = doc.containsKey("refill_max_runtime_ms") ? doc["refill_max_runtime_ms"].as<unsigned long>() : cfg.refillMaxRuntimeMs;
+        unsigned long refillMinIntervalMs = doc.containsKey("refill_min_interval_ms") ? doc["refill_min_interval_ms"].as<unsigned long>() : cfg.refillMinIntervalMs;
         WaterRefillRoute preferredRoute = cfg.preferredRoute;
         bool allowDirectSumpRefill = doc.containsKey("allow_direct_sump_refill") ? doc["allow_direct_sump_refill"].as<bool>() : cfg.allowDirectSumpRefill;
+        unsigned long fishRefillIntervalMs = doc.containsKey("fish_refill_interval_ms") ? doc["fish_refill_interval_ms"].as<unsigned long>() : cfg.fishRefillIntervalMs;
+        unsigned long fishRefillMaxRuntimeMs = doc.containsKey("fish_refill_max_runtime_ms") ? doc["fish_refill_max_runtime_ms"].as<unsigned long>() : cfg.fishRefillMaxRuntimeMs;
 
         if (doc.containsKey("preferred_route")) {
             preferredRoute = _parseWaterRoute(doc["preferred_route"] | "", cfg.preferredRoute);
         }
 
-        waterSystemSetConfig(circulationEnabled, refillEnabled, refillMaxRuntimeMs, preferredRoute, allowDirectSumpRefill);
+        waterSystemSetConfig(circulationEnabled,
+                     refillEnabled,
+                     refillMaxRuntimeMs,
+                     refillMinIntervalMs,
+                     preferredRoute,
+                     allowDirectSumpRefill,
+                     fishRefillIntervalMs,
+                     fishRefillMaxRuntimeMs);
 
         if (doc.containsKey("manual_refill")) {
             waterSystemSetManualRefill(doc["manual_refill"].as<bool>());
@@ -420,12 +430,15 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
             waterSystemClearAlarm();
         }
 
-        LOG_INFO("Water System config updated: Circ=%d, Refill=%d, Route=%s, Direct=%d, Max=%lu ms",
+        LOG_INFO("Water System config updated: Circ=%d, Refill=%d, Route=%s, Direct=%d, Max=%lu ms, MinInt=%lu ms, FishInt=%lu ms, FishMax=%lu ms",
                  circulationEnabled,
                  refillEnabled,
                  waterSystemGetRouteString(preferredRoute),
                  allowDirectSumpRefill,
-                 refillMaxRuntimeMs);
+             refillMaxRuntimeMs,
+             refillMinIntervalMs,
+             fishRefillIntervalMs,
+             fishRefillMaxRuntimeMs);
         _publishWaterSystemStatus();
     }
     
@@ -459,7 +472,6 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
             result["gpio"] = PUMP_NUTRIENT_B_PIN;
             LOG_INFO("[HW TEST] Pump B ON for %d ms", duration);
         }
-
         else if (strcmp(cmd, "pump_stop") == 0) {
             _stopHwTestPumpOutputs(true);
             result["status"] = "stopped";
@@ -780,33 +792,6 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
     doc["feeder_state"] = fishFeederGetStateString(feederStatus.state);
     doc["feeder_source"] = commandSourceToString(feederCfg.commandSource);
 
-    WaterSystemConfig waterCfg;
-    WaterSystemStatus waterStatus;
-    waterSystemGetConfig(&waterCfg);
-    waterSystemGetStatus(&waterStatus);
-    doc["circ_enabled"] = waterCfg.circulationEnabled;
-    doc["circ_running"] = waterStatus.circulationOutput;
-    doc["refill_enabled"] = waterCfg.refillEnabled;
-    doc["refill_running"] = waterStatus.refillOutput;
-    doc["manual_refill"] = waterCfg.manualRefill;
-    doc["preferred_route"] = waterSystemGetRouteString(waterCfg.preferredRoute);
-    doc["active_route"] = waterSystemGetRouteString(waterStatus.activeRoute);
-    doc["allow_direct_sump_refill"] = waterCfg.allowDirectSumpRefill;
-    doc["route_blocked"] = waterStatus.routeBlocked;
-    doc["circulation_pump_output"] = waterStatus.circulationPumpOutput;
-    doc["fish_tank_refill_output"] = waterStatus.fishTankRefillOutput;
-    doc["mix_tank_refill_output"] = waterStatus.mixTankRefillOutput;
-    doc["water_dilution_active"] = waterStatus.waterDilutionActive;
-    doc["mix_tank_settling_active"] = waterStatus.mixTankSettlingActive;
-    doc["mix_tank_control_zone"] = waterStatus.mixTankControlZone;
-    doc["dilution_hold_remaining_ms"] = waterStatus.dilutionHoldRemainingMs;
-    doc["sump_low"] = waterStatus.levelLow;
-    doc["sump_high"] = waterStatus.levelHigh;
-    doc["fish_overflow"] = waterStatus.overflowAlarm;
-    doc["water_alarm"] = waterStatus.alarmActive;
-    doc["water_state"] = waterSystemGetStateString(waterStatus.state);
-    doc["water_reason"] = waterStatus.reason;
-
     char payload[LOCAL_MQTT_PACKET_BUFFER_SIZE];
     size_t payloadLen = serializeJson(doc, payload, sizeof(payload));
 
@@ -880,9 +865,13 @@ static void _publishWaterSystemStatus(void) {
     doc["refill_enabled"] = cfg.refillEnabled;
     doc["manual_refill"] = cfg.manualRefill;
     doc["refill_max_runtime_ms"] = cfg.refillMaxRuntimeMs;
+    doc["refill_min_interval_ms"] = cfg.refillMinIntervalMs;
     doc["preferred_route"] = waterSystemGetRouteString(cfg.preferredRoute);
     doc["allow_direct_sump_refill"] = cfg.allowDirectSumpRefill;
+    doc["fish_refill_interval_ms"] = cfg.fishRefillIntervalMs;
+    doc["fish_refill_max_runtime_ms"] = cfg.fishRefillMaxRuntimeMs;
     doc["state"] = waterSystemGetStateString(status.state);
+    doc["state_label_th"] = waterSystemGetStateLabelTh(status.state);
     doc["reason"] = status.reason;
     doc["circulation_output"] = status.circulationOutput;
     doc["refill_output"] = status.refillOutput;
@@ -893,6 +882,8 @@ static void _publishWaterSystemStatus(void) {
     doc["mix_tank_settling_active"] = status.mixTankSettlingActive;
     doc["mix_tank_control_zone"] = status.mixTankControlZone;
     doc["dilution_hold_remaining_ms"] = status.dilutionHoldRemainingMs;
+    doc["fish_refill_ready"] = status.fishRefillReady;
+    doc["fish_refill_wait_remaining_ms"] = status.fishRefillWaitRemainingMs;
     doc["active_route"] = waterSystemGetRouteString(status.activeRoute);
     doc["route_valve_output"] = status.routeValveOutput;
     doc["sump_low"] = status.levelLow;

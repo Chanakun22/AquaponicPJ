@@ -44,7 +44,7 @@
 #define LIGHT_RELAY_PIN     12       // ขา Relay ควบคุมไฟ NeoPixel
 
 #ifndef FISH_FEEDER_PIN
-#define FISH_FEEDER_PIN     -1       // รีเลย์/มอเตอร์ให้อาหารปลา
+#define FISH_FEEDER_PIN     21       // รีเลย์/มอเตอร์ให้อาหารปลา
 #endif
 
 #ifndef EXHAUST_FAN_PIN
@@ -61,11 +61,11 @@
 #endif
 
 #ifndef PUMP_REFILL_PIN
-#define PUMP_REFILL_PIN      -1     // ปั๊มย้ายน้ำจากถังน้ำสะอาดไปถังรวม
+#define PUMP_REFILL_PIN      -1     // ปั๊มเติมน้ำจากถังน้ำสะอาดเข้าตู้ปลา (ใช้ชื่อเดิมเพื่อคง compatibility)
 #endif
 
 #ifndef REFILL_ROUTE_VALVE_PIN
-#define REFILL_ROUTE_VALVE_PIN -1   // วาล์วสลับทางเติมน้ำ: OFF=ผ่านตู้ปลา, ON=เข้าถังรวมตรง
+#define REFILL_ROUTE_VALVE_PIN -1   // โซลินอยด์น้ำเข้าถังผสม (ใช้ชื่อเดิมเพื่อคง compatibility)
 #endif
 
 #ifndef SUMP_LEVEL_LOW_PIN
@@ -297,6 +297,7 @@
 #define FEEDER_DEFAULT_FEED_HOUR          8
 #define FEEDER_DEFAULT_FEED_MINUTE        0
 #define FEEDER_DEFAULT_DURATION_MS        2000UL
+#define FEEDER_ACTIVE_LOW_DELAY_MS        100UL
 #define FEEDER_MIN_DURATION_MS            250UL
 #define FEEDER_MAX_DURATION_MS            10000UL
 
@@ -342,8 +343,11 @@
 #define WATER_CIRCULATION_DEFAULT_ENABLED 1
 #define WATER_REFILL_DEFAULT_ENABLED      0
 #define WATER_REFILL_MAX_RUNTIME_MS       120000UL
-#define WATER_REFILL_ROUTE_DEFAULT        0
-#define WATER_ALLOW_DIRECT_SUMP_REFILL_DEFAULT 1
+#define WATER_REFILL_MIN_INTERVAL_MS      300000UL
+#define WATER_REFILL_ROUTE_DEFAULT        2
+#define WATER_ALLOW_DIRECT_SUMP_REFILL_DEFAULT 0
+#define WATER_FISH_REFILL_INTERVAL_MS     604800000UL
+#define WATER_FISH_REFILL_MAX_RUNTIME_MS  30000UL
 #define WATER_DIRECT_SUMP_FALLBACK_DELAY_MS    30000UL
 
 // ============================================================================

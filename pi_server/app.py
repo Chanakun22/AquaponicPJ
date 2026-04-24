@@ -146,10 +146,14 @@ def load_settings():
             "refill_enabled": False,
             "manual_refill": False,
             "refill_max_runtime_ms": 120000,
+            "refill_min_interval_ms": 300000,
             "preferred_route": "AUTO",
             "active_route": "NONE",
             "allow_direct_sump_refill": True,
-            "state": "DISABLED",
+            "fish_refill_interval_ms": 604800000,
+            "fish_refill_max_runtime_ms": 30000,
+            "state": "IDLE",
+            "state_label_th": "พร้อมทำงาน",
             "reason": "Waiting for ESP32 status",
             "alarm_active": False,
             "circulation_pump_output": False,
@@ -159,6 +163,8 @@ def load_settings():
             "mix_tank_settling_active": False,
             "mix_tank_control_zone": True,
             "dilution_hold_remaining_ms": 0,
+            "fish_refill_ready": True,
+            "fish_refill_wait_remaining_ms": 0,
             "sump_low": False,
             "sump_high": False,
             "overflow_alarm": False,
@@ -505,11 +511,37 @@ def on_connect(client, userdata, flags, rc):
     client.subscribe("aquaponics/test/result")
 
 
+ESP_HEARTBEAT_TOPICS = {
+    "aquaponics/sensors",
+    "aquaponics/logs",
+    "aquaponics/status/sensors",
+    "aquaponics/status/ph_cal",
+    "aquaponics/status/fan_control",
+    "aquaponics/status/water_system",
+    "aquaponics/status/light_control",
+    "aquaponics/status/fish_feeder",
+    "aquaponics/test/result",
+}
+
+
+def mark_esp_heartbeat(topic, is_retained=False):
+    global last_esp_update, esp_online
+
+    if topic not in ESP_HEARTBEAT_TOPICS or is_retained:
+        return
+
+    last_esp_update = time.time()
+    if not esp_online:
+        esp_online = True
+        save_log("✅ ESP32 Reconnected!")
+
+
 def on_message(client, userdata, msg):
     global last_data, last_esp_update, esp_online, app_settings
     try:
         topic = msg.topic
         payload = msg.payload.decode()
+        mark_esp_heartbeat(topic, msg.retain)
         
         if topic == "aquaponics/logs":
             print(f"📝 Log: {payload}")
@@ -613,15 +645,6 @@ def on_message(client, userdata, msg):
 
 
         # It's sensor data
-        # Update heartbeat
-        now = time.time()
-        last_esp_update = now
-        
-        # If was offline, mark online and log
-        if not esp_online:
-            esp_online = True
-            save_log("✅ ESP32 Reconnected!")
-        
         data = json.loads(payload)
         for key in data:
             last_data[key] = data[key]
@@ -955,8 +978,11 @@ def post_settings():
                         "refill_enabled": new_settings["water_system"].get("refill_enabled", False),
                         "manual_refill": new_settings["water_system"].get("manual_refill", False),
                         "refill_max_runtime_ms": new_settings["water_system"].get("refill_max_runtime_ms", 120000),
-                        "preferred_route": new_settings["water_system"].get("preferred_route", "AUTO"),
-                        "allow_direct_sump_refill": new_settings["water_system"].get("allow_direct_sump_refill", True),
+                        "refill_min_interval_ms": new_settings["water_system"].get("refill_min_interval_ms", 300000),
+                        "preferred_route": new_settings["water_system"].get("preferred_route", "SUMP_DIRECT"),
+                        "allow_direct_sump_refill": new_settings["water_system"].get("allow_direct_sump_refill", False),
+                        "fish_refill_interval_ms": new_settings["water_system"].get("fish_refill_interval_ms", 604800000),
+                        "fish_refill_max_runtime_ms": new_settings["water_system"].get("fish_refill_max_runtime_ms", 30000),
                         "clear_alarm": False
                     }
                     if mqtt_client and mqtt_client.is_connected():
@@ -1427,8 +1453,11 @@ def water_system_config():
         manual_refill = data.get('manual_refill', False)
         clear_alarm = data.get('clear_alarm', False)
         refill_max_runtime_ms = int(data.get('refill_max_runtime_ms', 120000))
+        refill_min_interval_ms = int(data.get('refill_min_interval_ms', 300000))
         preferred_route = str(data.get('preferred_route', 'AUTO')).upper()
         allow_direct_sump_refill = bool(data.get('allow_direct_sump_refill', True))
+        fish_refill_interval_ms = int(data.get('fish_refill_interval_ms', 604800000))
+        fish_refill_max_runtime_ms = int(data.get('fish_refill_max_runtime_ms', 30000))
 
         if preferred_route not in ['AUTO', 'FISH_TANK', 'SUMP_DIRECT']:
             return jsonify({'status': 'error', 'message': 'Invalid preferred_route'}), 400
@@ -1439,8 +1468,11 @@ def water_system_config():
             'refill_enabled': refill_enabled,
             'manual_refill': manual_refill,
             'refill_max_runtime_ms': refill_max_runtime_ms,
+            'refill_min_interval_ms': refill_min_interval_ms,
             'preferred_route': preferred_route,
-            'allow_direct_sump_refill': allow_direct_sump_refill
+            'allow_direct_sump_refill': allow_direct_sump_refill,
+            'fish_refill_interval_ms': fish_refill_interval_ms,
+            'fish_refill_max_runtime_ms': fish_refill_max_runtime_ms
         })
         save_settings(app_settings)
 
@@ -1450,8 +1482,11 @@ def water_system_config():
             'manual_refill': manual_refill,
             'clear_alarm': clear_alarm,
             'refill_max_runtime_ms': refill_max_runtime_ms,
+            'refill_min_interval_ms': refill_min_interval_ms,
             'preferred_route': preferred_route,
-            'allow_direct_sump_refill': allow_direct_sump_refill
+            'allow_direct_sump_refill': allow_direct_sump_refill,
+            'fish_refill_interval_ms': fish_refill_interval_ms,
+            'fish_refill_max_runtime_ms': fish_refill_max_runtime_ms
         }
 
         if mqtt_client and mqtt_client.is_connected():
@@ -1460,7 +1495,8 @@ def water_system_config():
         save_log(
             f"💧 Water system config -> circ={circulation_enabled}, refill={refill_enabled}, "
             f"manual={manual_refill}, route={preferred_route}, direct={allow_direct_sump_refill}, "
-            f"clear_alarm={clear_alarm}, max={refill_max_runtime_ms}ms"
+            f"clear_alarm={clear_alarm}, max={refill_max_runtime_ms}ms, gap={refill_min_interval_ms}ms, "
+            f"fish_int={fish_refill_interval_ms}ms, fish_max={fish_refill_max_runtime_ms}ms"
         )
         log_activity(session.get('username', '?'), 'water_system', 'Water system config updated', request.remote_addr)
         return jsonify({'status': 'ok', 'message': 'Water system settings applied successfully'})
@@ -1645,9 +1681,32 @@ def build_dashboard_data():
     last_data["pi_temp"] = get_pi_temp()
     last_data["esp_status"] = "ONLINE" if esp_online else "OFFLINE"
     last_data["last_seen_sec"] = int(time.time() - last_esp_update) if last_esp_update > 0 else -1
+
+    dashboard_sensors = dict(last_data)
+    water_status = app_settings.get("water_system", {})
+    dashboard_sensors.update({
+        "active_route": water_status.get("active_route", dashboard_sensors.get("active_route", "NONE")),
+        "route_blocked": water_status.get("route_blocked", dashboard_sensors.get("route_blocked", False)),
+        "circulation_pump_output": water_status.get("circulation_pump_output", dashboard_sensors.get("circulation_pump_output", False)),
+        "fish_tank_refill_output": water_status.get("fish_tank_refill_output", dashboard_sensors.get("fish_tank_refill_output", False)),
+        "mix_tank_refill_output": water_status.get("mix_tank_refill_output", dashboard_sensors.get("mix_tank_refill_output", False)),
+        "water_dilution_active": water_status.get("water_dilution_active", dashboard_sensors.get("water_dilution_active", False)),
+        "mix_tank_settling_active": water_status.get("mix_tank_settling_active", dashboard_sensors.get("mix_tank_settling_active", False)),
+        "mix_tank_control_zone": water_status.get("mix_tank_control_zone", dashboard_sensors.get("mix_tank_control_zone", True)),
+        "dilution_hold_remaining_ms": water_status.get("dilution_hold_remaining_ms", dashboard_sensors.get("dilution_hold_remaining_ms", 0)),
+        "fish_refill_ready": water_status.get("fish_refill_ready", dashboard_sensors.get("fish_refill_ready", True)),
+        "fish_refill_wait_remaining_ms": water_status.get("fish_refill_wait_remaining_ms", dashboard_sensors.get("fish_refill_wait_remaining_ms", 0)),
+        "sump_low": water_status.get("sump_low", dashboard_sensors.get("sump_low", False)),
+        "sump_high": water_status.get("sump_high", dashboard_sensors.get("sump_high", False)),
+        "fish_overflow": water_status.get("overflow_alarm", dashboard_sensors.get("fish_overflow", False)),
+        "water_alarm": water_status.get("alarm_active", dashboard_sensors.get("water_alarm", False)),
+        "water_state": water_status.get("state", dashboard_sensors.get("water_state", "IDLE")),
+        "water_state_label_th": water_status.get("state_label_th", dashboard_sensors.get("water_state_label_th", "พร้อมทำงาน")),
+        "water_reason": water_status.get("reason", dashboard_sensors.get("water_reason", "Waiting for ESP32 status")),
+    })
     
     return {
-        "sensors": dict(last_data),
+        "sensors": dashboard_sensors,
         "health": dict(last_data),
         "info": {"firmware": "Pi-Server-v2 (Monitoring)", "status": "online"},
         "logs": list(log_buffer)

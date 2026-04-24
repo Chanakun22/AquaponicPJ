@@ -9,9 +9,11 @@
 #include <Arduino.h>
 
 typedef enum {
-    WATER_STATE_DISABLED = 0,
-    WATER_STATE_CIRCULATION,
-    WATER_STATE_REFILLING,
+    WATER_STATE_IDLE = 0,
+    WATER_STATE_MIX_TANK_REFILL,
+    WATER_STATE_WAIT_REFILL_INTERVAL,
+    WATER_STATE_MIX_TANK_SETTLING,
+    WATER_STATE_FISH_TANK_REFILL,
     WATER_STATE_BLOCKED,
     WATER_STATE_ALARM
 } WaterSystemState;
@@ -28,8 +30,11 @@ typedef struct {
     bool refillEnabled;
     bool manualRefill;
     unsigned long refillMaxRuntimeMs;
+    unsigned long refillMinIntervalMs;
     WaterRefillRoute preferredRoute;
     bool allowDirectSumpRefill;
+    unsigned long fishRefillIntervalMs;
+    unsigned long fishRefillMaxRuntimeMs;
 } WaterSystemConfig;
 
 typedef struct {
@@ -45,6 +50,8 @@ typedef struct {
     bool mixTankSettlingActive;
     bool mixTankControlZone;
     unsigned long dilutionHoldRemainingMs;
+    bool fishRefillReady;
+    unsigned long fishRefillWaitRemainingMs;
     bool levelLow;
     bool levelHigh;
     bool overflowAlarm;
@@ -63,11 +70,15 @@ void waterSystemLoop(void);
 void waterSystemSetConfig(bool circulationEnabled,
                           bool refillEnabled,
                           unsigned long refillMaxRuntimeMs,
+                          unsigned long refillMinIntervalMs,
                           WaterRefillRoute preferredRoute,
-                          bool allowDirectSumpRefill);
+                          bool allowDirectSumpRefill,
+                          unsigned long fishRefillIntervalMs,
+                          unsigned long fishRefillMaxRuntimeMs);
 void waterSystemGetConfig(WaterSystemConfig* config);
 void waterSystemGetStatus(WaterSystemStatus* status);
 const char* waterSystemGetStateString(WaterSystemState state);
+const char* waterSystemGetStateLabelTh(WaterSystemState state);
 const char* waterSystemGetRouteString(WaterRefillRoute route);
 void waterSystemSetManualRefill(bool enabled);
 void waterSystemSetCirculationEnabled(bool enabled);

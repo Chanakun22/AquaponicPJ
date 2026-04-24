@@ -16,12 +16,15 @@ static WaterSystemConfig _config = {
     WATER_REFILL_DEFAULT_ENABLED,
     false,
     WATER_REFILL_MAX_RUNTIME_MS,
+    WATER_REFILL_MIN_INTERVAL_MS,
     (WaterRefillRoute)WATER_REFILL_ROUTE_DEFAULT,
-    WATER_ALLOW_DIRECT_SUMP_REFILL_DEFAULT
+    WATER_ALLOW_DIRECT_SUMP_REFILL_DEFAULT,
+    WATER_FISH_REFILL_INTERVAL_MS,
+    WATER_FISH_REFILL_MAX_RUNTIME_MS
 };
 
 static WaterSystemStatus _status = {
-    WATER_STATE_DISABLED,
+    WATER_STATE_IDLE,
     WATER_REFILL_ROUTE_NONE,
     false,
     false,
@@ -31,6 +34,8 @@ static WaterSystemStatus _status = {
     false,
     false,
     false,
+    true,
+    0,
     true,
     0,
     false,
@@ -48,10 +53,30 @@ static WaterSystemStatus _status = {
 
 static bool _alarmLatched = false;
 static unsigned long _refillStartMs = 0;
+static unsigned long _lastMixRefillStopMs = 0;
+static unsigned long _lastFishRefillStopMs = 0;
 static unsigned long _lastDilutionEventMs = 0;
 static WaterRefillRoute _lastDilutionRoute = WATER_REFILL_ROUTE_NONE;
+static bool _refillWasActive = false;
+static WaterRefillRoute _lastActiveRefillRoute = WATER_REFILL_ROUTE_NONE;
 
 static const unsigned long WATER_MIX_SETTLING_MS = 120000UL;
+
+static bool _hasFishTankRefillPump(void) {
+#if PUMP_REFILL_PIN >= 0
+    return true;
+#else
+    return false;
+#endif
+}
+
+static bool _hasMixTankRefillSolenoid(void) {
+#if REFILL_ROUTE_VALVE_PIN >= 0
+    return true;
+#else
+    return false;
+#endif
+}
 
 static bool _hasCirculationPump(void) {
 #if PUMP_CIRCULATION_PIN >= 0
@@ -62,11 +87,7 @@ static bool _hasCirculationPump(void) {
 }
 
 static bool _hasRefillPump(void) {
-#if PUMP_REFILL_PIN >= 0
-    return true;
-#else
-    return false;
-#endif
+    return _hasFishTankRefillPump() || _hasMixTankRefillSolenoid();
 }
 
 static bool _hasLevelSensors(void) {
@@ -86,11 +107,7 @@ static bool _hasOverflowSensor(void) {
 }
 
 static bool _hasRouteValve(void) {
-#if REFILL_ROUTE_VALVE_PIN >= 0
-    return true;
-#else
-    return false;
-#endif
+    return _hasMixTankRefillSolenoid();
 }
 
 static bool _readConfiguredInput(int pin, uint8_t activeState) {
@@ -123,15 +140,68 @@ static void _writePumpOutput(int pin, bool enabled) {
 }
 
 static void _writeRouteValve(WaterRefillRoute route) {
-    if (REFILL_ROUTE_VALVE_PIN < 0) {
-        return;
-    }
+#if REFILL_ROUTE_VALVE_PIN >= 0
     digitalWrite(REFILL_ROUTE_VALVE_PIN,
-                 route == WATER_REFILL_ROUTE_SUMP_DIRECT ? REFILL_ROUTE_TO_SUMP_STATE : REFILL_ROUTE_TO_FISH_STATE);
+                 route == WATER_REFILL_ROUTE_SUMP_DIRECT ? PUMP_ON : PUMP_OFF);
+#else
+    (void)route;
+#endif
 }
 
 static bool _routeFeedsMixTank(WaterRefillRoute route) {
-    return route == WATER_REFILL_ROUTE_FISH_TANK || route == WATER_REFILL_ROUTE_SUMP_DIRECT;
+    return route == WATER_REFILL_ROUTE_SUMP_DIRECT || route == WATER_REFILL_ROUTE_FISH_TANK;
+}
+
+static bool _routeAvailable(WaterRefillRoute route) {
+    switch (route) {
+        case WATER_REFILL_ROUTE_FISH_TANK:
+            return _hasFishTankRefillPump();
+        case WATER_REFILL_ROUTE_SUMP_DIRECT:
+            return _hasMixTankRefillSolenoid();
+        default:
+            return false;
+    }
+}
+
+static WaterRefillRoute _resolveRefillRoute(void) {
+    switch (_config.preferredRoute) {
+        case WATER_REFILL_ROUTE_FISH_TANK:
+            return _routeAvailable(WATER_REFILL_ROUTE_FISH_TANK) ? WATER_REFILL_ROUTE_FISH_TANK : WATER_REFILL_ROUTE_NONE;
+
+        case WATER_REFILL_ROUTE_SUMP_DIRECT:
+            return _routeAvailable(WATER_REFILL_ROUTE_SUMP_DIRECT) ? WATER_REFILL_ROUTE_SUMP_DIRECT : WATER_REFILL_ROUTE_NONE;
+
+        case WATER_REFILL_ROUTE_AUTO:
+            if (_config.allowDirectSumpRefill && _routeAvailable(WATER_REFILL_ROUTE_SUMP_DIRECT)) {
+                return WATER_REFILL_ROUTE_SUMP_DIRECT;
+            }
+            if (_routeAvailable(WATER_REFILL_ROUTE_FISH_TANK)) {
+                return WATER_REFILL_ROUTE_FISH_TANK;
+            }
+            if (_routeAvailable(WATER_REFILL_ROUTE_SUMP_DIRECT)) {
+                return WATER_REFILL_ROUTE_SUMP_DIRECT;
+            }
+            return WATER_REFILL_ROUTE_NONE;
+
+        case WATER_REFILL_ROUTE_NONE:
+        default:
+            return WATER_REFILL_ROUTE_NONE;
+    }
+}
+
+static unsigned long _getRemainingIntervalMs(unsigned long now,
+                                             unsigned long lastEventMs,
+                                             unsigned long intervalMs) {
+    if (lastEventMs == 0 || intervalMs == 0) {
+        return 0;
+    }
+
+    unsigned long elapsed = now - lastEventMs;
+    if (elapsed >= intervalMs) {
+        return 0;
+    }
+
+    return intervalMs - elapsed;
 }
 
 static void _updateDerivedStatus(unsigned long now) {
@@ -147,8 +217,6 @@ static void _updateDerivedStatus(unsigned long now) {
     }
 
     _status.circulationPumpOutput = _status.circulationOutput;
-    _status.fishTankRefillOutput = _status.refillOutput && _status.activeRoute == WATER_REFILL_ROUTE_FISH_TANK;
-    _status.mixTankRefillOutput = _status.refillOutput && _status.activeRoute == WATER_REFILL_ROUTE_SUMP_DIRECT;
     _status.mixTankSettlingActive = settlingActive;
     _status.waterDilutionActive = _status.refillOutput || settlingActive;
     _status.mixTankControlZone = true;
@@ -160,8 +228,20 @@ static void _sanitizeConfig(void) {
         _config.refillMaxRuntimeMs = WATER_REFILL_MAX_RUNTIME_MS;
     }
 
-    if (_config.preferredRoute < WATER_REFILL_ROUTE_AUTO || _config.preferredRoute > WATER_REFILL_ROUTE_NONE) {
+    if (_config.refillMinIntervalMs > WATER_FISH_REFILL_INTERVAL_MS) {
+        _config.refillMinIntervalMs = WATER_FISH_REFILL_INTERVAL_MS;
+    }
+
+    if (_config.preferredRoute > WATER_REFILL_ROUTE_NONE) {
         _config.preferredRoute = (WaterRefillRoute)WATER_REFILL_ROUTE_DEFAULT;
+    }
+
+    if (_config.fishRefillIntervalMs == 0 || _config.fishRefillIntervalMs > (30UL * 24UL * 60UL * 60UL * 1000UL)) {
+        _config.fishRefillIntervalMs = WATER_FISH_REFILL_INTERVAL_MS;
+    }
+
+    if (_config.fishRefillMaxRuntimeMs == 0 || _config.fishRefillMaxRuntimeMs > WATER_REFILL_MAX_RUNTIME_MS) {
+        _config.fishRefillMaxRuntimeMs = WATER_FISH_REFILL_MAX_RUNTIME_MS;
     }
 }
 
@@ -171,59 +251,37 @@ static void _saveConfig(void) {
     _prefs.putBool("circEn", _config.circulationEnabled);
     _prefs.putBool("refillEn", _config.refillEnabled);
     _prefs.putULong("refillMax", _config.refillMaxRuntimeMs);
+    _prefs.putULong("refillMin", _config.refillMinIntervalMs);
     _prefs.putUChar("route", (uint8_t)_config.preferredRoute);
     _prefs.putBool("allowDir", _config.allowDirectSumpRefill);
+    _prefs.putULong("fishInt", _config.fishRefillIntervalMs);
+    _prefs.putULong("fishMax", _config.fishRefillMaxRuntimeMs);
     _prefs.end();
-}
-
-static bool _canUseDirectRoute(void) {
-    return _config.allowDirectSumpRefill && _hasRouteValve();
-}
-
-static WaterRefillRoute _selectRefillRoute(bool* routeBlocked, const char** blockedReason) {
-    if (routeBlocked) {
-        *routeBlocked = false;
-    }
-    if (blockedReason) {
-        *blockedReason = NULL;
-    }
-
-    switch (_config.preferredRoute) {
-        case WATER_REFILL_ROUTE_FISH_TANK:
-            return WATER_REFILL_ROUTE_FISH_TANK;
-
-        case WATER_REFILL_ROUTE_SUMP_DIRECT:
-            if (_canUseDirectRoute()) {
-                return WATER_REFILL_ROUTE_SUMP_DIRECT;
-            }
-            if (routeBlocked) {
-                *routeBlocked = true;
-            }
-            if (blockedReason) {
-                *blockedReason = _config.allowDirectSumpRefill
-                    ? "Preferred direct sump route requires REFILL_ROUTE_VALVE_PIN"
-                    : "Preferred direct sump route is disabled in config";
-            }
-            return WATER_REFILL_ROUTE_NONE;
-
-        case WATER_REFILL_ROUTE_AUTO:
-        default:
-            if (_canUseDirectRoute() && _refillStartMs != 0 &&
-                (millis() - _refillStartMs) >= WATER_DIRECT_SUMP_FALLBACK_DELAY_MS) {
-                return WATER_REFILL_ROUTE_SUMP_DIRECT;
-            }
-            return WATER_REFILL_ROUTE_FISH_TANK;
-    }
 }
 
 const char* waterSystemGetStateString(WaterSystemState state) {
     switch (state) {
-        case WATER_STATE_DISABLED: return "DISABLED";
-        case WATER_STATE_CIRCULATION: return "CIRCULATION";
-        case WATER_STATE_REFILLING: return "REFILLING";
+        case WATER_STATE_IDLE: return "IDLE";
+        case WATER_STATE_MIX_TANK_REFILL: return "MIX_TANK_REFILL";
+        case WATER_STATE_WAIT_REFILL_INTERVAL: return "WAIT_REFILL_INTERVAL";
+        case WATER_STATE_MIX_TANK_SETTLING: return "MIX_TANK_SETTLING";
+        case WATER_STATE_FISH_TANK_REFILL: return "FISH_TANK_REFILL";
         case WATER_STATE_BLOCKED: return "BLOCKED";
         case WATER_STATE_ALARM: return "ALARM";
         default: return "UNKNOWN";
+    }
+}
+
+const char* waterSystemGetStateLabelTh(WaterSystemState state) {
+    switch (state) {
+        case WATER_STATE_IDLE: return "พร้อมทำงาน";
+        case WATER_STATE_MIX_TANK_REFILL: return "เติมถังน้ำผสม";
+        case WATER_STATE_WAIT_REFILL_INTERVAL: return "รอช่วงกันเติมถี่";
+        case WATER_STATE_MIX_TANK_SETTLING: return "รอให้น้ำในถังผสมนิ่ง";
+        case WATER_STATE_FISH_TANK_REFILL: return "เติมผ่านตู้ปลา";
+        case WATER_STATE_BLOCKED: return "ถูกบล็อก";
+        case WATER_STATE_ALARM: return "แจ้งเตือน";
+        default: return "ไม่ทราบสถานะ";
     }
 }
 
@@ -242,8 +300,11 @@ void waterSystemSetup(void) {
     _config.circulationEnabled = _prefs.getBool("circEn", WATER_CIRCULATION_DEFAULT_ENABLED);
     _config.refillEnabled = _prefs.getBool("refillEn", WATER_REFILL_DEFAULT_ENABLED);
     _config.refillMaxRuntimeMs = _prefs.getULong("refillMax", WATER_REFILL_MAX_RUNTIME_MS);
+    _config.refillMinIntervalMs = _prefs.getULong("refillMin", WATER_REFILL_MIN_INTERVAL_MS);
     _config.preferredRoute = (WaterRefillRoute)_prefs.getUChar("route", WATER_REFILL_ROUTE_DEFAULT);
     _config.allowDirectSumpRefill = _prefs.getBool("allowDir", WATER_ALLOW_DIRECT_SUMP_REFILL_DEFAULT);
+    _config.fishRefillIntervalMs = _prefs.getULong("fishInt", WATER_FISH_REFILL_INTERVAL_MS);
+    _config.fishRefillMaxRuntimeMs = _prefs.getULong("fishMax", WATER_FISH_REFILL_MAX_RUNTIME_MS);
     _prefs.end();
     _sanitizeConfig();
 
@@ -281,22 +342,30 @@ void waterSystemSetup(void) {
     _status.hasRouteValve = _hasRouteValve();
 
     if (!_status.hasCirculationPump) {
-        _setState(WATER_STATE_BLOCKED, "Set PUMP_CIRCULATION_PIN when relay wiring is finalized");
+        _setState(WATER_STATE_BLOCKED, "ยังไม่กำหนดขาปั๊มหมุนน้ำหลัก");
+    } else if (!_status.hasRefillPump) {
+        _setState(WATER_STATE_BLOCKED, "ยังไม่กำหนด actuator สำหรับเติมน้ำ");
     } else {
-        _setState(WATER_STATE_DISABLED, "Water system ready");
+        _setState(WATER_STATE_IDLE, "ระบบน้ำพร้อมทำงาน");
     }
 }
 
 void waterSystemSetConfig(bool circulationEnabled,
                           bool refillEnabled,
                           unsigned long refillMaxRuntimeMs,
+                          unsigned long refillMinIntervalMs,
                           WaterRefillRoute preferredRoute,
-                          bool allowDirectSumpRefill) {
+                          bool allowDirectSumpRefill,
+                          unsigned long fishRefillIntervalMs,
+                          unsigned long fishRefillMaxRuntimeMs) {
     _config.circulationEnabled = circulationEnabled;
     _config.refillEnabled = refillEnabled;
     _config.refillMaxRuntimeMs = refillMaxRuntimeMs;
+    _config.refillMinIntervalMs = refillMinIntervalMs;
     _config.preferredRoute = preferredRoute;
     _config.allowDirectSumpRefill = allowDirectSumpRefill;
+    _config.fishRefillIntervalMs = fishRefillIntervalMs;
+    _config.fishRefillMaxRuntimeMs = fishRefillMaxRuntimeMs;
     _sanitizeConfig();
     _saveConfig();
 }
@@ -327,17 +396,20 @@ void waterSystemSetPreferredRoute(WaterRefillRoute route) {
 
 void waterSystemSetAllowDirectSumpRefill(bool enabled) {
     _config.allowDirectSumpRefill = enabled;
+    _sanitizeConfig();
     _saveConfig();
 }
 
 void waterSystemClearAlarm(void) {
     _alarmLatched = false;
     _refillStartMs = 0;
+    _refillWasActive = false;
+    _lastActiveRefillRoute = WATER_REFILL_ROUTE_NONE;
     _lastDilutionEventMs = 0;
     _lastDilutionRoute = WATER_REFILL_ROUTE_NONE;
     _status.activeRoute = WATER_REFILL_ROUTE_NONE;
     _status.routeBlocked = false;
-    _setState(WATER_STATE_DISABLED, "Alarm cleared");
+    _setState(WATER_STATE_IDLE, "ล้างสถานะแจ้งเตือนแล้ว");
 }
 
 void waterSystemGetStatus(WaterSystemStatus* status) {
@@ -350,6 +422,8 @@ void waterSystemLoop(void) {
     unsigned long now = millis();
     char stateReason[96];
     stateReason[0] = '\0';
+    bool waitingForInterval = false;
+    unsigned long mixIntervalRemainingMs = _getRemainingIntervalMs(now, _lastMixRefillStopMs, _config.refillMinIntervalMs);
 
     _status.hasCirculationPump = _hasCirculationPump();
     _status.hasRefillPump = _hasRefillPump();
@@ -369,15 +443,12 @@ void waterSystemLoop(void) {
     _status.mixTankSettlingActive = false;
     _status.mixTankControlZone = true;
     _status.dilutionHoldRemainingMs = 0;
-
-    if (_status.overflowAlarm) {
-        _alarmLatched = true;
-        _setState(WATER_STATE_ALARM, "Fish tank overflow alarm triggered");
-    }
+    _status.fishRefillReady = true;
+    _status.fishRefillWaitRemainingMs = 0;
 
     if (_status.hasLevelSensors && _status.levelLow && _status.levelHigh) {
         _alarmLatched = true;
-        _setState(WATER_STATE_ALARM, "Sump level sensors disagree: low and high active together");
+        _setState(WATER_STATE_ALARM, "เซ็นเซอร์ระดับน้ำถังผสมขัดแย้งกัน");
     }
 
     bool circulationDesired = _config.circulationEnabled;
@@ -388,22 +459,30 @@ void waterSystemLoop(void) {
     if (_config.manualRefill) {
         if (!_status.hasRefillPump) {
             blocked = true;
-            _setState(WATER_STATE_BLOCKED, "Manual refill requested but PUMP_REFILL_PIN is not set");
+            _setState(WATER_STATE_BLOCKED, "สั่งเติมด้วยมือแต่ยังไม่กำหนด actuator เติมน้ำ");
         } else {
             refillDesired = true;
         }
     } else if (_config.refillEnabled) {
         if (!_status.hasRefillPump) {
             blocked = true;
-            _setState(WATER_STATE_BLOCKED, "Refill enabled but PUMP_REFILL_PIN is not set");
+            _setState(WATER_STATE_BLOCKED, "เปิดเติมอัตโนมัติแต่ยังไม่กำหนด actuator เติมน้ำ");
         } else if (!_status.hasLevelSensors) {
             blocked = true;
-            _setState(WATER_STATE_BLOCKED, "Refill enabled but sump level sensors are not configured");
+            _setState(WATER_STATE_BLOCKED, "เปิดเติมอัตโนมัติแต่ยังไม่มีเซ็นเซอร์ low/high ของถังผสม");
         } else if (_status.levelHigh) {
             refillDesired = false;
             _refillStartMs = 0;
         } else if (_status.levelLow) {
-            refillDesired = true;
+            if (mixIntervalRemainingMs > 0 && _lastMixRefillStopMs != 0) {
+                waitingForInterval = true;
+                snprintf(stateReason,
+                         sizeof(stateReason),
+                         "ถังผสมยังอยู่ในช่วงกันเติมถี่ (%lu วินาที)",
+                         mixIntervalRemainingMs / 1000UL);
+            } else {
+                refillDesired = true;
+            }
         } else {
             refillDesired = false;
             _refillStartMs = 0;
@@ -417,20 +496,23 @@ void waterSystemLoop(void) {
             _refillStartMs = now;
         }
 
-        const char* routeBlockedReason = NULL;
-        desiredRoute = _selectRefillRoute(&_status.routeBlocked, &routeBlockedReason);
-        if (_status.routeBlocked) {
-            blocked = true;
+        desiredRoute = _resolveRefillRoute();
+
+        if (desiredRoute == WATER_REFILL_ROUTE_NONE) {
             refillDesired = false;
-            _config.manualRefill = false;
-            _setState(WATER_STATE_BLOCKED, routeBlockedReason ? routeBlockedReason : "No valid refill route available");
+            blocked = true;
+            _status.routeBlocked = true;
+            _setState(WATER_STATE_BLOCKED, "ไม่มีเส้นทางเติมที่ใช้งานได้ตาม config ปัจจุบัน");
         }
 
-        if ((now - _refillStartMs) >= _config.refillMaxRuntimeMs) {
-            _alarmLatched = true;
+        if (refillDesired && (now - _refillStartMs) >= _config.refillMaxRuntimeMs) {
             refillDesired = false;
             _config.manualRefill = false;
-            _setState(WATER_STATE_ALARM, "Refill timeout reached before sump became full");
+            _alarmLatched = true;
+            _setState(WATER_STATE_ALARM,
+                      desiredRoute == WATER_REFILL_ROUTE_FISH_TANK
+                          ? "เติมน้ำเข้าตู้ปลาเกินเวลาที่ตั้งไว้"
+                          : "เติมถังน้ำผสมเกินเวลาที่ตั้งไว้");
         }
     }
 
@@ -443,7 +525,9 @@ void waterSystemLoop(void) {
     _status.circulationOutput = circulationDesired && _status.hasCirculationPump;
     _status.refillOutput = refillDesired && _status.hasRefillPump;
     _status.activeRoute = _status.refillOutput ? desiredRoute : WATER_REFILL_ROUTE_NONE;
-    _status.routeValveOutput = _status.activeRoute == WATER_REFILL_ROUTE_SUMP_DIRECT;
+    _status.fishTankRefillOutput = _status.refillOutput && _status.activeRoute == WATER_REFILL_ROUTE_FISH_TANK;
+    _status.mixTankRefillOutput = _status.refillOutput && _status.activeRoute == WATER_REFILL_ROUTE_SUMP_DIRECT;
+    _status.routeValveOutput = _status.mixTankRefillOutput;
     _status.alarmActive = _alarmLatched;
 
     if (_status.refillOutput && _routeFeedsMixTank(_status.activeRoute)) {
@@ -455,7 +539,19 @@ void waterSystemLoop(void) {
 
     _writeRouteValve(_status.activeRoute);
     _writePumpOutput(PUMP_CIRCULATION_PIN, _status.circulationOutput);
-    _writePumpOutput(PUMP_REFILL_PIN, _status.refillOutput);
+    _writePumpOutput(PUMP_REFILL_PIN, _status.fishTankRefillOutput);
+
+    if (_refillWasActive && !_status.refillOutput) {
+        _lastMixRefillStopMs = now;
+        _refillStartMs = 0;
+    }
+
+    if (_status.refillOutput) {
+        _lastActiveRefillRoute = _status.activeRoute;
+    } else if (!_refillWasActive) {
+        _lastActiveRefillRoute = WATER_REFILL_ROUTE_NONE;
+    }
+    _refillWasActive = _status.refillOutput;
 
     if (_alarmLatched) {
         _setState(WATER_STATE_ALARM, _status.reason);
@@ -466,27 +562,39 @@ void waterSystemLoop(void) {
         return;
     }
 
+    if (waitingForInterval) {
+        _setState(WATER_STATE_WAIT_REFILL_INTERVAL, stateReason[0] ? stateReason : "รอช่วงกันเติมถี่");
+        return;
+    }
+
     if (_status.refillOutput) {
-        const char* refillTarget = _status.mixTankRefillOutput ? "mix tank" : "fish tank";
         if (_config.manualRefill) {
-            snprintf(stateReason, sizeof(stateReason), "Manual %s refill is active", refillTarget);
+            snprintf(stateReason,
+                     sizeof(stateReason),
+                     _status.activeRoute == WATER_REFILL_ROUTE_FISH_TANK
+                         ? "กำลังสั่งปั๊มเติมน้ำเข้าตู้ปลาแบบสั่งด้วยมือ"
+                         : "กำลังเปิดโซลินอยด์เติมน้ำเข้าถังผสมแบบสั่งด้วยมือ");
         } else {
-            snprintf(stateReason, sizeof(stateReason), "Control zone dilution active: refilling via %s", refillTarget);
+            snprintf(stateReason,
+                     sizeof(stateReason),
+                     _status.activeRoute == WATER_REFILL_ROUTE_FISH_TANK
+                         ? "ถังผสมระดับต่ำ ระบบกำลังปั๊มน้ำจากถังสะอาดเข้าตู้ปลา"
+                         : "ถังผสมระดับต่ำ ระบบกำลังเปิดโซลินอยด์น้ำเข้า");
         }
-        _setState(WATER_STATE_REFILLING, stateReason);
+        _setState(_status.activeRoute == WATER_REFILL_ROUTE_FISH_TANK
+                      ? WATER_STATE_FISH_TANK_REFILL
+                      : WATER_STATE_MIX_TANK_REFILL,
+                  stateReason);
     } else if (_status.mixTankSettlingActive) {
-        const char* settledFrom = _lastDilutionRoute == WATER_REFILL_ROUTE_SUMP_DIRECT ? "mix tank refill" :
-                                  _lastDilutionRoute == WATER_REFILL_ROUTE_FISH_TANK ? "fish tank refill" :
-                                  "recent refill";
         snprintf(stateReason,
                  sizeof(stateReason),
-                 "Mix tank settling after %s (%lu s left)",
-                 settledFrom,
+                 "รอให้น้ำในถังผสมนิ่งหลัง%s (%lu วินาที)",
+                 "เติมเข้าถังผสม",
                  _status.dilutionHoldRemainingMs / 1000UL);
-        _setState(WATER_STATE_CIRCULATION, stateReason);
+        _setState(WATER_STATE_MIX_TANK_SETTLING, stateReason);
     } else if (_status.circulationOutput) {
-        _setState(WATER_STATE_CIRCULATION, "Mix tank control zone is circulating");
+        _setState(WATER_STATE_IDLE, "โซนถังผสมกำลังหมุนน้ำและพร้อมทำงาน");
     } else {
-        _setState(WATER_STATE_DISABLED, "Water system idle");
+        _setState(WATER_STATE_IDLE, "ระบบน้ำหยุดอยู่");
     }
 }

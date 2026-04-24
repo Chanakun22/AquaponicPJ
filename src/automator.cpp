@@ -21,6 +21,11 @@ static volatile bool _paused = false;  // HW Test pause flag (volatile for cross
 static AutomatorConfig _config;
 static Preferences _prefs;
 
+static void _stopAutomatorOutputs(void) {
+    digitalWrite(PUMP_NUTRIENT_A_PIN, PUMP_OFF);
+    digitalWrite(PUMP_NUTRIENT_B_PIN, PUMP_OFF);
+}
+
 static bool _automatorBlockedByWaterSystem(const WaterSystemStatus* waterStatus, const char** reason, const char** nextState) {
     if (waterStatus == NULL) {
         return false;
@@ -86,8 +91,7 @@ static void _changeState(AutomatorState newState, const char* reason) {
     _updateReason(reason);
     
     // Safety: turn off all pumps when changing states
-    digitalWrite(PUMP_NUTRIENT_A_PIN, PUMP_OFF);
-    digitalWrite(PUMP_NUTRIENT_B_PIN, PUMP_OFF);
+    _stopAutomatorOutputs();
 
     
     LOG_INFO("[AUTOMATOR] State Changed to %s: %s", automatorGetStateString(newState), reason);
@@ -249,8 +253,7 @@ void automatorPause(void) {
     if (!_paused) {
         _paused = true;
         // Turn off all pumps immediately
-        digitalWrite(PUMP_NUTRIENT_A_PIN, PUMP_OFF);
-        digitalWrite(PUMP_NUTRIENT_B_PIN, PUMP_OFF);
+        _stopAutomatorOutputs();
 
         LOG_INFO("[AUTOMATOR] PAUSED for HW Test");
     }

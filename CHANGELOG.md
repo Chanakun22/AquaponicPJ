@@ -2,6 +2,56 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-04-25] - Flow Planner Sync With Latest Water And Dosing Logic
+
+### Changed
+
+- **refactor: align planner layout with current fish-route refill and direct A/B dosing flow (`forTestFlow/flow-layout.json`, `forTestFlow/index.html`):**
+  - อัปเดต flow layout หลักให้สะท้อน route เติมน้ำล่าสุดทั้ง `FISH_TANK_REFILL` และ `MIX_TANK_REFILL` พร้อมเส้นควบคุมจาก `Water System` ไปยัง `Pump เติมตู้ปลา`, `โซลินอยด์น้ำเข้าถังผสม`, และ `Pump หมุนเวียน`
+  - เพิ่มอุปกรณ์ `Pump ปุ๋ย A` และ `Pump ปุ๋ย B` ลงใน planner และเชื่อม `Automator` ให้สื่อชัดว่า firmware จ่ายสารลงถังผสมโดยตรงผ่านปั๊ม A/B โดยไม่มีปั๊มผสมแยก
+  - ปรับ `states` ของ planner ให้ตรงกับ state machine ปัจจุบันของ firmware ทั้งฝั่ง water system และ automator
+  - เปลี่ยน `seedDemo()` ในหน้า planner ให้เปิดมาด้วย flow ล่าสุดทันทีเมื่อยังไม่มีข้อมูลใน `localStorage` แทน demo schematic แบบ generic เดิม และ bump storage key เป็น `flow-planner-local-v2` เพื่อไม่ให้ browser โหลด schematic เก่าค้าง
+
+- **feat: add dedicated water-system auto flow diagram (`forTestFlow/water-system-auto-flow.json`):**
+  - เพิ่มไฟล์ flow แยกสำหรับอธิบาย state machine ของ `Water System AUTO` โดยเฉพาะ ตั้งแต่การอ่าน level sensors, การเช็ก blocked/alarm, การเลือก route, การ refill, การ settling, และผลต่อ automator
+  - ทำให้สามารถเปิด diagram แยกใน planner ได้โดยไม่ต้องปนกับภาพรวมอุปกรณ์ทั้งระบบ เหมาะกับการใช้คุย logic และ debug ลำดับ state
+
+## [2026-04-23] - Flow Planner Arrow Direction Fix
+
+### Changed
+
+- **refactor: lock water-system refill to the mix-tank inlet actuator and retire route logic in practice (`include/config.h`, `src/waterSystem.cpp`, `WATER_SYSTEM_FLOW_TH.md`):**
+  - ปรับ assumption ของระบบน้ำตาม plumbing ใหม่: ถังผสมและถังน้ำสะอาดมีน้ำเข้าแยกกัน, ถังผสมใช้โซลินอยด์ที่ ESP32 ควบคุม, และถังน้ำสะอาดใช้กลไกเชิงกลของตัวถังเอง
+  - ทำให้ firmware ใช้เส้นทางเติมจริงเพียงแบบเดียวคือ `MIX_TANK_REFILL` ผ่าน actuator ของถังผสม โดยไม่ใช้ route valve หรือ special refill ผ่านตู้ปลาใน logic runtime อีกต่อไป
+  - คง field legacy อย่าง `preferred_route`, `allow_direct_sump_refill`, และ `fish refill` ไว้เพื่อ compatibility กับ surface เดิม แต่ไม่ใช้ตัดสินใจ flow หลักแล้ว
+
+- **refactor: remove legacy route/fish-refill controls from Pi water pages (`pi_server/settings.html`, `pi_server/index.html`, `pi_server/hardware_test.html`, `pi_server/app.py`):**
+  - เอา field และปุ่มที่ผู้ใช้เห็นสำหรับ `preferred_route`, `allow_direct_sump_refill`, และ fish special refill ออกจากหน้า Settings และ Hardware Test เพื่อให้ UI ตรงกับ plumbing ใหม่ที่เติมเข้าถังผสมอย่างเดียว
+  - เปลี่ยน card บน Dashboard หลักจาก `Route` / `Fish Tank Refill` เป็นสถานะ `Mix Inlet` และ `Alarm` แทน เพื่อให้หน้าหลักสะท้อน actuator และสถานะที่ยังมีความหมายจริง
+  - ปรับ default/publish defaults ฝั่ง Pi ให้ legacy fields เริ่มจาก `SUMP_DIRECT` และ `false` แทน `AUTO` / `true` เพื่อไม่ให้ cache หรือ payload ที่ซ่อนอยู่ย้อนกลับไปใช้ assumption เก่า
+
+- **feat: add non-blocking 500 ms start delay for active-low fish feeder (`include/config.h`, `src/fishFeeder.cpp`):**
+  - เพิ่ม `FEEDER_ACTIVE_LOW_DELAY_MS = 500` เพื่อหน่วงก่อนสั่งขาให้อาหารปลาแบบ active low โดยไม่ hardcode ใน logic
+  - เปลี่ยน `fishFeederStartManualFeed()` ให้ arm คำสั่งไว้ก่อน แล้วค่อย active output หลังครบ 0.5 วินาทีใน `fishFeederLoop()` แทนการสั่งรีเลย์ทันที
+  - คงนโยบาย no-block ของระบบไว้ โดยไม่ใช้ `delay()` และยังยกเลิกรอบ pending feed ได้เมื่อผู้ใช้ปิด feeder ระหว่างช่วงหน่วง
+
+- **fix: treat all live ESP MQTT topics as heartbeat on Pi server (`pi_server/app.py`):**
+  - แก้การตัดสิน `ESP32 STATUS` ของหน้า Pi ที่เดิมต่ออายุ heartbeat เฉพาะ `aquaponics/sensors` ทำให้ขึ้น `OFFLINE` หลอกได้ แม้ status topic อื่นจาก ESP ยังวิ่งอยู่ตามปกติ
+  - เพิ่มชุด topic heartbeat ของ ESP และ refresh `last_esp_update` จากทุก packet ที่มาจาก ESP แบบ non-retained เช่น `status/water_system`, `status/fan_control`, `status/light_control`, `status/fish_feeder`, `logs`, และ `test/result`
+  - คงพฤติกรรม timeout 15 วินาทีเดิมไว้ แต่ให้สถานะ `ONLINE/OFFLINE` สะท้อนการมีชีวิตของ ESP จริงขึ้น แทนการผูกกับ sensor payload เส้นเดียว
+
+- **fix: move water dashboard fields to dedicated status cache and slim main sensor packet (`src/localMqtt.cpp`, `pi_server/app.py`):**
+  - ตัด field ระบบน้ำที่ซ้ำออกจาก payload `aquaponics/sensors` เพื่อให้ packet หลักกลับไปโฟกัสค่าที่ต้องใช้ทุก 2 วินาทีจริง ๆ เช่น sensor values, health stats, และ automation state
+  - ให้หน้า dashboard ฝั่ง Pi merge ค่า water-system จาก cache `aquaponics/status/water_system` ตอน build `dashboard_update` แทนการบังคับให้ sensor packet แบกทั้งค่าหลักและ water state ไปพร้อมกัน
+  - ลดโอกาสที่ sensor packet จะโตเกินจน publish ไม่ออก หลังเพิ่ม state/config/status ของ water system หลาย field ในรอบก่อนหน้า
+
+- **fix: make flow arrows clearly show source and destination in local planner (`forTestFlow/index.html`):**
+  - เปลี่ยนการคำนวณเส้น flow ให้เริ่มและจบที่ขอบของอุปกรณ์แต่ละกล่องแทนการลากจากจุดกึ่งกลางถึงจุดกึ่งกลาง ทำให้ลูกศรไม่จมเข้าไปใน node ปลายทางและมองทิศทางได้ชัดขึ้น
+  - ให้ตำแหน่ง label ของเส้นอิงจาก segment ที่ถูกตัดกับขอบ node จริง เพื่อให้ข้อความอยู่กึ่งกลางเส้นที่เห็นบนจอ
+  - ปรับ export PNG ให้ใช้ geometry เดียวกับ SVG บนหน้า planner เพื่อให้ภาพที่ export ออกมาแสดงทิศการไหลตรงกับหน้าใช้งานจริง
+  - ลดขนาดหัวลูกศรและน้ำหนักเส้นให้ดู minimal ขึ้น โดยยังคง highlight เส้นที่เลือกอยู่เพื่อไม่ให้ใช้งานยากเวลามีหลาย flow บน canvas
+  - เพิ่มระยะเผื่อปลายทางของ flow สำหรับหัวลูกศร เพื่อแก้กรณี marker ถูก card ปลายทางบังในมุมเฉียงบางแบบ โดยยังคงทิศทางและสัดส่วนเดิมของเส้น
+
 ## [2026-04-22] - Pi Server Auth And UI Hardening
 
 ### Changed
@@ -22,6 +72,11 @@ All notable changes to the **Smart Aquaponics AI** project will be documented in
   - อัปเดต default state ฝั่ง Pi และหน้า Settings ให้แสดงสถานะใหม่ของระบบน้ำได้ทันทีโดยไม่ต้องเดาจาก route/output เดิมเพียงอย่างเดียว
   - แปลหน้า `hardware_test.html` เป็นภาษาไทยในส่วนหัวข้อ, ปุ่ม, state cards, และข้อความ runtime/log หลัก พร้อมเพิ่มการ์ดสถานะใหม่สำหรับ fish refill, mix refill, dilution, settling, และเวลารอให้น้ำคงตัว
   - เพิ่ม widget `Mix Tank Control Zone` บนหน้า `index.html` ให้หน้า dashboard หลักเห็น state, route, circulation, fish/mix refill outputs, dilution, settling, control-zone stability, hold time, และ reason ได้จากหน้าแรกทันที พร้อม map workflow wait states ใหม่ของ mix tank ให้อ่านได้ตรงกับ firmware
+
+- **refactor: split water states into mix refill / fish special refill / interval wait (`include/waterSystem.h`, `src/waterSystem.cpp`, `src/localMqtt.cpp`, `src/commandHandler.cpp`, `pi_server/app.py`, `pi_server/settings.html`, `pi_server/hardware_test.html`, `pi_server/index.html`):**
+  - เปลี่ยน state machine ของ water system ให้แยก state ชัดขึ้นเป็น `พร้อมทำงาน`, `เติมถังน้ำผสม`, `รอช่วงกันเติมถี่`, `รอให้น้ำในถังผสมนิ่ง`, `เติมผ่านตู้ปลา`, `ถูกบล็อก`, และ `แจ้งเตือน` เพื่อให้ตรงกับ flow ล่าสุดที่ใช้ถังน้ำผสมเป็น control zone หลัก
+  - เพิ่ม config ใหม่ `refill_min_interval_ms`, `fish_refill_interval_ms`, และ `fish_refill_max_runtime_ms` เพื่อคุมรอบเติมถังผสมไม่ให้ถี่เกิน และจำกัดรอบพิเศษผ่านตู้ปลาให้ห่าง/สั้นตามที่คุยกัน
+  - เพิ่ม status ใหม่ `state_label_th`, `fish_refill_ready`, และ `fish_refill_wait_remaining_ms` แล้วต่อขึ้นหน้า Settings / HW Test / Dashboard เพื่อให้คนดูหน้า Pi อ่าน state machine ภาษาไทยได้ทันที
 
 - **fix: make WDT fallback checkpoints less misleading (`src/main.cpp`):**
   - เปลี่ยน `TaskSensors` และ `TaskControl` ให้ใช้ `taskCheckpoint()` ทุก stage แทนการอัปเดตแค่ `stage` โดยไม่ feed heartbeat ระหว่างทาง เพื่อให้ crash fallback/report สะท้อน checkpoint ล่าสุดจริงมากขึ้น
