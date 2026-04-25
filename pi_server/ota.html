@@ -407,7 +407,7 @@
             </div>
             <div class="esp-info-item">
                 <div class="esp-info-label">ESP32 IP</div>
-                <div class="esp-info-value" id="espIp">192.168.10.10</div>
+                <div class="esp-info-value" id="espIp">-</div>
             </div>
             <div class="esp-info-item">
                 <div class="esp-info-label">Free Heap</div>
@@ -664,6 +664,19 @@
             }
         }
 
+        async function loadSecureSettings() {
+            try {
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                const espIp = data?.secure?.esp_ip?.trim();
+                if (espIp) {
+                    document.getElementById('espIp').textContent = espIp;
+                }
+            } catch (err) {
+                document.getElementById('espIp').textContent = '192.168.10.10';
+            }
+        }
+
         // === Helpers ===
         function formatSize(bytes) {
             if (bytes < 1024) return bytes + ' B';
@@ -685,6 +698,7 @@
         }
 
         // === Init ===
+        loadSecureSettings();
         updateEspInfo();
         setInterval(updateEspInfo, 10000);
 

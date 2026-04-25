@@ -195,8 +195,7 @@ const char* automatorGetNextStateString(void) {
             return "EVALUATING";
 
         case AUTO_STATE_EVALUATING: {
-            float waterTemp = tempRead();
-            float tds = tdsRead(waterTemp);
+            float tds = tdsGetLastValue();
 
             if (isnan(tds) || tds <= 5.0f) {
                 return "IDLE";
@@ -308,8 +307,7 @@ void automatorLoop(void) {
             break;
 
         case AUTO_STATE_EVALUATING: {
-            float waterTemp = tempRead();
-            float tds = tdsRead(waterTemp);
+            float tds = tdsGetLastValue();
             
             // Validate sensor read (don't act on NAN or 0)
             if (isnan(tds) || tds <= 5.0f) {

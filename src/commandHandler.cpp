@@ -229,12 +229,13 @@ static void _showHelp(CommandOutput_t out) {
  * @brief แสดงค่าเซ็นเซอร์ทั้งหมด
  */
 static void _showStatus(CommandOutput_t out) {
+    float lastTds = tdsGetLastValue();
     commandPrintf(out, "\r\n");
     commandPrintf(out, "========== SENSOR STATUS ==========\r\n");
     commandPrintf(out, "  Water Temp : %.2f C\r\n", tempRead());
     commandPrintf(out, "  Air Temp   : %.2f C\r\n", dhtReadTemperature());
     commandPrintf(out, "  Humidity   : %.2f %%\r\n", dhtReadHumidity());
-    commandPrintf(out, "  TDS        : %.0f ppm\r\n", tdsRead(tempRead()));
+    commandPrintf(out, "  TDS        : %.0f ppm\r\n", lastTds);
     commandPrintf(out, "  pH         : %.2f\r\n", phRead());
     commandPrintf(out, "  Light      : %.0f lux\r\n", lightRead());
     commandPrintf(out, "===================================\r\n");
@@ -352,7 +353,7 @@ static void _runSystemTest(CommandOutput_t out) {
     float t_water = tempRead();
     float t_air = dhtReadTemperature();
     float humid = dhtReadHumidity();
-    float tds = tdsRead(t_water);
+    float tds = tdsGetLastValue();
     float light = lightRead();
     float ph = phRead();
     

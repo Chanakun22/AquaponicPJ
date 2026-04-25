@@ -10,6 +10,9 @@
 #if OTA_ENABLED == 1
 #include <ArduinoOTA.h>
 #include <WiFi.h>
+#if defined(ESP32) && WATCHDOG_ENABLED
+#include "esp_task_wdt.h"
+#endif
 #endif
 
 // ============================================================================
@@ -17,6 +20,7 @@
 // ============================================================================
 
 static bool _otaInitialized = false;
+static bool _otaInProgress = false;
 
 // ============================================================================
 // PUBLIC FUNCTIONS
@@ -35,16 +39,24 @@ void otaSetup(void) {
     }
     
     ArduinoOTA.onStart([]() {
+        _otaInProgress = true;
         LOG_WARN("OTA Update started");
     });
     
     ArduinoOTA.onEnd([]() {
+        _otaInProgress = false;
         LOG_INFO("OTA Update finished");
     });
     
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-        unsigned int percent = (progress / (total / 100));
+        unsigned int percent = (total > 0U)
+            ? (unsigned int)(((unsigned long long)progress * 100ULL) / (unsigned long long)total)
+            : 0U;
         static unsigned int lastPercent = 0;
+
+        #if defined(ESP32) && WATCHDOG_ENABLED
+        esp_task_wdt_reset();
+        #endif
         
         if (percent != lastPercent && percent % 10 == 0) {
             LOG_INFO("OTA Progress: %u%%", percent);
@@ -53,6 +65,7 @@ void otaSetup(void) {
     });
     
     ArduinoOTA.onError([](ota_error_t error) {
+        _otaInProgress = false;
         LOG_ERROR("OTA Error[%u]: ", error);
         if (error == OTA_AUTH_ERROR) {
             LOG_ERROR("Auth Failed");
@@ -80,6 +93,11 @@ void otaLoop(void) {
     #if OTA_ENABLED == 1
     if (_otaInitialized) {
         ArduinoOTA.handle();
+        #if defined(ESP32) && WATCHDOG_ENABLED
+        if (_otaInProgress) {
+            esp_task_wdt_reset();
+        }
+        #endif
     }
     #endif
 }

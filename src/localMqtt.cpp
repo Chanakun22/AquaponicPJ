@@ -48,6 +48,8 @@ static unsigned long _reconnectInterval = 5000;          // Backoff interval (�
 static const unsigned long MAX_RECONNECT_INTERVAL = 60000; // สูงสุด 60 วินาที
 static const uint16_t LOCAL_MQTT_PACKET_BUFFER_SIZE = 2048;
 static const uint8_t LOCAL_MQTT_MAX_LOGS_PER_LOOP = 1;
+static StaticJsonDocument<1792> _sensorPublishDoc;
+static char _sensorPublishPayload[LOCAL_MQTT_PACKET_BUFFER_SIZE];
 
 // HW Test: deadline-based pump auto-off handled in TaskNetworking tick.
 static bool _hwTestPumpActive = false;
@@ -526,7 +528,7 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
             float wt = tempRead();
             float at = dhtReadTemperature();
             float hm = dhtReadHumidity();
-            float td = tdsRead(wt);
+            float td = tdsGetLastValue();
             float ph = phRead();
             float lx = lightRead();
             if (!isnan(wt)) result["water_temp"] = serialized(String(wt, 1));
@@ -716,92 +718,91 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
     
     _lastPublishTime = millis();
 
-    StaticJsonDocument<1792> doc;
+    _sensorPublishDoc.clear();
     
     // Format same as Netpie for consistency, or simpler flat JSON
-    if (!isnan(waterTemp)) doc["water_temp"] = round(waterTemp * 10) / 10.0;
-    if (!isnan(airTemp)) doc["air_temp"] = round(airTemp * 10) / 10.0;
-    if (!isnan(humidity)) doc["humidity"] = round(humidity * 10) / 10.0;
-    if (tds >= 0) doc["tds"] = round(tds * 10) / 10.0;
-    if (light >= 0) doc["light"] = round(light * 10) / 10.0;
-    if (ph >= 0) doc["ph"] = round(ph * 100) / 100.0;
+    if (!isnan(waterTemp)) _sensorPublishDoc["water_temp"] = round(waterTemp * 10) / 10.0;
+    if (!isnan(airTemp)) _sensorPublishDoc["air_temp"] = round(airTemp * 10) / 10.0;
+    if (!isnan(humidity)) _sensorPublishDoc["humidity"] = round(humidity * 10) / 10.0;
+    if (tds >= 0) _sensorPublishDoc["tds"] = round(tds * 10) / 10.0;
+    if (light >= 0) _sensorPublishDoc["light"] = round(light * 10) / 10.0;
+    if (ph >= 0) _sensorPublishDoc["ph"] = round(ph * 100) / 100.0;
     
     // Add TDS voltage for calibration
     float tdsVoltage = tdsGetVoltage();
-    if (tdsVoltage >= 0) doc["tds_voltage"] = round(tdsVoltage * 1000) / 1000.0;
+    if (tdsVoltage >= 0) _sensorPublishDoc["tds_voltage"] = round(tdsVoltage * 1000) / 1000.0;
     
     // Add pH voltage for calibration (mV)
     float phVoltage = phReadVoltage();
-    if (phVoltage >= 0) doc["ph_voltage"] = round(phVoltage * 10) / 10.0;
-    if (phIsReady()) doc["ph_value"] = round(phRead() * 100) / 100.0;
+    if (phVoltage >= 0) _sensorPublishDoc["ph_voltage"] = round(phVoltage * 10) / 10.0;
+    if (phIsReady()) _sensorPublishDoc["ph_value"] = round(phRead() * 100) / 100.0;
     
     // Add Network Connectivity Status
-    doc["mqtt_connected"] = netpieIsConnected(); // Status for Dashboard
-    doc["wifi_rssi"] = WiFi.RSSI();
+    _sensorPublishDoc["mqtt_connected"] = netpieIsConnected(); // Status for Dashboard
+    _sensorPublishDoc["wifi_rssi"] = WiFi.RSSI();
     
     // Add System Health Stats
     SystemHealth_t health;
     systemGetHealth(&health);
-    doc["uptime_sec"] = health.uptimeMs / 1000;
-    doc["free_heap"] = health.freeHeap;
-    doc["heap_size"] = health.heapSize; // Added for RAM calc
-    doc["wifi_reconnects"] = health.wifiReconnects;
-    doc["mqtt_reconnects"] = health.mqttReconnects;
-    doc["watchdog_resets"] = health.watchdogResets;
-    doc["reset_reason"] = health.resetReason;
-    doc["cpu_temp"] = health.cpuTemp; // ESP32 Temp
+    _sensorPublishDoc["uptime_sec"] = health.uptimeMs / 1000;
+    _sensorPublishDoc["free_heap"] = health.freeHeap;
+    _sensorPublishDoc["heap_size"] = health.heapSize; // Added for RAM calc
+    _sensorPublishDoc["wifi_reconnects"] = health.wifiReconnects;
+    _sensorPublishDoc["mqtt_reconnects"] = health.mqttReconnects;
+    _sensorPublishDoc["watchdog_resets"] = health.watchdogResets;
+    _sensorPublishDoc["reset_reason"] = health.resetReason;
+    _sensorPublishDoc["cpu_temp"] = health.cpuTemp; // ESP32 Temp
     
     // Add Automator Process State (Process Tracker)
     AutomatorConfig authCfg;
     automatorGetConfig(&authCfg);
-    doc["auto_enabled"] = authCfg.enabled;
-    doc["auto_tgt_tds"] = authCfg.targetTds;
-    doc["auto_tgt_ph"] = authCfg.targetPh;
-    doc["auto_state"] = automatorGetStateString(automatorGetCurrentState());
-    doc["auto_next_state"] = automatorGetNextStateString();
-    doc["auto_reason"] = automatorGetActionReason();
-    doc["auto_time_left"] = automatorGetTimeRemainingSec();
+    _sensorPublishDoc["auto_enabled"] = authCfg.enabled;
+    _sensorPublishDoc["auto_tgt_tds"] = authCfg.targetTds;
+    _sensorPublishDoc["auto_tgt_ph"] = authCfg.targetPh;
+    _sensorPublishDoc["auto_state"] = automatorGetStateString(automatorGetCurrentState());
+    _sensorPublishDoc["auto_next_state"] = automatorGetNextStateString();
+    _sensorPublishDoc["auto_reason"] = automatorGetActionReason();
+    _sensorPublishDoc["auto_time_left"] = automatorGetTimeRemainingSec();
 
     LightControlConfig lightCfg;
     LightControlStatus lightStatus;
     lightCtrlGetConfig(&lightCfg);
     lightCtrlGetStatus(&lightStatus);
-    doc["light_relay"] = lightStatus.running;
-    doc["light_schedule_enabled"] = lightCfg.enabled;
-    doc["light_manual_state"] = lightCfg.manualState;
-    doc["light_source"] = lightCtrlGetCommandSourceString(lightCfg.commandSource);
+    _sensorPublishDoc["light_relay"] = lightStatus.running;
+    _sensorPublishDoc["light_schedule_enabled"] = lightCfg.enabled;
+    _sensorPublishDoc["light_manual_state"] = lightCfg.manualState;
+    _sensorPublishDoc["light_source"] = lightCtrlGetCommandSourceString(lightCfg.commandSource);
 
     FanControlConfig fanCfg;
     FanControlStatus fanStatus;
     fanCtrlGetConfig(&fanCfg);
     fanCtrlGetStatus(&fanStatus);
-    doc["fan_enabled"] = fanCfg.enabled;
-    doc["fan_auto_mode"] = fanCfg.autoMode;
-    doc["fan_manual_state"] = fanCfg.manualState;
-    doc["fan_running"] = fanStatus.running;
-    doc["fan_state"] = fanCtrlGetStateString(fanStatus.state);
-    doc["fan_reason"] = fanStatus.reason;
-    doc["fan_has_output"] = fanStatus.hasOutput;
+    _sensorPublishDoc["fan_enabled"] = fanCfg.enabled;
+    _sensorPublishDoc["fan_auto_mode"] = fanCfg.autoMode;
+    _sensorPublishDoc["fan_manual_state"] = fanCfg.manualState;
+    _sensorPublishDoc["fan_running"] = fanStatus.running;
+    _sensorPublishDoc["fan_state"] = fanCtrlGetStateString(fanStatus.state);
+    _sensorPublishDoc["fan_reason"] = fanStatus.reason;
+    _sensorPublishDoc["fan_has_output"] = fanStatus.hasOutput;
 
     FishFeederConfig feederCfg;
     FishFeederStatus feederStatus;
     fishFeederGetConfig(&feederCfg);
     fishFeederGetStatus(&feederStatus);
-    doc["feeder_enabled"] = feederCfg.enabled;
-    doc["feeder_running"] = feederStatus.running;
-    doc["feeder_state"] = fishFeederGetStateString(feederStatus.state);
-    doc["feeder_source"] = commandSourceToString(feederCfg.commandSource);
+    _sensorPublishDoc["feeder_enabled"] = feederCfg.enabled;
+    _sensorPublishDoc["feeder_running"] = feederStatus.running;
+    _sensorPublishDoc["feeder_state"] = fishFeederGetStateString(feederStatus.state);
+    _sensorPublishDoc["feeder_source"] = commandSourceToString(feederCfg.commandSource);
 
-    char payload[LOCAL_MQTT_PACKET_BUFFER_SIZE];
-    size_t payloadLen = serializeJson(doc, payload, sizeof(payload));
+    size_t payloadLen = serializeJson(_sensorPublishDoc, _sensorPublishPayload, sizeof(_sensorPublishPayload));
 
-    if (payloadLen == 0 || payloadLen >= sizeof(payload) - 1) {
+    if (payloadLen == 0 || payloadLen >= sizeof(_sensorPublishPayload) - 1) {
         LOG_ERROR("Local MQTT payload too large (%u bytes), skipping publish", (unsigned int)payloadLen);
         return;
     }
 
-    if (_localMqtt.publish(LOCAL_MQTT_TOPIC_SENSORS, payload)) {
-        LOG_DEBUG("Local MQTT Publish: %s", payload);
+    if (_localMqtt.publish(LOCAL_MQTT_TOPIC_SENSORS, _sensorPublishPayload)) {
+        LOG_DEBUG("Local MQTT Publish: %s", _sensorPublishPayload);
     } else {
         LOG_ERROR("Local MQTT Publish Failed (len=%u, state=%d)",
                   (unsigned int)payloadLen,

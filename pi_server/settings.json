@@ -1,6 +1,6 @@
 {
   "thresholds": {
-    "ph_min": 6.0,
+    "ph_min": 6,
     "ph_max": 7.5,
     "water_temp_min": 22,
     "water_temp_max": 30,
@@ -11,26 +11,121 @@
     "tds_min": 300,
     "tds_max": 600
   },
-  "light": {
-    "enabled": false,
-    "on_day": 1,
-    "on_time": "06:00",
-    "off_day": 5,
-    "off_time": "18:00"
-  },
   "notifications": {
-    "line_token": "",
+    "line_token": "h3ZAs9qNLL5JfUPS2BE54D7hVoeL7oLBk/Dd23uIukb7A3Nq1WmndlTrMJStBvxTG4HfADVjT5zjH2ea8X/4ZITwNDCRh0hZZf9O18D6vtTirgDxef5Oo1rBTHEA4dvf0MJ+keAmDZvHIby10Y/d2AdB04t89/1O/w1cDnyilFU=",
     "alert_cooldown_min": 15,
     "enabled": false
   },
   "display": {
     "graph_days": 3,
-    "refresh_sec": 5,
-    "device_name": "Aquaponics System"
+    "device_name": ""
+  },
+  "sensor_config": {
+    "tds": true,
+    "ph": true,
+    "water": true,
+    "air": true,
+    "light": true
+  },
+  "water_system": {
+    "circulation_enabled": false,
+    "refill_enabled": false,
+    "manual_refill": false,
+    "refill_max_runtime_ms": 120000,
+    "refill_min_interval_ms": 300000,
+    "preferred_route": "AUTO",
+    "active_route": "NONE",
+    "allow_direct_sump_refill": false,
+    "fish_refill_interval_ms": 604800000,
+    "fish_refill_max_runtime_ms": 30000,
+    "state": "UNKNOWN",
+    "state_label_th": "\u0e1e\u0e23\u0e49\u0e2d\u0e21\u0e17\u0e33\u0e07\u0e32\u0e19",
+    "reason": "-",
+    "alarm_active": false,
+    "circulation_pump_output": false,
+    "fish_tank_refill_output": false,
+    "mix_tank_refill_output": false,
+    "water_dilution_active": false,
+    "mix_tank_settling_active": false,
+    "mix_tank_control_zone": true,
+    "dilution_hold_remaining_ms": 0,
+    "fish_refill_ready": true,
+    "fish_refill_wait_remaining_ms": 0,
+    "sump_low": false,
+    "sump_high": false,
+    "overflow_alarm": false,
+    "route_blocked": false,
+    "route_valve_output": false,
+    "has_route_valve": false
+  },
+  "fan_control": {
+    "enabled": false,
+    "auto_mode": false,
+    "manual_state": false,
+    "temp_on_c": 32,
+    "temp_off_c": 30,
+    "humidity_on_pct": 80,
+    "humidity_off_pct": 75,
+    "state": "BLOCKED",
+    "running": false,
+    "has_output": false,
+    "reason": "Set EXHAUST_FAN_PIN when fan relay wiring is finalized",
+    "air_temp_c": 26.3,
+    "humidity_pct": 52.5
+  },
+  "light_control": {
+    "command_source": "local_web",
+    "enabled": false,
+    "manual_state": false,
+    "on_day": 7,
+    "on_time": "07:00",
+    "off_day": 7,
+    "off_time": "18:00",
+    "running": true,
+    "ntp_synced": false,
+    "has_output": true,
+    "reason": "Manual ON"
+  },
+  "fish_feeder": {
+    "command_source": "local_web",
+    "enabled": false,
+    "feed_day": 7,
+    "feed_time": "14:35",
+    "duration_ms": 250,
+    "state": "DISABLED",
+    "running": false,
+    "has_output": true,
+    "last_feed_at": "2026-04-25 15:44",
+    "reason": "Fish feeder disabled"
+  },
+  "tds_calibration": {
+    "low_ppm": 500,
+    "low_voltage": 0.0,
+    "high_ppm": 1000,
+    "high_voltage": 0.0,
+    "calibrated": false
+  },
+  "ph_calibration": {
+    "cal401_done": true,
+    "cal686_done": true,
+    "cal918_done": true,
+    "last_voltage": 2481,
+    "last_ph": 8.96
+  },
+  "camera": {
+    "width": 640,
+    "height": 480,
+    "framerate": 24,
+    "quality": 70
   },
   "secure": {
     "ota_password": "admin123",
-    "esp_ip": "192.168.10.100",
+    "esp_ip": "192.168.10.10",
     "terminal_ip": "192.168.10.2"
+  },
+  "automation": {
+    "enabled": false,
+    "target_tds": 800,
+    "target_ph": 6.5
   }
 }

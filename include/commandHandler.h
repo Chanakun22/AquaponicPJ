@@ -43,11 +43,6 @@ void commandPrintf(CommandOutput_t output, const char* format, ...);
 void commandCheckSerial(void);
 
 /**
- * @brief Check and process Telnet input
- */
-void commandCheckTelnet(void);
-
-/**
  * @brief Non-blocking pump test auto-off tick (call in loop)
  */
 void commandPumpTestTick(void);

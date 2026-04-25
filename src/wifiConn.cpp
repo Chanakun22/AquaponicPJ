@@ -18,8 +18,8 @@
 // FIXED WIFI CREDENTIALS (Pi Hotspot)
 // ============================================================================
 
-static const char* WIFI_SSID = "Aquaponics-LAN";
-static const char* WIFI_PASS = "aqua1234";
+static const char* WIFI_SSID = WIFI_AP_NAME;
+static const char* WIFI_PASS = WIFI_AP_PASS;
 
 // ============================================================================
 // PRIVATE VARIABLES

@@ -163,32 +163,6 @@ static bool _routeAvailable(WaterRefillRoute route) {
     }
 }
 
-static WaterRefillRoute _resolveRefillRoute(void) {
-    switch (_config.preferredRoute) {
-        case WATER_REFILL_ROUTE_FISH_TANK:
-            return _routeAvailable(WATER_REFILL_ROUTE_FISH_TANK) ? WATER_REFILL_ROUTE_FISH_TANK : WATER_REFILL_ROUTE_NONE;
-
-        case WATER_REFILL_ROUTE_SUMP_DIRECT:
-            return _routeAvailable(WATER_REFILL_ROUTE_SUMP_DIRECT) ? WATER_REFILL_ROUTE_SUMP_DIRECT : WATER_REFILL_ROUTE_NONE;
-
-        case WATER_REFILL_ROUTE_AUTO:
-            if (_config.allowDirectSumpRefill && _routeAvailable(WATER_REFILL_ROUTE_SUMP_DIRECT)) {
-                return WATER_REFILL_ROUTE_SUMP_DIRECT;
-            }
-            if (_routeAvailable(WATER_REFILL_ROUTE_FISH_TANK)) {
-                return WATER_REFILL_ROUTE_FISH_TANK;
-            }
-            if (_routeAvailable(WATER_REFILL_ROUTE_SUMP_DIRECT)) {
-                return WATER_REFILL_ROUTE_SUMP_DIRECT;
-            }
-            return WATER_REFILL_ROUTE_NONE;
-
-        case WATER_REFILL_ROUTE_NONE:
-        default:
-            return WATER_REFILL_ROUTE_NONE;
-    }
-}
-
 static unsigned long _getRemainingIntervalMs(unsigned long now,
                                              unsigned long lastEventMs,
                                              unsigned long intervalMs) {
@@ -202,6 +176,43 @@ static unsigned long _getRemainingIntervalMs(unsigned long now,
     }
 
     return intervalMs - elapsed;
+}
+
+static unsigned long _getFishRefillWaitRemainingMs(unsigned long now) {
+    if (!_routeAvailable(WATER_REFILL_ROUTE_FISH_TANK)) {
+        return 0;
+    }
+
+    return _getRemainingIntervalMs(now, _lastFishRefillStopMs, _config.fishRefillIntervalMs);
+}
+
+static bool _isFishRefillReady(unsigned long now, bool overflowActive) {
+    return _routeAvailable(WATER_REFILL_ROUTE_FISH_TANK)
+        && !overflowActive
+        && _getFishRefillWaitRemainingMs(now) == 0;
+}
+
+static WaterRefillRoute _resolveRefillRouteForNow(unsigned long now, bool overflowActive) {
+    switch (_config.preferredRoute) {
+        case WATER_REFILL_ROUTE_FISH_TANK:
+            return _isFishRefillReady(now, overflowActive) ? WATER_REFILL_ROUTE_FISH_TANK : WATER_REFILL_ROUTE_NONE;
+
+        case WATER_REFILL_ROUTE_SUMP_DIRECT:
+            return _routeAvailable(WATER_REFILL_ROUTE_SUMP_DIRECT) ? WATER_REFILL_ROUTE_SUMP_DIRECT : WATER_REFILL_ROUTE_NONE;
+
+        case WATER_REFILL_ROUTE_AUTO:
+            if (_isFishRefillReady(now, overflowActive)) {
+                return WATER_REFILL_ROUTE_FISH_TANK;
+            }
+            if (_config.allowDirectSumpRefill && _routeAvailable(WATER_REFILL_ROUTE_SUMP_DIRECT)) {
+                return WATER_REFILL_ROUTE_SUMP_DIRECT;
+            }
+            return WATER_REFILL_ROUTE_NONE;
+
+        case WATER_REFILL_ROUTE_NONE:
+        default:
+            return WATER_REFILL_ROUTE_NONE;
+    }
 }
 
 static void _updateDerivedStatus(unsigned long now) {
@@ -424,6 +435,7 @@ void waterSystemLoop(void) {
     stateReason[0] = '\0';
     bool waitingForInterval = false;
     unsigned long mixIntervalRemainingMs = _getRemainingIntervalMs(now, _lastMixRefillStopMs, _config.refillMinIntervalMs);
+    unsigned long fishIntervalRemainingMs = _getFishRefillWaitRemainingMs(now);
 
     _status.hasCirculationPump = _hasCirculationPump();
     _status.hasRefillPump = _hasRefillPump();
@@ -443,8 +455,8 @@ void waterSystemLoop(void) {
     _status.mixTankSettlingActive = false;
     _status.mixTankControlZone = true;
     _status.dilutionHoldRemainingMs = 0;
-    _status.fishRefillReady = true;
-    _status.fishRefillWaitRemainingMs = 0;
+    _status.fishRefillReady = _isFishRefillReady(now, _status.overflowAlarm);
+    _status.fishRefillWaitRemainingMs = fishIntervalRemainingMs;
 
     if (_status.hasLevelSensors && _status.levelLow && _status.levelHigh) {
         _alarmLatched = true;
@@ -496,13 +508,50 @@ void waterSystemLoop(void) {
             _refillStartMs = now;
         }
 
-        desiredRoute = _resolveRefillRoute();
+        desiredRoute = _resolveRefillRouteForNow(now, _status.overflowAlarm);
 
         if (desiredRoute == WATER_REFILL_ROUTE_NONE) {
             refillDesired = false;
-            blocked = true;
-            _status.routeBlocked = true;
-            _setState(WATER_STATE_BLOCKED, "ไม่มีเส้นทางเติมที่ใช้งานได้ตาม config ปัจจุบัน");
+
+            if (_routeAvailable(WATER_REFILL_ROUTE_FISH_TANK)
+                    && (_config.preferredRoute == WATER_REFILL_ROUTE_FISH_TANK
+                        || _config.preferredRoute == WATER_REFILL_ROUTE_AUTO)
+                    && (fishIntervalRemainingMs > 0 || _status.overflowAlarm)) {
+                waitingForInterval = true;
+                if (_status.overflowAlarm) {
+                    snprintf(stateReason,
+                             sizeof(stateReason),
+                             "หยุดเติมตู้ปลา เพราะ overflow sensor ยัง active อยู่");
+                } else {
+                    snprintf(stateReason,
+                             sizeof(stateReason),
+                             "รอรอบเติมตู้ปลาถัดไป (%lu วินาที)",
+                             fishIntervalRemainingMs / 1000UL);
+                }
+            } else {
+                blocked = true;
+                _status.routeBlocked = true;
+                _setState(WATER_STATE_BLOCKED, "ไม่มีเส้นทางเติมที่ใช้งานได้ตาม config ปัจจุบัน");
+            }
+        }
+
+        if (refillDesired && desiredRoute == WATER_REFILL_ROUTE_FISH_TANK) {
+            bool fishRuntimeReached = (now - _refillStartMs) >= _config.fishRefillMaxRuntimeMs;
+            bool fishShouldStop = _status.overflowAlarm || fishRuntimeReached;
+
+            if (fishShouldStop) {
+                _lastFishRefillStopMs = now;
+
+                if (!_config.manualRefill
+                        && _config.preferredRoute == WATER_REFILL_ROUTE_AUTO
+                        && _config.allowDirectSumpRefill
+                        && _routeAvailable(WATER_REFILL_ROUTE_SUMP_DIRECT)) {
+                    desiredRoute = WATER_REFILL_ROUTE_SUMP_DIRECT;
+                    _refillStartMs = now;
+                } else {
+                    refillDesired = false;
+                }
+            }
         }
 
         if (refillDesired && (now - _refillStartMs) >= _config.refillMaxRuntimeMs) {
@@ -543,6 +592,9 @@ void waterSystemLoop(void) {
 
     if (_refillWasActive && !_status.refillOutput) {
         _lastMixRefillStopMs = now;
+        if (_lastActiveRefillRoute == WATER_REFILL_ROUTE_FISH_TANK) {
+            _lastFishRefillStopMs = now;
+        }
         _refillStartMs = 0;
     }
 
@@ -572,13 +624,13 @@ void waterSystemLoop(void) {
             snprintf(stateReason,
                      sizeof(stateReason),
                      _status.activeRoute == WATER_REFILL_ROUTE_FISH_TANK
-                         ? "กำลังสั่งปั๊มเติมน้ำเข้าตู้ปลาแบบสั่งด้วยมือ"
+                         ? "กำลังสั่งปั๊มเติมน้ำเข้าตู้ปลาแบบสั่งด้วยมือ (หยุดเมื่อครบเวลา/overflow)"
                          : "กำลังเปิดโซลินอยด์เติมน้ำเข้าถังผสมแบบสั่งด้วยมือ");
         } else {
             snprintf(stateReason,
                      sizeof(stateReason),
                      _status.activeRoute == WATER_REFILL_ROUTE_FISH_TANK
-                         ? "ถังผสมระดับต่ำ ระบบกำลังปั๊มน้ำจากถังสะอาดเข้าตู้ปลา"
+                         ? "ถังผสมระดับต่ำ ระบบกำลังปั๊มน้ำเข้าตู้ปลาแบบจำกัดเวลา/overflow"
                          : "ถังผสมระดับต่ำ ระบบกำลังเปิดโซลินอยด์น้ำเข้า");
         }
         _setState(_status.activeRoute == WATER_REFILL_ROUTE_FISH_TANK

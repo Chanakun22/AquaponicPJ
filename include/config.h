@@ -176,10 +176,10 @@
 // WIFI Configuration
 // ==========================================
 #ifndef SECRET_WIFI_AP_NAME
-#define SECRET_WIFI_AP_NAME AquaponicsPJ // Default if not defined
+#define SECRET_WIFI_AP_NAME Aquaponics-LAN // Default if not defined
 #endif
 #ifndef SECRET_WIFI_AP_PASS
-#define SECRET_WIFI_AP_PASS admin1234
+#define SECRET_WIFI_AP_PASS aqua1234
 #endif
 
 #define WIFI_AP_NAME        XSTRINGIFY(SECRET_WIFI_AP_NAME)
@@ -228,7 +228,7 @@
 #define TELNET_PORT         23
 
 #ifndef SECRET_TELNET_PASSWORD
-#define SECRET_TELNET_PASSWORD admin1234
+#define SECRET_TELNET_PASSWORD admin123
 #endif
 
 #define TELNET_PASSWORD     XSTRINGIFY(SECRET_TELNET_PASSWORD)

@@ -408,6 +408,54 @@
             transform: translateX(22px);
         }
 
+        .water-section-title {
+            margin: 18px 0 10px;
+            font-size: 0.76rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .water-panel-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 14px;
+        }
+
+        .water-panel-grid .form-group {
+            margin-bottom: 0;
+        }
+
+        .water-status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .water-status-card {
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 12px 14px;
+            background: rgba(255,255,255,0.03);
+        }
+
+        .water-status-card span {
+            display: block;
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .water-status-card strong {
+            display: block;
+            font-size: 0.96rem;
+            color: var(--text-main);
+        }
+
         /* === Buttons === */
         .btn {
             background: rgba(255,255,255,0.06);
@@ -890,7 +938,7 @@
 
         <div class="card">
             <h2><i class="fas fa-water"></i> Water System <span class="card-mode apply-now">Apply Now</span></h2>
-            <div class="card-hint">ใช้ตั้งค่าระบบน้ำของบ่อ ทั้งการหมุนน้ำ, การเติมน้ำ, เส้นทางเติมน้ำ, และการล้าง alarm โดยค่าที่กด Apply จะส่งไป ESP32 ทันที</div>
+            <div class="card-hint">รวมค่าหลักของระบบน้ำทั้งหมดไว้ในการ์ดเดียว ทั้ง circulation, refill policy, fish-safe refill limit, route fallback, สถานะจริงจาก ESP32 และปุ่มสั่งงานทันที</div>
 
             <div class="form-group">
                 <div class="toggle-container" style="justify-content: space-between; margin-bottom: 12px;">
@@ -912,18 +960,34 @@
                 <span class="field-tip">เปิดให้ระบบตรวจลูกลอย/เซ็นเซอร์ระดับน้ำของถังผสม แล้วสั่งเติมน้ำอัตโนมัติเมื่อระดับต่ำกว่าที่กำหนด</span>
             </div>
 
-            <div class="form-group">
-                <label>Max Refill Time (ms)</label>
-                <input type="number" id="water_refill_max_runtime_ms" step="1000" min="1000" placeholder="e.g. 120000">
-                <span class="field-tip">เวลาสูงสุดที่อนุญาตให้ปั๊มเติมน้ำทำงานต่อเนื่อง ถ้าเกินค่านี้แล้วยังไม่ถึงระดับที่ควรได้ ระบบจะมองว่าเติมผิดปกติและเข้า alarm</span>
+            <div class="water-section-title">Refill Policy</div>
+            <div class="water-panel-grid">
+                <div class="form-group">
+                    <label>Max Refill Time (ms)</label>
+                    <input type="number" id="water_refill_max_runtime_ms" step="1000" min="1000" placeholder="e.g. 120000">
+                    <span class="field-tip">เวลาสูงสุดของรอบเติมรวม ถ้าเกินค่านี้แล้วยังไม่ถึงระดับที่ควรได้ ระบบจะเข้า alarm</span>
+                </div>
+
+                <div class="form-group">
+                    <label>Mix Refill Min Interval (sec)</label>
+                    <input type="number" id="water_refill_min_interval_sec" step="1" min="0" placeholder="e.g. 300">
+                    <span class="field-tip">ช่วงพักขั้นต่ำหลังเติมถังผสมจบรอบ เพื่อกันการเติมถี่เกินไป</span>
+                </div>
+
+                <div class="form-group">
+                    <label>Fish Refill Max Time (sec)</label>
+                    <input type="number" id="water_fish_refill_max_runtime_sec" step="1" min="1" placeholder="e.g. 10">
+                    <span class="field-tip">จำกัดเวลาปั๊มเติมผ่านตู้ปลาในแต่ละรอบ เพื่อไม่ให้น้ำ overflow ไหลลงถังผสมมากเกินไป</span>
+                </div>
+
+                <div class="form-group">
+                    <label>Fish Refill Cooldown (sec)</label>
+                    <input type="number" id="water_fish_refill_interval_sec" step="1" min="0" placeholder="e.g. 600">
+                    <span class="field-tip">ช่วงพักก่อนอนุญาตให้ใช้ route ผ่านตู้ปลาได้อีกครั้ง หลังหยุดเพราะครบเวลา หรือ overflow sensor ทำงาน</span>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label>Mix Refill Min Interval (sec)</label>
-                <input type="number" id="water_refill_min_interval_sec" step="1" min="0" placeholder="e.g. 300">
-                <span class="field-tip">ช่วงพักขั้นต่ำหลังเติมถังน้ำผสมจบรอบ เพื่อกัน sensor แกว่งหรือระดับน้ำกระเพื่อมแล้วสั่งเติมถี่เกินไป</span>
-            </div>
-
+            <div class="water-section-title">Route Strategy</div>
             <div class="form-group">
                 <label>เส้นทางเติมน้ำ</label>
                 <select id="water_preferred_route">
@@ -931,7 +995,7 @@
                     <option value="FISH_TANK">ผ่านตู้ปลา</option>
                     <option value="SUMP_DIRECT">เข้าถังผสมตรง</option>
                 </select>
-                <span class="field-tip">`อัตโนมัติ` ให้ระบบเลือก route ตาม config และอุปกรณ์ที่พร้อม, `ผ่านตู้ปลา` คือปั๊มน้ำจากถังน้ำสะอาดเข้าตู้ปลาแล้ว overflow ไปถังผสม, `เข้าถังผสมตรง` คือเปิดโซลินอยด์เติมเข้าถังผสมทันที</span>
+                <span class="field-tip">`อัตโนมัติ` จะเลือกเติมผ่านตู้ปลาก่อน แล้วหยุดตามเวลา/overflow sensor ก่อนค่อยพิจารณา fallback, `ผ่านตู้ปลา` คือบังคับใช้เฉพาะ route นี้, `เข้าถังผสมตรง` คือเปิดโซลินอยด์เติมเข้าถังผสมทันที</span>
             </div>
 
             <div class="form-group">
@@ -942,38 +1006,107 @@
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
-                <span class="field-tip" id="water_route_hint">ใช้ตอนเลือก `อัตโนมัติ` เท่านั้น ถ้าเปิดไว้ระบบจะยอม fallback ไปทางเข้าถังผสมตรงเมื่อ route ผ่านตู้ปลาไม่พร้อม</span>
+                <span class="field-tip" id="water_route_hint">ใช้ตอนเลือก `อัตโนมัติ` เท่านั้น ถ้าเปิดไว้ระบบจะยอม fallback ไปทางเข้าถังผสมตรงเมื่อรอบเติมผ่านตู้ปลาหยุดแล้ว แต่ถังผสมยังไม่ถึงระดับที่ต้องการ</span>
             </div>
 
-            <div class="form-group" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 18px;">
-                สถานะ: <strong id="water_state_text">UNKNOWN</strong><br>
-                route ที่ตั้งไว้: <strong id="water_preferred_route_text">อัตโนมัติ</strong><br>
-                route ที่กำลังใช้: <strong id="water_active_route_text">ไม่มี</strong><br>
-                ระบบถูก block: <strong id="water_route_blocked_text">NO</strong><br>
-                กำลังเจือจางน้ำ: <strong id="water_dilution_text">NO</strong><br>
-                ถังผสมกำลังนิ่งค่า: <strong id="water_settling_text">NO</strong><br>
-                โซลินอยด์น้ำเข้าถังผสม: <strong id="water_mix_refill_text">NO</strong><br>
-                โซนควบคุมหลัก: <strong id="water_mix_zone_text">YES</strong><br>
-                เวลารอค่าน้ำคงตัว: <strong id="water_dilution_hold_text">0s</strong><br>
-                เหตุผล: <span id="water_reason_text">-</span>
-                <span class="field-tip">ส่วนนี้คือสถานะจริงที่ ESP32 รายงานกลับมา ใช้ดูว่าตอนนี้ระบบกำลังทำอะไร, actuator น้ำเข้าถังผสมกำลังทำงานหรือไม่, และ block เพราะอะไร</span>
+            <div class="water-section-title">Live Status</div>
+            <div class="water-status-grid">
+                <div class="water-status-card">
+                    <span>State</span>
+                    <strong id="water_state_text">UNKNOWN</strong>
+                </div>
+                <div class="water-status-card">
+                    <span>Configured Route</span>
+                    <strong id="water_preferred_route_text">อัตโนมัติ</strong>
+                </div>
+                <div class="water-status-card">
+                    <span>Active Route</span>
+                    <strong id="water_active_route_text">ไม่มี</strong>
+                </div>
+                <div class="water-status-card">
+                    <span>Fish Refill Ready</span>
+                    <strong id="water_fish_ready_text">YES</strong>
+                </div>
+                <div class="water-status-card">
+                    <span>Fish Wait Remaining</span>
+                    <strong id="water_fish_wait_text">0s</strong>
+                </div>
+                <div class="water-status-card">
+                    <span>Dilution Hold</span>
+                    <strong id="water_dilution_hold_text">0s</strong>
+                </div>
             </div>
 
-            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
-                <button class="btn btn-primary" onclick="saveWaterSystemConfig()" style="flex:1; min-width:170px;">
-                    <i class="fas fa-save"></i> Apply Water Config
-                </button>
-                <button class="btn" onclick="manualRefill(true)" style="flex:1; min-width:140px;">
-                    <i class="fas fa-fill-drip"></i> Manual Refill On
-                </button>
-                <button class="btn" onclick="manualRefill(false)" style="flex:1; min-width:140px;">
-                    <i class="fas fa-stop"></i> Manual Refill Off
-                </button>
-                <button class="btn btn-danger" onclick="clearWaterAlarm()" style="flex:1; min-width:140px;">
-                    <i class="fas fa-shield-alt"></i> Clear Alarm
-                </button>
-            </div>
-            <span class="field-tip">`Apply Water Config` ใช้ส่งค่าที่ตั้งไว้ด้านบนไปยัง ESP32, `Manual Refill On/Off` ใช้สั่งเติมน้ำด้วยมือชั่วคราว, และ `Clear Alarm` ใช้ล้างสถานะ alarm หลังแก้สาเหตุแล้ว</span>
+            <details class="advanced-panel" open>
+                <summary>
+                    <span>Runtime Details &amp; Manual Actions</span>
+                    <span class="advanced-hint">Status from ESP32 and direct commands</span>
+                </summary>
+                <div class="advanced-body">
+                    <div class="water-status-grid">
+                        <div class="water-status-card">
+                            <span>Circulation Output</span>
+                            <strong id="water_circulation_output_text">NO</strong>
+                        </div>
+                        <div class="water-status-card">
+                            <span>Fish Tank Refill</span>
+                            <strong id="water_fish_refill_text">NO</strong>
+                        </div>
+                        <div class="water-status-card">
+                            <span>Mix Tank Refill</span>
+                            <strong id="water_mix_refill_text">NO</strong>
+                        </div>
+                        <div class="water-status-card">
+                            <span>Route Blocked</span>
+                            <strong id="water_route_blocked_text">NO</strong>
+                        </div>
+                        <div class="water-status-card">
+                            <span>Water Dilution</span>
+                            <strong id="water_dilution_text">NO</strong>
+                        </div>
+                        <div class="water-status-card">
+                            <span>Mix Settling</span>
+                            <strong id="water_settling_text">NO</strong>
+                        </div>
+                        <div class="water-status-card">
+                            <span>Mix Zone</span>
+                            <strong id="water_mix_zone_text">YES</strong>
+                        </div>
+                        <div class="water-status-card">
+                            <span>Level Low / High</span>
+                            <strong id="water_level_text">NO / NO</strong>
+                        </div>
+                        <div class="water-status-card">
+                            <span>Overflow Sensor</span>
+                            <strong id="water_overflow_text">NO</strong>
+                        </div>
+                        <div class="water-status-card">
+                            <span>Alarm</span>
+                            <strong id="water_alarm_text">NO</strong>
+                        </div>
+                    </div>
+
+                    <div class="status-block" style="margin-top:14px; margin-bottom:16px;">
+                        เหตุผลล่าสุด: <strong id="water_reason_text">-</strong>
+                    </div>
+
+                    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+                        <button class="btn btn-primary" onclick="saveWaterSystemConfig()" style="flex:1; min-width:170px;">
+                            <i class="fas fa-save"></i> Apply Water Config
+                        </button>
+                        <button class="btn" onclick="manualRefill(true)" style="flex:1; min-width:140px;">
+                            <i class="fas fa-fill-drip"></i> Manual Refill On
+                        </button>
+                        <button class="btn" onclick="manualRefill(false)" style="flex:1; min-width:140px;">
+                            <i class="fas fa-stop"></i> Manual Refill Off
+                        </button>
+                        <button class="btn btn-danger" onclick="clearWaterAlarm()" style="flex:1; min-width:140px;">
+                            <i class="fas fa-shield-alt"></i> Clear Alarm
+                        </button>
+                    </div>
+                    <span class="field-tip">Apply จะส่งค่าทั้งหมดของการ์ดนี้ไป ESP32 ทันที ส่วน Manual Refill และ Clear Alarm ใช้สั่งงาน runtime โดยตรง</span>
+                </div>
+            </details>
         </div>
 
         <div class="card">
@@ -1488,8 +1621,22 @@
             const isAuto = routeSelect.value === 'AUTO';
             fallbackToggle.disabled = !isAuto;
             hint.textContent = isAuto
-                ? 'ใช้ตอนเลือก `อัตโนมัติ` เท่านั้น ถ้าเปิดไว้ระบบจะยอม fallback ไปทางเข้าถังผสมตรงเมื่อ route ผ่านตู้ปลาไม่พร้อม'
+                ? 'ใช้ตอนเลือก `อัตโนมัติ` เท่านั้น ถ้าเปิดไว้ระบบจะยอม fallback ไปทางเข้าถังผสมตรงเมื่อรอบเติมผ่านตู้ปลาหยุดแล้ว แต่ถังผสมยังไม่พอ'
                 : 'ตอนนี้เลือก route แบบบังคับแล้ว ค่า fallback จะไม่ถูกใช้จนกว่าจะกลับมาเลือกโหมดอัตโนมัติ';
+        }
+
+        function normalizeInteger(value, fallback, min = null, max = null) {
+            let normalized = Number.parseInt(value, 10);
+            if (!Number.isFinite(normalized)) {
+                normalized = fallback;
+            }
+            if (min !== null) {
+                normalized = Math.max(min, normalized);
+            }
+            if (max !== null) {
+                normalized = Math.min(max, normalized);
+            }
+            return normalized;
         }
 
         function populateForm() {
@@ -1514,7 +1661,7 @@
             document.getElementById('feeder_enabled').checked = settings.fish_feeder?.enabled ?? false;
             document.getElementById('feeder_day').value = String(settings.fish_feeder?.feed_day ?? 7);
             document.getElementById('feeder_time').value = settings.fish_feeder?.feed_time ?? '08:00';
-            document.getElementById('feeder_duration_ms').value = settings.fish_feeder?.duration_ms ?? 2000;
+            document.getElementById('feeder_duration_ms').value = normalizeInteger(settings.fish_feeder?.duration_ms, 2000, 250, 10000);
             document.getElementById('feeder_state_text').textContent = settings.fish_feeder?.state ?? 'UNKNOWN';
             document.getElementById('feeder_running_text').textContent = settings.fish_feeder?.running ? 'YES' : 'NO';
             document.getElementById('feeder_last_feed_text').textContent = settings.fish_feeder?.last_feed_at ?? 'Never';
@@ -1537,17 +1684,26 @@
             document.getElementById('water_refill_enabled').checked = settings.water_system?.refill_enabled ?? false;
             document.getElementById('water_refill_max_runtime_ms').value = settings.water_system?.refill_max_runtime_ms ?? 120000;
             document.getElementById('water_refill_min_interval_sec').value = Math.round((settings.water_system?.refill_min_interval_ms ?? 300000) / 1000);
+            document.getElementById('water_fish_refill_max_runtime_sec').value = Math.round((settings.water_system?.fish_refill_max_runtime_ms ?? 30000) / 1000);
+            document.getElementById('water_fish_refill_interval_sec').value = Math.round((settings.water_system?.fish_refill_interval_ms ?? 604800000) / 1000);
             document.getElementById('water_preferred_route').value = settings.water_system?.preferred_route ?? 'AUTO';
-            document.getElementById('water_allow_direct_sump_refill').checked = settings.water_system?.allow_direct_sump_refill ?? true;
+            document.getElementById('water_allow_direct_sump_refill').checked = settings.water_system?.allow_direct_sump_refill ?? false;
             document.getElementById('water_state_text').textContent = settings.water_system?.state_label_th ?? formatWaterState(settings.water_system?.state ?? 'UNKNOWN');
             document.getElementById('water_preferred_route_text').textContent = formatWaterRoute(settings.water_system?.preferred_route ?? 'AUTO');
             document.getElementById('water_active_route_text').textContent = formatWaterRoute(settings.water_system?.active_route ?? 'NONE');
+            document.getElementById('water_circulation_output_text').textContent = formatWaterBool(settings.water_system?.circulation_pump_output ?? false);
+            document.getElementById('water_fish_refill_text').textContent = formatWaterBool(settings.water_system?.fish_tank_refill_output ?? false);
             document.getElementById('water_route_blocked_text').textContent = formatWaterBool(settings.water_system?.route_blocked ?? false);
             document.getElementById('water_dilution_text').textContent = formatWaterBool(settings.water_system?.water_dilution_active ?? false);
             document.getElementById('water_settling_text').textContent = formatWaterBool(settings.water_system?.mix_tank_settling_active ?? false);
             document.getElementById('water_mix_refill_text').textContent = formatWaterBool(settings.water_system?.mix_tank_refill_output ?? false);
             document.getElementById('water_mix_zone_text').textContent = formatWaterBool(settings.water_system?.mix_tank_control_zone ?? true);
             document.getElementById('water_dilution_hold_text').textContent = formatHoldMs(settings.water_system?.dilution_hold_remaining_ms ?? 0);
+            document.getElementById('water_fish_ready_text').textContent = formatWaterBool(settings.water_system?.fish_refill_ready ?? true);
+            document.getElementById('water_fish_wait_text').textContent = formatHoldMs(settings.water_system?.fish_refill_wait_remaining_ms ?? 0);
+            document.getElementById('water_level_text').textContent = `${formatWaterBool(settings.water_system?.sump_low ?? false)} / ${formatWaterBool(settings.water_system?.sump_high ?? false)}`;
+            document.getElementById('water_overflow_text').textContent = formatWaterBool(settings.water_system?.overflow_alarm ?? false);
+            document.getElementById('water_alarm_text').textContent = formatWaterBool(settings.water_system?.alarm_active ?? false);
             document.getElementById('water_reason_text').textContent = settings.water_system?.reason ?? '-';
             updateWaterRouteControls();
 
@@ -1715,7 +1871,7 @@
                     enabled: document.getElementById('feeder_enabled').checked,
                     feed_day: parseInt(document.getElementById('feeder_day').value || 7),
                     feed_time: document.getElementById('feeder_time').value || '08:00',
-                    duration_ms: parseInt(document.getElementById('feeder_duration_ms').value || 2000),
+                    duration_ms: normalizeInteger(document.getElementById('feeder_duration_ms').value, 2000, 250, 10000),
                     state: settings.fish_feeder?.state ?? 'UNKNOWN',
                     running: settings.fish_feeder?.running ?? false,
                     has_output: settings.fish_feeder?.has_output ?? false,
@@ -1743,8 +1899,8 @@
                     refill_min_interval_ms: parseInt(document.getElementById('water_refill_min_interval_sec').value || 300) * 1000,
                     preferred_route: document.getElementById('water_preferred_route').value,
                     allow_direct_sump_refill: document.getElementById('water_allow_direct_sump_refill').checked,
-                    fish_refill_interval_ms: settings.water_system?.fish_refill_interval_ms ?? 604800000,
-                    fish_refill_max_runtime_ms: settings.water_system?.fish_refill_max_runtime_ms ?? 30000,
+                    fish_refill_interval_ms: parseInt(document.getElementById('water_fish_refill_interval_sec').value || 604800) * 1000,
+                    fish_refill_max_runtime_ms: parseInt(document.getElementById('water_fish_refill_max_runtime_sec').value || 30) * 1000,
                     state: settings.water_system?.state ?? 'UNKNOWN',
                     state_label_th: settings.water_system?.state_label_th ?? 'พร้อมทำงาน',
                     active_route: settings.water_system?.active_route ?? 'NONE',
@@ -1818,8 +1974,8 @@
                 });
                 const result = await res.json();
                 if (result.status === 'ok') {
+                    await loadSettings();
                     showToast('Settings saved! ✅');
-                    settings = data;
                 } else {
                     showToast('Error: ' + result.message, true);
                 }
@@ -1921,7 +2077,7 @@
                 enabled: document.getElementById('feeder_enabled').checked,
                 feed_day: parseInt(document.getElementById('feeder_day').value || 7),
                 feed_time: document.getElementById('feeder_time').value || '08:00',
-                duration_ms: parseInt(document.getElementById('feeder_duration_ms').value || 2000),
+                duration_ms: normalizeInteger(document.getElementById('feeder_duration_ms').value, 2000, 250, 10000),
                 ...overrides
             };
         }
@@ -2065,8 +2221,8 @@
                 refill_min_interval_ms: parseInt(document.getElementById('water_refill_min_interval_sec').value || 300) * 1000,
                 preferred_route: document.getElementById('water_preferred_route').value,
                 allow_direct_sump_refill: document.getElementById('water_allow_direct_sump_refill').checked,
-                fish_refill_interval_ms: settings.water_system?.fish_refill_interval_ms ?? 604800000,
-                fish_refill_max_runtime_ms: settings.water_system?.fish_refill_max_runtime_ms ?? 30000,
+                fish_refill_interval_ms: parseInt(document.getElementById('water_fish_refill_interval_sec').value || 604800) * 1000,
+                fish_refill_max_runtime_ms: parseInt(document.getElementById('water_fish_refill_max_runtime_sec').value || 30) * 1000,
                 ...extra
             };
 

@@ -2,6 +2,89 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-04-26] - Water And Pi Decision Skill
+
+### Added
+
+- **docs: add reusable repo skill for recent water-system and Pi-settings decisions (`.agent/skills/water-system-and-pi-settings-decisions/SKILL.md`):**
+  - สรุปกติกา `AUTO = fish-first fallback`, การจำกัด fish refill ด้วย timeout/overflow, และการ re-check mix tank ก่อน fallback ไว้เป็น skill ใช้อ้างอิงซ้ำได้
+  - เก็บข้อตกลงเรื่อง default 10 วินาที, การจัดวาง water settings ใน Pi, และ contract ของ `Feed Duration (ms)` ระหว่าง UI, API, และ MQTT
+  - เพิ่ม checklist สำหรับงานที่แตะ `src/waterSystem.cpp`, `pi_server/app.py`, และ `pi_server/settings.html` เพื่อให้ agent รอบถัดไปหยิบบริบทเดียวกันได้เร็วขึ้น
+
+- **docs: add focused repo skill for fish feeder Pi persistence (`.agent/skills/fish-feeder-pi-settings-persistence/SKILL.md`):**
+  - แยกสรุปเฉพาะ contract ของ `Fish Feeder` ระหว่างหน้า Pi, `app.py`, `settings.json`, และ MQTT โดยไม่ปน logic ของ water system
+  - เก็บ checklist สำหรับ debug อาการ `Feed Duration (ms)` หรือ field feeder อื่น save แล้วเด้งกลับค่าเดิม เช่น path ของ `settings.json`, schema merge, key mapping, และการ reload หลัง save
+  - ทำให้ agent รอบถัดไปเรียกใช้ skill แคบเฉพาะงาน persistence/debug ของ feeder ได้ตรงกว่าเดิม
+
+### Changed
+
+- **fix: align Pi OTA/terminal ESP target config with saved settings and DHCP reservation (`pi_server/app.py`, `pi_server/settings.json`, `pi_server/ota.html`, `pi_server/terminal.html`):**
+  - ตัด hardcode `esp_ip` และ `ota_password` ใน OTA backend ให้ไปอ่านจาก `secure` settings จริงแทน เพื่อไม่ให้หน้า OTA flash ไปผิด IP หรือใช้รหัสเก่าเมื่อ config เปลี่ยน
+  - ปรับ default `secure.esp_ip` ให้ตรงกับ DHCP reservation ใน `dnsmasq_ap.conf` คือ `192.168.10.10` แทนค่าที่ drift ไปเป็น `192.168.10.100`
+  - ทำให้หน้า `ota.html` และ `terminal.html` โหลด `ESP IP` จาก `/api/settings` แทนการฝังค่าไว้ใน HTML เพื่อลด config drift แบบเดียวกับเคส WiFi
+
+- **chore: align firmware fallback secrets with the active AP/telnet defaults (`include/config.h`, `include/secrets.h`):**
+  - เปลี่ยน fallback SSID/password ใน firmware headers ให้ตรงกับค่าปัจจุบัน `Aquaponics-LAN` / `aqua1234` แทนค่าที่ drift ไปก่อนหน้า
+  - ปรับ fallback `TELNET_PASSWORD` ให้ตรงกับ `secrets.ini` ปัจจุบันเป็น `admin123` เพื่อลดความสับสนเวลา build โดยไม่มี secret overrides
+
+- **fix: persist full Pi settings schema and sync water defaults to the current Pi baseline (`pi_server/app.py`, `pi_server/settings.html`, `pi_server/settings.json`, `include/config.h`):**
+  - เปลี่ยน `POST /api/settings` และ `save_settings()` ให้ deep-merge กับ schema ล่าสุดก่อน save เพื่อไม่ให้ nested settings หรือ block อย่าง `secure` หลุดหายจาก `settings.json`
+  - เติม `secure` block กลับเข้าไฟล์ `settings.json` ปัจจุบัน และทำให้ save รอบถัดไปยังคงเก็บ `ota_password` / `esp_ip` / `terminal_ip` ไว้ต่อเนื่อง
+  - sync default ของ water system ให้ตรงกับค่าจริงจาก Pi ตอนนี้ คือ `allow_direct_sump_refill = false` และ `fish_refill_max_runtime_ms = 30000` ทั้งฝั่ง Pi UI/backend และ firmware default
+
+- **fix: make TaskSensors the single owner of TDS ADC sampling (`src/TdsSensor.cpp`, `src/automator.cpp`, `src/localMqtt.cpp`, `src/commandHandler.cpp`):**
+  - ตัดการเรียก `tdsRead()` จาก task อื่นอย่าง automator, local MQTT HW test, และ CLI status/test แล้วให้ทุกจุดอ่านค่า cache จาก `tdsGetLastValue()` แทน
+  - เพิ่มการป้องกัน state กลางของ TDS sensor ระหว่างอ่าน/เขียน และ cache ค่า voltage/TDS ล่าสุดไว้ เพื่อลด race บน buffer/index/result ระหว่างข้าม core
+  - ทำให้เส้นทาง `analogRead(TDS_PIN)` เหลืออยู่ใน `TaskSensors` ผ่าน `tdsLoop()` เป็นหลัก เพื่อลดโอกาสค่า ADC เพี้ยนจากหลาย task แย่งอ่านพร้อมกัน
+
+- **fix: move large local MQTT sensor publish buffers off TaskNetworking stack (`src/localMqtt.cpp`):**
+  - ย้าย `StaticJsonDocument<1792>` และ payload buffer 2048 bytes ของ `localMqttPublishData()` ออกจาก local stack frame ไปเป็น static file-scope storage
+  - ลด stack pressure ใน `TaskNetworking` ที่มี stack 8192 bytes อยู่แล้วและต้องผ่าน WiFi/MQTT/OTA/Telnet path หลายชั้นใน loop เดียว
+  - คง payload format เดิมไว้ทั้งหมด เพื่อให้หน้า Pi และ topic `aquaponics/sensors` ไม่ต้องเปลี่ยน contract
+
+- **fix: harden OTA progress handling and serialize shared system NVS access (`src/ota.cpp`, `src/system.cpp`):**
+  - แก้สูตร progress ของ OTA ให้ไม่หารด้วยศูนย์เมื่อ `total` มีค่าน้อยหรือผิดปกติ และ feed WDT ระหว่าง OTA transfer/handle เพื่อกัน reset ระหว่าง flash
+  - เพิ่ม mutex รอบ `Preferences` ตัวกลางของ `system.cpp` เพื่อไม่ให้ path จากหลาย task เขียน namespace `system` พร้อมกัน
+  - ครอบการ load/save stats, sensor enable state, และ factory reset path ให้ใช้ lock เดียวกันก่อนแตะ NVS ในโมดูล system
+
+- **refactor: remove stale declarations and align fixed WiFi/Telnet module config with shared constants (`src/wifiConn.cpp`, `include/commandHandler.h`, `src/telnetServer.cpp`, `src/waterSystem.cpp`, `src/system.cpp`):**
+  - เปลี่ยน `wifiConn.cpp` ให้ใช้ `WIFI_AP_NAME` / `WIFI_AP_PASS` จาก config แทน hardcode SSID/password ภายในไฟล์
+  - ลบ declaration ของ `commandCheckTelnet()` และลบฟังก์ชัน `_resolveRefillRoute()` ที่ไม่ได้ถูกเรียกใช้งานแล้ว เพื่อลด dead surface ใน codebase
+  - ทำให้ global object ใน `telnetServer.cpp` เป็น `static` ตามขอบเขตของโมดูล และลบ log ซ้ำใน factory reset path ของ `system.cpp`
+
+## [2026-04-25] - Pi Fish Feeder Duration Save Fix
+
+### Changed
+
+- **fix: make Fish Feeder duration persist reliably from the Pi settings page (`pi_server/app.py`, `pi_server/settings.html`):**
+  - เปลี่ยน `settings.json` ของ Pi ให้ใช้ path อิงตำแหน่งไฟล์ `app.py` โดยตรง แทน relative path ล้วน เพื่อลดปัญหา save ไปคนละ working directory แล้วหน้า Settings โหลดกลับมาเหมือนค่าไม่ติด
+  - ให้ `load_settings()` merge ไฟล์เก่ากับ default schema และ sanitize `fish_feeder.duration_ms` ทุกครั้งที่โหลด เพื่อให้ config รุ่นเก่าหรือค่าที่เป็น `null` ไม่ทำให้ช่อง `Feed Duration (ms)` เด้งกลับเป็นค่าเดิม
+  - เพิ่มการ normalize/clamp ค่า `Feed Duration (ms)` ทั้งตอนกด `Save General Settings` และ `Apply Feeder Config` พร้อม reload ค่าจริงจาก server หลัง save เพื่อให้หน้าเว็บสะท้อนค่าที่ persisted แล้วจริง
+
+## [2026-04-25] - Water Auto Route Fish-First Fallback
+
+### Changed
+
+- **feat: consolidate Pi water-system controls into one settings card (`pi_server/settings.html`):**
+  - รวม field ของ water system ที่ใช้งานจริงไว้ใน card เดียวของหน้า Settings ทั้ง circulation, refill policy, route strategy, fish refill max time, fish refill cooldown, live status และ manual actions
+  - เปิดให้ตั้ง `fish_refill_max_runtime_ms` และ `fish_refill_interval_ms` จากหน้า Pi ได้ตรง ๆ เพื่อจูนการเติมผ่านตู้ปลาให้ปลอดภัยกับปลาโดยไม่ต้องพึ่งค่าเดิมที่ซ่อนอยู่
+  - จัด card ใหม่ให้เห็นสถานะสำคัญจาก ESP32 เช่น route ที่ใช้จริง, fish refill ready/wait, overflow, level low/high, alarm, และเหตุผลล่าสุด ในหน้าเดียวกัน
+
+- **tune: align fish refill default limit to 10 seconds across firmware and Pi (`include/config.h`, `pi_server/app.py`, `pi_server/settings.html`, `pi_server/pwa/sw.js`):**
+  - เปลี่ยนค่า default ของ `fish_refill_max_runtime_ms` จาก 30 วินาทีเป็น 10 วินาทีใน firmware และ Pi เพื่อให้ค่าตั้งต้นตรงกับแนวคิดจำกัดการเปลี่ยนน้ำของตู้ปลา
+  - ปรับ fallback ค่าในหน้า Settings ให้เปิดมาที่ 10 วินาทีเหมือนกันทั้งตอนโหลดค่าและตอนกด Apply โดยที่ยังสามารถแก้เพิ่ม/ลดได้จากหน้าเว็บ
+  - bump PWA cache เป็น `aquaponics-v10` เพื่อให้ browser ดึงหน้า Settings และ assets เวอร์ชันใหม่หลัง deploy
+
+- **fix: make AUTO refill route prefer fish tank before direct sump fallback (`src/waterSystem.cpp`, `forTestFlow/water-system-auto-flow.json`):**
+  - ปรับ `_resolveRefillRoute()` ให้ `AUTO` เลือก `FISH_TANK` ก่อนเมื่อปั๊มเติมตู้ปลายังใช้งานได้ แทนการเลือก `SUMP_DIRECT` ก่อนแบบเดิม
+  - จำกัดการ fallback ไป `SUMP_DIRECT` ให้เกิดเฉพาะตอนที่เปิด `allow_direct_sump_refill` และ fish route ใช้ไม่ได้จริง เพื่อให้ semantic ของ `AUTO` ตรงกับ fish-first fallback
+  - อัปเดต flow แยกของ `Water System AUTO` ให้คำอธิบาย route selection ตรงกับ behavior ใหม่ใน firmware
+
+- **feat: cap fish-tank refill by timer or overflow before continuing mix refill (`src/waterSystem.cpp`, `forTestFlow/water-system-auto-flow.json`):**
+  - ทำให้รอบ `FISH_TANK_REFILL` หยุดได้เองเมื่อครบ `fish_refill_max_runtime_ms` หรือเมื่อ `overflow sensor` ของตู้ปลาถูก trigger แทนการปล่อยให้ปั๊มเติมผ่านตู้ปลาวิ่งต่อจนถังผสมเต็ม
+  - ให้ `AUTO` fallback ไป `SUMP_DIRECT` ได้หลังจากรอบเติมตู้ปลาถูกหยุดด้วยข้อจำกัดความปลอดภัยแล้วเท่านั้น เพื่อลดการเปลี่ยนน้ำปริมาณมากในตู้ปลา
+  - เปลี่ยน `fish_refill_ready` และ `fish_refill_wait_remaining_ms` ให้สะท้อนสถานะจริงของรอบเติมตู้ปลา แทนค่า placeholder เดิม
+
 ## [2026-04-25] - Flow Planner Sync With Latest Water And Dosing Logic
 
 ### Changed
@@ -15,6 +98,10 @@ All notable changes to the **Smart Aquaponics AI** project will be documented in
 - **feat: add dedicated water-system auto flow diagram (`forTestFlow/water-system-auto-flow.json`):**
   - เพิ่มไฟล์ flow แยกสำหรับอธิบาย state machine ของ `Water System AUTO` โดยเฉพาะ ตั้งแต่การอ่าน level sensors, การเช็ก blocked/alarm, การเลือก route, การ refill, การ settling, และผลต่อ automator
   - ทำให้สามารถเปิด diagram แยกใน planner ได้โดยไม่ต้องปนกับภาพรวมอุปกรณ์ทั้งระบบ เหมาะกับการใช้คุย logic และ debug ลำดับ state
+
+- **feat: add dedicated full-system overview flow diagram (`forTestFlow/full-system-overview-flow.json`):**
+  - เพิ่ม flow แยกสำหรับอธิบายภาพรวมทั้งระบบตั้งแต่ boot/setup, TaskSensors, sensor cache, TaskControl, water system, automator, controller อื่น, จนถึง TaskNetworking และการสื่อสารกับ Pi/NETPIE
+  - ทำให้มี diagram ที่ใช้คุย architecture ทั้งระบบได้ตรง ๆ โดยไม่ต้องใช้ layout อุปกรณ์จริงอย่างเดียว และไม่ต้องปนกับ state-machine flow ของระบบน้ำ
 
 ## [2026-04-23] - Flow Planner Arrow Direction Fix
 

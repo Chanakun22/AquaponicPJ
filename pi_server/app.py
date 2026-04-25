@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, send_file, request, session, redirect, url_for
 from flask_socketio import SocketIO, emit
 import paho.mqtt.client as mqtt
+import copy
 import json
 import threading
 import psutil
@@ -113,7 +114,68 @@ def admin_required(f):
     return decorated_function
 
 # === Settings File ===
-SETTINGS_FILE = "settings.json"
+SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json")
+
+
+def _deep_merge_dict(base, overrides):
+    merged = copy.deepcopy(base)
+    if not isinstance(overrides, dict):
+        return merged
+
+    for key, value in overrides.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge_dict(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _coerce_int(value, fallback, minimum=None, maximum=None):
+    try:
+        normalized = int(value)
+    except (TypeError, ValueError):
+        normalized = fallback
+
+    if minimum is not None and normalized < minimum:
+        normalized = minimum
+    if maximum is not None and normalized > maximum:
+        normalized = maximum
+    return normalized
+
+
+def _normalize_fish_feeder_settings(fish_feeder, current=None):
+    current = current if isinstance(current, dict) else {}
+    fish_feeder = fish_feeder if isinstance(fish_feeder, dict) else {}
+
+    command_source = str(
+        fish_feeder.get("command_source", current.get("command_source", "local_web"))
+    ).lower()
+    if command_source not in ["netpie", "local_web"]:
+        command_source = current.get("command_source", "local_web")
+        if command_source not in ["netpie", "local_web"]:
+            command_source = "local_web"
+
+    feed_time = str(fish_feeder.get("feed_time", current.get("feed_time", "08:00"))).strip() or "08:00"
+
+    normalized = dict(current)
+    normalized.update({
+        "command_source": command_source,
+        "enabled": bool(fish_feeder.get("enabled", current.get("enabled", False))),
+        "feed_day": _coerce_int(fish_feeder.get("feed_day", current.get("feed_day", 7)), 7, 0, 7),
+        "feed_time": feed_time,
+        "duration_ms": _coerce_int(
+            fish_feeder.get("duration_ms", current.get("duration_ms", 2000)),
+            current.get("duration_ms", 2000),
+            250,
+            10000,
+        ),
+    })
+
+    for key in ["state", "running", "has_output", "last_feed_at", "reason"]:
+        if key in fish_feeder:
+            normalized[key] = fish_feeder[key]
+
+    return normalized
 
 def load_settings():
     """Load settings from JSON file"""
@@ -149,7 +211,7 @@ def load_settings():
             "refill_min_interval_ms": 300000,
             "preferred_route": "AUTO",
             "active_route": "NONE",
-            "allow_direct_sump_refill": True,
+            "allow_direct_sump_refill": False,
             "fish_refill_interval_ms": 604800000,
             "fish_refill_max_runtime_ms": 30000,
             "state": "IDLE",
@@ -229,12 +291,23 @@ def load_settings():
             "height": 720,
             "framerate": 15,
             "quality": 80
+        },
+        "secure": {
+            "ota_password": "admin123",
+            "esp_ip": "192.168.10.10",
+            "terminal_ip": "192.168.10.2"
         }
     }
     try:
         if os.path.exists(SETTINGS_FILE):
             with open(SETTINGS_FILE, "r") as f:
-                return json.load(f)
+                loaded = json.load(f)
+                merged = _deep_merge_dict(default, loaded)
+                merged["fish_feeder"] = _normalize_fish_feeder_settings(
+                    merged.get("fish_feeder", {}),
+                    default["fish_feeder"],
+                )
+                return merged
     except Exception as e:
         print(f"Error loading settings: {e}")
     return default
@@ -454,10 +527,12 @@ def save_settings_to_db(settings):
 def save_settings(settings):
     """Save settings to JSON file atomically and Database"""
     try:
+        settings_to_save = _deep_merge_dict(load_settings(), settings)
+
         # 1. Save to File (Actual Config) - Atomic Write
         tmp_file = f"{SETTINGS_FILE}.tmp"
         with open(tmp_file, "w") as f:
-            json.dump(settings, f, indent=2)
+            json.dump(settings_to_save, f, indent=2)
             f.flush()
             os.fsync(f.fileno()) # Ensure data is written to disk
         
@@ -465,7 +540,7 @@ def save_settings(settings):
         os.replace(tmp_file, SETTINGS_FILE)
             
         # 2. Save to DB (History/Backup)
-        save_settings_to_db(settings)
+        save_settings_to_db(settings_to_save)
         
         return True
     except Exception as e:
@@ -910,7 +985,14 @@ def post_settings():
     try:
         new_settings = request.get_json()
         if new_settings:
-            app_settings.update(new_settings)
+            current_settings = _deep_merge_dict(load_settings(), app_settings)
+            app_settings = _deep_merge_dict(current_settings, new_settings)
+
+            app_settings["fish_feeder"] = _normalize_fish_feeder_settings(
+                app_settings.get("fish_feeder", {}),
+                current_settings.get("fish_feeder", {}),
+            )
+
             # Check if sensor config changed and publish to MQTT
             if "sensor_config" in new_settings:
                 try:
@@ -1399,25 +1481,20 @@ def fish_feeder_config():
     """Receive fish feeder settings from Web Dashboard and publish to MQTT"""
     global app_settings
     try:
-        data = request.get_json()
-        command_source = str(data.get('command_source', 'local_web')).lower()
-        enabled = bool(data.get('enabled', False))
-        feed_day = int(data.get('feed_day', 7))
-        feed_time = str(data.get('feed_time', '08:00'))
-        duration_ms = int(data.get('duration_ms', 2000))
+        data = request.get_json() or {}
+        normalized = _normalize_fish_feeder_settings(data, app_settings.get('fish_feeder', {}))
+        command_source = normalized['command_source']
+        enabled = normalized['enabled']
+        feed_day = normalized['feed_day']
+        feed_time = normalized['feed_time']
+        duration_ms = normalized['duration_ms']
         trigger_feed = bool(data.get('trigger_feed', False))
 
         if command_source not in ['netpie', 'local_web']:
             return jsonify({'status': 'error', 'message': 'Invalid command_source'}), 400
 
         app_settings.setdefault('fish_feeder', {})
-        app_settings['fish_feeder'].update({
-            'command_source': command_source,
-            'enabled': enabled,
-            'feed_day': feed_day,
-            'feed_time': feed_time,
-            'duration_ms': duration_ms
-        })
+        app_settings['fish_feeder'].update(normalized)
         save_settings(app_settings)
 
         payload = {
@@ -1455,7 +1532,7 @@ def water_system_config():
         refill_max_runtime_ms = int(data.get('refill_max_runtime_ms', 120000))
         refill_min_interval_ms = int(data.get('refill_min_interval_ms', 300000))
         preferred_route = str(data.get('preferred_route', 'AUTO')).upper()
-        allow_direct_sump_refill = bool(data.get('allow_direct_sump_refill', True))
+        allow_direct_sump_refill = bool(data.get('allow_direct_sump_refill', False))
         fish_refill_interval_ms = int(data.get('fish_refill_interval_ms', 604800000))
         fish_refill_max_runtime_ms = int(data.get('fish_refill_max_runtime_ms', 30000))
 
@@ -1775,8 +1852,9 @@ def ota_upload():
                      "🔄 Starting espota flash to ESP32..."]
         }
 
-        esp_ip = "192.168.10.10"
-        ota_password = "admin123"
+        secure_settings = load_settings().get("secure", {})
+        esp_ip = str(secure_settings.get("esp_ip", "192.168.10.10")).strip() or "192.168.10.10"
+        ota_password = str(secure_settings.get("ota_password", "admin123")).strip()
         espota_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'espota.py')
 
         def run_ota():

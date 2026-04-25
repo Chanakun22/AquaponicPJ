@@ -13,6 +13,8 @@
 #include "lightSensor.h"
 #include <Preferences.h>
 #include <WiFi.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 #if defined(ESP32)
 #include <ESP.h>
@@ -35,8 +37,21 @@ static unsigned int _mqttReconnects = 0;
 static bool _systemInitialized = false;
 
 static Preferences _prefs;
+static SemaphoreHandle_t _prefsMutex = NULL;
 static char _lastCrashInfoCache[160] = "";
 static bool _hasLastCrashInfoCache = false;
+
+static void _lockPrefs(void) {
+    if (_prefsMutex != NULL) {
+        xSemaphoreTake(_prefsMutex, portMAX_DELAY);
+    }
+}
+
+static void _unlockPrefs(void) {
+    if (_prefsMutex != NULL) {
+        xSemaphoreGive(_prefsMutex);
+    }
+}
 
 #if defined(ESP32)
 static void _clearRtcCrashSnapshot(void) {
@@ -81,6 +96,7 @@ static void _captureRtcCrashSnapshotFallback(void) {
 // ============================================================================
 
 static void _loadPersistedStats(void) {
+    _lockPrefs();
     _prefs.begin("system", true);  // Read-only
     
     _watchdogResets = _prefs.getUInt("wdResets", 0);
@@ -88,12 +104,14 @@ static void _loadPersistedStats(void) {
     _mqttReconnects = _prefs.getUInt("mqttReconnects", 0);
     
     _prefs.end();
+    _unlockPrefs();
     
     LOG_DEBUG("Loaded persisted stats: WD=%u, WiFi=%u, MQTT=%u", 
               _watchdogResets, _wifiReconnects, _mqttReconnects);
 }
 
 static void _savePersistedStats(void) {
+    _lockPrefs();
     _prefs.begin("system", false);
     
     _prefs.putUInt("wdResets", _watchdogResets);
@@ -101,6 +119,7 @@ static void _savePersistedStats(void) {
     _prefs.putUInt("mqttReconnects", _mqttReconnects);
     
     _prefs.end();
+    _unlockPrefs();
 }
 
 #if defined(ESP32)
@@ -116,6 +135,13 @@ static bool _isWatchdogResetReason(esp_reset_reason_t reason) {
 void systemInit(void) {
     if (_systemInitialized) {
         return;
+    }
+
+    if (_prefsMutex == NULL) {
+        _prefsMutex = xSemaphoreCreateMutex();
+        if (_prefsMutex == NULL) {
+            LOG_ERROR("Failed to create system NVS mutex");
+        }
     }
     
     _bootTime = millis();
@@ -175,7 +201,6 @@ void systemLoop(void) {
             
             // Blink LED rapidly to indicate reset
             // Note: Removed LED blinking to avoid GPIO conflict
-            LOG_INFO("Resetting in 3... 2... 1...");
             LOG_INFO("Resetting in 3... 2... 1...");
             // Non-blocking wait not strictly needed here since we are about to reset anyway, 
             // but removing delay avoids WDT risk if it was tight.
@@ -285,6 +310,8 @@ void systemFactoryReset(void) {
     #if defined(ESP32)
     WiFi.disconnect(true, true);  // Turn off and erase credentials
     #endif
+
+    _lockPrefs();
     
     // Clear pH calibration
     prefs.begin("phSensor", false);
@@ -300,6 +327,7 @@ void systemFactoryReset(void) {
     prefs.begin("system", false);
     prefs.clear();
     prefs.end();
+    _unlockPrefs();
     
     LOG_INFO("All settings cleared. Restarting...");
     
@@ -374,6 +402,7 @@ static bool _sensorEnabled[SENSOR_COUNT] = { true, true, true, true, true };
 static const char* _sensorKeys[SENSOR_COUNT] = { "sns_tds", "sns_ph", "sns_water", "sns_air", "sns_light" };
 
 void systemSensorInit(void) {
+    _lockPrefs();
     _prefs.begin("system", true); // Read-only
     
     for (int i = 0; i < SENSOR_COUNT; i++) {
@@ -382,6 +411,7 @@ void systemSensorInit(void) {
     }
     
     _prefs.end();
+    _unlockPrefs();
 }
 
 void systemSetSensorEnabled(SensorId_t id, bool enabled) {
@@ -389,10 +419,12 @@ void systemSetSensorEnabled(SensorId_t id, bool enabled) {
     
     if (_sensorEnabled[id] != enabled) {
         _sensorEnabled[id] = enabled;
-        
+
+        _lockPrefs();
         _prefs.begin("system", false); // Read-write
         _prefs.putBool(_sensorKeys[id], enabled);
         _prefs.end();
+        _unlockPrefs();
         
         LOG_INFO("Set Sensor [%d] to %s", id, enabled ? "ENABLED" : "DISABLED");
     }
@@ -400,6 +432,7 @@ void systemSetSensorEnabled(SensorId_t id, bool enabled) {
 
 void systemSetAllSensorsEnabled(bool states[SENSOR_COUNT]) {
     // Open NVS once for all writes (prevents race condition)
+    _lockPrefs();
     _prefs.begin("system", false);
     
     for (int i = 0; i < SENSOR_COUNT; i++) {
@@ -411,6 +444,7 @@ void systemSetAllSensorsEnabled(bool states[SENSOR_COUNT]) {
     }
     
     _prefs.end();
+    _unlockPrefs();
     LOG_INFO("All sensor states saved to NVS");
 }
 

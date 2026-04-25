@@ -8,9 +8,9 @@
 #include "commandHandler.h"
 #include <WiFi.h>
 
-WiFiServer _telnetServer(23);
-WiFiClient _telnetClient;
-bool _isAuthenticated = false;
+static WiFiServer _telnetServer(23);
+static WiFiClient _telnetClient;
+static bool _isAuthenticated = false;
 static char _inputBuffer[64];
 static size_t _bufferIndex = 0;
 

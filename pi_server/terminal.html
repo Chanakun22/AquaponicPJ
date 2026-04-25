@@ -154,7 +154,7 @@
             </div>
         </div>
         <div class="connect-row">
-            <input type="text" class="connect-input" id="espIp" placeholder="ESP32 IP" value="192.168.10.10">
+            <input type="text" class="connect-input" id="espIp" placeholder="ESP32 IP" value="">
             <input type="text" class="connect-input small" id="espPort" placeholder="Port" value="23">
             <button class="btn btn-connect" id="connectBtn" onclick="connectTerminal()">
                 <i class="fas fa-plug"></i> Connect
@@ -212,6 +212,22 @@ Enter ESP32 IP and click Connect to begin.
         const disconnectBtn = document.getElementById('disconnectBtn');
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
+
+        async function loadSecureSettings() {
+            try {
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                const espIp = data?.secure?.esp_ip?.trim();
+                if (espIp) {
+                    document.getElementById('espIp').value = espIp;
+                    return;
+                }
+            } catch (err) {
+                // Fall through to default below.
+            }
+
+            document.getElementById('espIp').value = '192.168.10.10';
+        }
 
         function initSocket() {
             if (socket) return;
@@ -373,6 +389,8 @@ Enter ESP32 IP and click Connect to begin.
         document.querySelector('.terminal-wrapper').addEventListener('click', (e) => {
             if (e.target.tagName !== 'BUTTON' && !input.disabled) input.focus();
         });
+
+        loadSecureSettings();
     </script>
 </body>
 </html>

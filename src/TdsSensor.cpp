@@ -20,6 +20,18 @@ static int _tdsBufferIndex = 0;
 static int _tdsSampleCollected = 0;  // จำนวน sample ที่เก็บได้
 static bool _tdsReady = false;       // flag บอกว่าเก็บ sample ครบหรือยัง
 static float _tdsLastResult = -1.0f; // ค่า TDS ล่าสุดจาก tdsRead()
+static float _tdsLastVoltage = -1.0f;
+static float _tdsVoltageMovingAverage = -1.0f;
+static float _tdsMovingAverage = -1.0f;
+
+#if defined(ESP32)
+static portMUX_TYPE _tdsMux = portMUX_INITIALIZER_UNLOCKED;
+#define TDS_LOCK() portENTER_CRITICAL(&_tdsMux)
+#define TDS_UNLOCK() portEXIT_CRITICAL(&_tdsMux)
+#else
+#define TDS_LOCK()
+#define TDS_UNLOCK()
+#endif
 
 // Calibration variables
 static float _kValue = 1.0f;      // Gain factor (scaling)
@@ -125,6 +137,32 @@ static float _calculateTdsFromVoltage(float voltage) {
     }
 }
 
+static float _calculateFilteredVoltage(void) {
+    int tempBuffer[TDS_SAMPLE_COUNT];
+    bool ready = false;
+
+    TDS_LOCK();
+    ready = _tdsReady;
+    for (int i = 0; i < TDS_SAMPLE_COUNT; i++) {
+        tempBuffer[i] = _tdsBuffer[i];
+    }
+    TDS_UNLOCK();
+
+    if (!ready) {
+        return -1.0f;
+    }
+
+    float rawVoltage = _getMedian(tempBuffer, TDS_SAMPLE_COUNT) * TDS_VREF / TDS_ADC_RESOLUTION;
+
+    if (_tdsVoltageMovingAverage < 0) {
+        _tdsVoltageMovingAverage = rawVoltage;
+    } else {
+        _tdsVoltageMovingAverage = (rawVoltage * 0.15f) + (_tdsVoltageMovingAverage * 0.85f);
+    }
+
+    return _tdsVoltageMovingAverage;
+}
+
 // ============================================================================
 // PUBLIC FUNCTIONS
 // ============================================================================
@@ -142,6 +180,10 @@ void tdsSetup(void) {
     _tdsBufferIndex = 0;
     _tdsSampleCollected = 0;
     _tdsReady = false;
+    _tdsLastResult = -1.0f;
+    _tdsLastVoltage = -1.0f;
+    _tdsVoltageMovingAverage = -1.0f;
+    _tdsMovingAverage = -1.0f;
     
     LOG_INFO("TDS sensor initialized, collecting %d samples...", TDS_SAMPLE_COUNT);
     
@@ -154,30 +196,19 @@ void tdsSetup(void) {
 }
 
 float tdsGetVoltage(void) {
-    if (!_tdsReady) return -1.0f;
-    
-    // คัดลอกไปใส่ตัวแปรชั่วคราวเพื่อคำนวณ
-    int tempBuffer[TDS_SAMPLE_COUNT];
-    for (int i = 0; i < TDS_SAMPLE_COUNT; i++) {
-        tempBuffer[i] = _tdsBuffer[i];
-    }
-    
-    // แปลงค่า ADC Median เป็น Voltage
-    float rawVoltage = _getMedian(tempBuffer, TDS_SAMPLE_COUNT) * TDS_VREF / TDS_ADC_RESOLUTION;
-    
-    // Moving Average Filter for smooth display (Alpha 0.15)
-    static float _voltageMovingAverage = -1.0f;
-    if (_voltageMovingAverage < 0) {
-        _voltageMovingAverage = rawVoltage;
-    } else {
-        _voltageMovingAverage = (rawVoltage * 0.15f) + (_voltageMovingAverage * 0.85f);
-    }
-    
-    return _voltageMovingAverage;
+    float voltage = -1.0f;
+    TDS_LOCK();
+    voltage = _tdsLastVoltage;
+    TDS_UNLOCK();
+    return voltage;
 }
 
 bool tdsIsReady(void) {
-    return _tdsReady;
+    bool ready = false;
+    TDS_LOCK();
+    ready = _tdsReady;
+    TDS_UNLOCK();
+    return ready;
 }
 
 bool tdsIsCalibrated(void) {
@@ -187,21 +218,37 @@ bool tdsIsCalibrated(void) {
 
 
 float tdsRead(float temperature) {
-    _tdsBuffer[_tdsBufferIndex] = analogRead(TDS_PIN);
+    int sample = analogRead(TDS_PIN);
+    bool becameReady = false;
+
+    TDS_LOCK();
+    _tdsBuffer[_tdsBufferIndex] = sample;
     _tdsBufferIndex = (_tdsBufferIndex + 1) % TDS_SAMPLE_COUNT;
-    
+
     if (!_tdsReady && _tdsBufferIndex == 0) {
         _tdsReady = true;
+        becameReady = true;
+    }
+    TDS_UNLOCK();
+
+    if (becameReady) {
         LOG_INFO("TDS buffer full, sensors ready!");
     }
-    
-    if (!_tdsReady) return -1.0f;
-    
-    float voltage = tdsGetVoltage();
+
+    if (!tdsIsReady()) return -1.0f;
+
+    float voltage = _calculateFilteredVoltage();
+    TDS_LOCK();
+    _tdsLastVoltage = voltage;
+    TDS_UNLOCK();
+
+    if (voltage < 0.0f) return -1.0f;
     
     // Hardware Validation: Detect unplugged sensor (near 0V) or short circuit (near VREF)
     if (voltage < 0.05f || voltage > (TDS_VREF - 0.05f)) {
+        TDS_LOCK();
         _tdsLastResult = NAN;
+        TDS_UNLOCK();
         return NAN;
     }
     
@@ -224,19 +271,24 @@ float tdsRead(float temperature) {
     if (tdsValue > TDS_MAX) tdsValue = TDS_MAX;
     
     // --- Moving Average Filter (Alpha 0.1) ---
-    static float _tdsMovingAverage = -1.0f;
     if (_tdsMovingAverage < 0) {
         _tdsMovingAverage = tdsValue;
     } else {
         _tdsMovingAverage = (tdsValue * 0.1f) + (_tdsMovingAverage * 0.9f);
     }
     
+    TDS_LOCK();
     _tdsLastResult = _tdsMovingAverage;
+    TDS_UNLOCK();
     return _tdsMovingAverage;
 }
 
 float tdsGetLastValue(void) {
-    return _tdsLastResult;
+    float lastValue = -1.0f;
+    TDS_LOCK();
+    lastValue = _tdsLastResult;
+    TDS_UNLOCK();
+    return lastValue;
 }
 
 void tdsSetCalibration(float lowPpm, float lowVoltage, float highPpm, float highVoltage) {
