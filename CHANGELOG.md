@@ -2,6 +2,23 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-04-26] - Pi Auth Session Revocation And Rate Limits
+
+### Changed
+
+- **security: revoke stale signed cookies after deploy and throttle auth-sensitive APIs (`pi_server/app.py`):**
+  - เพิ่ม `session_epoch` ที่เก็บฝั่ง server และ bind ลง session cookie ตอน login เพื่อให้ cookie เก่าที่ไม่มี epoch หรือมีค่าไม่ตรงถูกบังคับ logout ทันทีหลัง deploy code ใหม่
+  - ตรวจ session ทุกครั้งกับข้อมูล user/role ปัจจุบันใน `auth_config.json` ทำให้ session เดิมใช้ต่อไม่ได้เมื่อ account ถูกลบหรือ role ถูกเปลี่ยน
+  - เพิ่ม in-memory rate limit สำหรับ `/api/login` และ endpoint แก้ไขผู้ใช้ (`/api/admin/users*`) เพื่อลดการ brute force และการยิง API จัดการสิทธิ์ซ้ำ
+
+## [2026-04-26] - Restore Pi AP Credentials
+
+### Changed
+
+- **fix: restore the Pi hotspot credentials to the long-used deployment values (`pi_server/hostapd.conf`, `pi_server/setup_ap.sh`):**
+  - เปลี่ยน `wpa_passphrase` กลับเป็น `aqua1234` ให้ตรงกับค่า `wifi_ap_pass` ที่ firmware ใช้อยู่จาก `secrets.ini`
+  - เปลี่ยนข้อความสรุปท้าย `setup_ap.sh` ให้แสดง SSID/password เดิมอีกครั้ง เพื่อให้ operator เห็นค่าที่ใช้งานจริงเหมือนก่อนหน้า
+
 ## [2026-04-26] - Pi User Role Management
 
 ### Changed

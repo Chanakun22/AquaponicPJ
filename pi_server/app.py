@@ -22,6 +22,12 @@ SESSION_SECURE_ENV = "AQUAPONICS_SESSION_SECURE"
 AUTH_BOOTSTRAP_PASSWORD_ENV = "AQUAPONICS_BOOTSTRAP_ADMIN_PASSWORD"
 OTA_PASSWORD_ENV = "AQUAPONICS_OTA_PASSWORD"
 ALLOWED_USER_ROLES = {"admin", "user"}
+RATE_LIMIT_LOCK = threading.Lock()
+RATE_LIMIT_BUCKETS = {}
+LOGIN_RATE_LIMIT_MAX_ATTEMPTS = 5
+LOGIN_RATE_LIMIT_WINDOW_SEC = 300
+ADMIN_MUTATION_RATE_LIMIT_MAX_ATTEMPTS = 20
+ADMIN_MUTATION_RATE_LIMIT_WINDOW_SEC = 300
 
 
 def _read_env(name):
@@ -29,6 +35,10 @@ def _read_env(name):
     if isinstance(value, str):
         return value.strip()
     return ""
+
+
+def _new_random_hex(byte_length=16):
+    return os.urandom(byte_length).hex()
 
 
 def _app_path(*parts):
@@ -70,6 +80,110 @@ def normalize_user_role(role, default="user"):
         return role_value
     return None
 
+
+def ensure_auth_runtime_fields(config):
+    changed = False
+
+    if not isinstance(config.get("session_epoch"), str) or not config.get("session_epoch", "").strip():
+        config["session_epoch"] = _new_random_hex()
+        changed = True
+
+    users = config.get("users", [])
+    if isinstance(users, list) and users and config.get("bootstrap_required"):
+        config["bootstrap_required"] = False
+        changed = True
+
+    return changed
+
+
+def rotate_session_epoch(config):
+    config["session_epoch"] = _new_random_hex()
+    return config["session_epoch"]
+
+
+def get_client_ip():
+    forwarded_for = request.headers.get("X-Forwarded-For", "")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip() or (request.remote_addr or "unknown")
+    return request.remote_addr or "unknown"
+
+
+def check_rate_limit(scope, limit, window_seconds):
+    now = time.time()
+    client_ip = get_client_ip()
+    if scope == "login":
+        bucket_key = f"{scope}:{client_ip}"
+    else:
+        bucket_key = f"{scope}:{client_ip}:{session.get('username', 'anonymous')}"
+
+    with RATE_LIMIT_LOCK:
+        timestamps = RATE_LIMIT_BUCKETS.get(bucket_key, [])
+        timestamps = [stamp for stamp in timestamps if now - stamp < window_seconds]
+        if len(timestamps) >= limit:
+            retry_after = max(1, int(window_seconds - (now - timestamps[0])))
+            RATE_LIMIT_BUCKETS[bucket_key] = timestamps
+            return True, retry_after
+
+        timestamps.append(now)
+        RATE_LIMIT_BUCKETS[bucket_key] = timestamps
+
+    return False, 0
+
+
+def rate_limit(scope, limit, window_seconds, message=None):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            limited, retry_after = check_rate_limit(scope, limit, window_seconds)
+            if limited:
+                response = jsonify({
+                    "status": "error",
+                    "message": message or "Too many requests. Please try again later."
+                })
+                response.status_code = 429
+                response.headers["Retry-After"] = str(retry_after)
+                return response
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
+def clear_current_session():
+    session.clear()
+
+
+def reject_authentication(message, status_code=401):
+    clear_current_session()
+    if request.path.startswith('/api/'):
+        return jsonify({"status": "error", "message": message}), status_code
+    return redirect('/login')
+
+
+def validate_current_session():
+    username = str(session.get("username", "")).strip()
+    if not username:
+        return False, "Authentication required", None
+
+    current_auth_config = load_auth_config()
+    if auth_bootstrap_required(current_auth_config):
+        return False, "Admin bootstrap required", None
+
+    expected_epoch = str(current_auth_config.get("session_epoch", "")).strip()
+    session_epoch = str(session.get("auth_epoch", "")).strip()
+    if not session_epoch or session_epoch != expected_epoch:
+        return False, "Session expired. Please sign in again.", None
+
+    user = next((candidate for candidate in current_auth_config.get("users", []) if candidate.get("username") == username), None)
+    if not user:
+        return False, "Session expired. Please sign in again.", None
+
+    current_role = normalize_user_role(user.get("role", "user")) or "user"
+    session_role = normalize_user_role(session.get("role", "user")) or "user"
+    if session_role != current_role:
+        return False, "Account permissions changed. Please sign in again.", None
+
+    return True, user, current_auth_config
+
 def load_auth_config():
     """Load user credentials from auth config file"""
     loaded_config = {}
@@ -85,12 +199,15 @@ def load_auth_config():
     users = loaded_config.get("users", [])
     if isinstance(users, list) and users:
         loaded_config["bootstrap_required"] = False
+        if ensure_auth_runtime_fields(loaded_config):
+            save_auth_config(loaded_config)
         return loaded_config
 
     bootstrap_config = _bootstrap_auth_config()
     merged = dict(loaded_config)
     merged["users"] = bootstrap_config["users"]
     merged["bootstrap_required"] = bootstrap_config["bootstrap_required"]
+    ensure_auth_runtime_fields(merged)
 
     if merged["users"]:
         save_auth_config(merged)
@@ -153,10 +270,9 @@ def login_required(f):
     """Decorator to protect routes — redirects to /login if not authenticated"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'username' not in session:
-            if request.path.startswith('/api/'):
-                return jsonify({"status": "error", "message": "Authentication required"}), 401
-            return redirect('/login')
+        is_valid, payload, _ = validate_current_session()
+        if not is_valid:
+            return reject_authentication(payload, 401)
         return f(*args, **kwargs)
     return decorated_function
 
@@ -164,11 +280,10 @@ def admin_required(f):
     """Decorator for admin-only routes — user role must be 'admin'"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'username' not in session:
-            if request.path.startswith('/api/'):
-                return jsonify({"status": "error", "message": "Authentication required"}), 401
-            return redirect('/login')
-        if session.get('role') != 'admin':
+        is_valid, user, _ = validate_current_session()
+        if not is_valid:
+            return reject_authentication(user, 401)
+        if normalize_user_role(user.get('role', 'user')) != 'admin':
             if request.path.startswith('/api/'):
                 return jsonify({"status": "error", "message": "Admin access required"}), 403
             return redirect('/')
@@ -904,6 +1019,12 @@ def login_page():
     return _send_local_file('login.html')
 
 @app.route('/api/login', methods=['POST'])
+@rate_limit(
+    'login',
+    LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
+    LOGIN_RATE_LIMIT_WINDOW_SEC,
+    message='Too many login attempts. Please wait a few minutes before trying again.'
+)
 def api_login():
     global auth_config
     try:
@@ -929,7 +1050,8 @@ def api_login():
 
         if user and check_password_hash(user['password_hash'], password):
             session['username'] = username
-            session['role'] = user.get('role', 'user')
+            session['role'] = normalize_user_role(user.get('role', 'user')) or 'user'
+            session['auth_epoch'] = auth_config.get('session_epoch', '')
             session.permanent = True
             app.permanent_session_lifetime = timedelta(days=7)
             log_activity(username, 'login', 'Login successful', ip)
@@ -2376,6 +2498,12 @@ def get_admin_users():
 
 @app.route('/api/admin/users', methods=['POST'])
 @admin_required
+@rate_limit(
+    'admin_user_mutation',
+    ADMIN_MUTATION_RATE_LIMIT_MAX_ATTEMPTS,
+    ADMIN_MUTATION_RATE_LIMIT_WINDOW_SEC,
+    message='Too many user-management changes. Please wait before trying again.'
+)
 def add_admin_user():
     """Add a new user"""
     global auth_config
@@ -2403,7 +2531,9 @@ def add_admin_user():
             'password_hash': generate_password_hash(password),
             'role': role
         })
+        rotate_session_epoch(auth_config)
         save_auth_config(auth_config)
+        session['auth_epoch'] = auth_config.get('session_epoch', '')
         log_activity(session.get('username', '?'), 'user_mgmt', f'Added user: {username} (role={role})', request.remote_addr)
         print(f"👤 User added: {username} ({role})")
         return jsonify({'status': 'ok', 'message': f'User "{username}" added'})
@@ -2412,6 +2542,12 @@ def add_admin_user():
 
 @app.route('/api/admin/users/role', methods=['POST'])
 @admin_required
+@rate_limit(
+    'admin_user_mutation',
+    ADMIN_MUTATION_RATE_LIMIT_MAX_ATTEMPTS,
+    ADMIN_MUTATION_RATE_LIMIT_WINDOW_SEC,
+    message='Too many user-management changes. Please wait before trying again.'
+)
 def update_admin_user_role():
     """Update a user's role while ensuring at least one admin remains."""
     global auth_config
@@ -2441,9 +2577,11 @@ def update_admin_user_role():
             return jsonify({'status': 'error', 'message': 'You cannot remove your own admin role while logged in'}), 400
 
         user['role'] = role
+        rotate_session_epoch(auth_config)
         save_auth_config(auth_config)
         if username == session.get('username'):
             session['role'] = role
+        session['auth_epoch'] = auth_config.get('session_epoch', '')
         log_activity(session.get('username', '?'), 'user_mgmt', f'Changed role for: {username} -> {role}', request.remote_addr)
         print(f"🛡️ Role changed for {username}: {current_role} -> {role}")
         return jsonify({'status': 'ok', 'message': f'Role updated for "{username}"'})
@@ -2452,6 +2590,12 @@ def update_admin_user_role():
 
 @app.route('/api/admin/users/password', methods=['POST'])
 @admin_required
+@rate_limit(
+    'admin_user_mutation',
+    ADMIN_MUTATION_RATE_LIMIT_MAX_ATTEMPTS,
+    ADMIN_MUTATION_RATE_LIMIT_WINDOW_SEC,
+    message='Too many user-management changes. Please wait before trying again.'
+)
 def change_user_password():
     """Change a user's password"""
     global auth_config
@@ -2471,7 +2615,9 @@ def change_user_password():
             return jsonify({'status': 'error', 'message': f'User "{username}" not found'}), 404
 
         user['password_hash'] = generate_password_hash(new_password)
+        rotate_session_epoch(auth_config)
         save_auth_config(auth_config)
+        session['auth_epoch'] = auth_config.get('session_epoch', '')
         log_activity(session.get('username', '?'), 'user_mgmt', f'Changed password for: {username}', request.remote_addr)
         print(f"🔑 Password changed for: {username}")
         return jsonify({'status': 'ok', 'message': f'Password updated for "{username}"'})
@@ -2480,6 +2626,12 @@ def change_user_password():
 
 @app.route('/api/admin/users/delete', methods=['POST'])
 @admin_required
+@rate_limit(
+    'admin_user_mutation',
+    ADMIN_MUTATION_RATE_LIMIT_MAX_ATTEMPTS,
+    ADMIN_MUTATION_RATE_LIMIT_WINDOW_SEC,
+    message='Too many user-management changes. Please wait before trying again.'
+)
 def delete_admin_user():
     """Delete a user (cannot delete 'admin')"""
     global auth_config
@@ -2499,7 +2651,9 @@ def delete_admin_user():
         if len(auth_config['users']) == original_len:
             return jsonify({'status': 'error', 'message': f'User "{username}" not found'}), 404
 
+        rotate_session_epoch(auth_config)
         save_auth_config(auth_config)
+        session['auth_epoch'] = auth_config.get('session_epoch', '')
         log_activity(session.get('username', '?'), 'user_mgmt', f'Deleted user: {username}', request.remote_addr)
         print(f"🗑️ User deleted: {username}")
         return jsonify({'status': 'ok', 'message': f'User "{username}" deleted'})
