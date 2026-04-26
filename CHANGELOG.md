@@ -2,6 +2,14 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-04-26] - Login Password Visibility Toggle
+
+### Changed
+
+- **ui: add a show/hide password control to the Pi login screen (`pi_server/login.html`):**
+  - เพิ่มปุ่มไอคอนตาในช่อง password เพื่อสลับแสดงหรือซ่อนรหัสผ่านได้จากหน้า login โดยไม่เปลี่ยน flow การ submit เดิม
+  - ปรับ spacing/focus state ของ input ให้ยังใช้งานง่ายทั้งเมาส์และคีย์บอร์ด
+
 ## [2026-04-26] - Pi Auth Session Revocation And Rate Limits
 
 ### Changed
