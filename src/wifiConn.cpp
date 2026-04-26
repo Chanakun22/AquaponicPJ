@@ -21,6 +21,12 @@
 static const char* WIFI_SSID = WIFI_AP_NAME;
 static const char* WIFI_PASS = WIFI_AP_PASS;
 
+static bool wifiCredentialsConfigured(void) {
+    return strlen(WIFI_SSID) > 0
+        && strlen(WIFI_PASS) > 0
+        && strcmp(WIFI_PASS, UNCONFIGURED_SECRET_SENTINEL) != 0;
+}
+
 // ============================================================================
 // PRIVATE VARIABLES
 // ============================================================================
@@ -35,6 +41,11 @@ static const unsigned long RECONNECT_INTERVAL = 10000; // reconnect ทุก 10
 // ============================================================================
 
 void wifiSetup(void) {
+    if (!wifiCredentialsConfigured()) {
+        LOG_WARN("WiFi disabled: SECRET_WIFI_AP_PASS is not configured");
+        return;
+    }
+
     LOG_INFO("Connecting to fixed WiFi: %s", WIFI_SSID);
     
     WiFi.mode(WIFI_STA);
@@ -70,6 +81,10 @@ void wifiSetup(void) {
 }
 
 void wifiLoop(void) {
+    if (!wifiCredentialsConfigured()) {
+        return;
+    }
+
     // Periodic connection check (non-blocking)
     if (millis() - _wifiLastCheckTime >= WIFI_CHECK_INTERVAL) {
         _wifiLastCheckTime = millis();
@@ -110,6 +125,11 @@ bool wifiIsConnected(void) {
 }
 
 void wifiReset(void) {
+    if (!wifiCredentialsConfigured()) {
+        LOG_WARN("WiFi reset ignored: SECRET_WIFI_AP_PASS is not configured");
+        return;
+    }
+
     LOG_WARN("Resetting WiFi — reconnecting to %s", WIFI_SSID);
     WiFi.disconnect();
     WiFi.begin(WIFI_SSID, WIFI_PASS);

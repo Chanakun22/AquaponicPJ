@@ -22,6 +22,10 @@
 static bool _otaInitialized = false;
 static bool _otaInProgress = false;
 
+static bool otaPasswordConfigured(void) {
+    return strlen(OTA_PASSWORD) > 0 && strcmp(OTA_PASSWORD, UNCONFIGURED_SECRET_SENTINEL) != 0;
+}
+
 // ============================================================================
 // PUBLIC FUNCTIONS
 // ============================================================================
@@ -31,12 +35,14 @@ void otaSetup(void) {
     if (_otaInitialized) {
         return;
     }
+
+    if (!otaPasswordConfigured()) {
+        LOG_WARN("OTA disabled: SECRET_OTA_PASSWORD is not configured");
+        return;
+    }
     
     ArduinoOTA.setHostname(OTA_HOSTNAME);
-    
-    if (strlen(OTA_PASSWORD) > 0) {
-        ArduinoOTA.setPassword(OTA_PASSWORD);
-    }
+    ArduinoOTA.setPassword(OTA_PASSWORD);
     
     ArduinoOTA.onStart([]() {
         _otaInProgress = true;

@@ -163,7 +163,7 @@ Pi ทำหน้าที่เป็น **Access Point (AP)** ชื่อ `A
    ```ini
    [secrets]
    WIFI_AP_NAME = Aquaponics-Setup
-   WIFI_AP_PASS = admin1234
+   WIFI_AP_PASS = replace_with_unique_ap_password
    NETPIE_CLIENT_ID = your_client_id
    NETPIE_TOKEN = your_token
    NETPIE_SECRET = your_secret

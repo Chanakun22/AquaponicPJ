@@ -241,11 +241,11 @@ static void _mqttCallback(char* topic, byte* payload, unsigned int length) {
  */
 static bool _mqttReconnect(void) {
     LOG_INFO("Connecting to MQTT broker...");
-    
-    // DEBUG: Check credentials (remove specific values after debugging)
-    LOG_DEBUG("ID: %s", NETPIE_CLIENT_ID);
-    LOG_DEBUG("Token: %s", NETPIE_TOKEN);
-    // LOG_DEBUG("Secret: %s", NETPIE_SECRET); // Keep secret hidden but check ID/Token format
+    LOG_DEBUG(
+        "MQTT credentials present: client_id=%s, token=%s",
+        NETPIE_CLIENT_ID,
+        strlen(NETPIE_TOKEN) > 0 ? "configured" : "missing"
+    );
     
     // NETPIE_CLIENT_ID, NETPIE_TOKEN, NETPIE_SECRET are macros from config.h/secrets.ini
     if (_mqtt.connect(NETPIE_CLIENT_ID, NETPIE_TOKEN, NETPIE_SECRET)) {

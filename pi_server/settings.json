@@ -12,7 +12,7 @@
     "tds_max": 600
   },
   "notifications": {
-    "line_token": "h3ZAs9qNLL5JfUPS2BE54D7hVoeL7oLBk/Dd23uIukb7A3Nq1WmndlTrMJStBvxTG4HfADVjT5zjH2ea8X/4ZITwNDCRh0hZZf9O18D6vtTirgDxef5Oo1rBTHEA4dvf0MJ+keAmDZvHIby10Y/d2AdB04t89/1O/w1cDnyilFU=",
+    "line_token": "",
     "alert_cooldown_min": 15,
     "enabled": false
   },
@@ -119,7 +119,7 @@
     "quality": 70
   },
   "secure": {
-    "ota_password": "admin123",
+    "ota_password": "",
     "esp_ip": "192.168.10.10",
     "terminal_ip": "192.168.10.2"
   },

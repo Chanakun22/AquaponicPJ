@@ -2,6 +2,41 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-04-26] - Pi User Role Management
+
+### Changed
+
+- **feat: allow admins to choose and update each dashboard user's role (`pi_server/admin_users.html`, `pi_server/app.py`):**
+  - เพิ่มตัวเลือก role ตอนสร้าง user ใหม่ในหน้า `/admin/users` แทนการบังคับสร้างเป็น `user` เสมอ
+  - เพิ่ม role selector และปุ่มบันทึกในรายการผู้ใช้ เพื่อเปลี่ยนสิทธิ์ `admin` / `user` ได้จากหน้าเดียว
+  - เพิ่ม backend endpoint สำหรับอัปเดต role พร้อม validation กันการลดสิทธิ์จนไม่เหลือ admin และกันการปลดสิทธิ์ admin ของตัวเองขณะยังล็อกอินอยู่
+
+## [2026-04-26] - Secret Leak Hardening
+
+### Changed
+
+- **security: remove public bootstrap credentials and fail closed when secrets are missing (`pi_server/app.py`, `include/config.h`, `src/ota.cpp`, `src/telnetServer.cpp`, `pi_server/settings.json`, `PRODUCTION.md`):**
+  - ตัด hardcoded admin bootstrap password ใน Pi server ออก แล้วเปลี่ยนให้สร้างบัญชี admin ครั้งแรกจาก env `AQUAPONICS_BOOTSTRAP_ADMIN_PASSWORD` เท่านั้น
+  - เปลี่ยน default `ota_password` ใน Pi settings และ tracked `settings.json` เป็นค่าว่าง พร้อมบังคับให้ endpoint OTA ปฏิเสธคำขอเมื่อยังไม่ได้ตั้งรหัสจริง
+  - เปลี่ยน fallback `SECRET_OTA_PASSWORD` และ `SECRET_TELNET_PASSWORD` ใน firmware เป็น sentinel ที่ใช้งานจริงไม่ได้ และ disable OTA/Telnet อัตโนมัติเมื่อยังไม่ได้ configure
+  - ล้าง LINE token และ OTA password ที่ถูก track ใน `pi_server/settings.json` และอัปเดตเอกสาร production ให้ย้ายไปใช้ secrets/env สำหรับ deployment จริง
+  - ผูกไฟล์ `auth_config.json`, `aquaponics.db`, `system.log`, และ static/page assets กับ directory ของ `app.py` โดยตรง พร้อมเปลี่ยน `pwa`/`static` routes ไปใช้ safe directory serving แทนการประกอบ path จาก URL ตรง ๆ
+  - ตัด debug log ที่พิมพ์ NETPIE token ตรง ๆ และเลิกพิมพ์รหัสผ่าน Hotspot ออกทาง `setup_ap.sh`
+
+## [2026-04-26] - Water System Native Regression Tests
+
+### Added
+
+- **test: add focused native coverage for new water refill route behavior (`test/test_native/test_water_system_native.cpp`, `test/test_native/mock/config.h`):**
+  - เพิ่ม unit tests สำหรับ `AUTO` route ที่ต้องเลือก `FISH_TANK` ก่อน `SUMP_DIRECT` เมื่อทั้งสองเส้นทางพร้อมใช้งาน
+  - เพิ่ม regression test สำหรับ fallback ไป `SUMP_DIRECT` หลังครบ `fish_refill_max_runtime_ms` เพื่อกัน logic ย้อนกลับไประบบเดิมโดยไม่ตั้งใจ
+  - เพิ่ม test สำหรับ fish refill cooldown เพื่อยืนยันว่า status รายงาน `fishRefillReady=false` และมีเวลารอคงเหลือหลังหยุดเติมผ่านตู้ปลา
+
+- **test: split native sensor suites into one PlatformIO test program per folder (`platformio.ini`, `test/test_dht_native/test_main.cpp`, `test/test_light_native/test_main.cpp`, `test/test_tds_native/test_main.cpp`, `test/test_temp_native/test_main.cpp`, `test/test_water_system_native/test_main.cpp`):**
+  - ปิดการเก็บ `test/test_native` เป็น suite เดียว เพราะในโฟลเดอร์นั้นมีหลายไฟล์ที่ต่างก็มี `main()` และ mock globals ของตัวเอง ทำให้ native linker ชนกันทั้งก้อน
+  - เพิ่ม wrapper suite แยกตามโมดูล พร้อม stub `setUp/tearDown`, `telnetPrintfNonBlocking()`, และ `localMqttPublishLog()` เพื่อให้ Unity และ production logger link ผ่านใน native environment
+  - ทำให้ `pio test -e native` สามารถ compile/run ราย suite ตามรูปแบบของ PlatformIO แทนการพยายามรวมทุก sensor test เข้าด้วยกันใน executable เดียว
+
 ## [2026-04-26] - Water And Pi Decision Skill
 
 ### Added
@@ -24,8 +59,8 @@ All notable changes to the **Smart Aquaponics AI** project will be documented in
   - ทำให้หน้า `ota.html` และ `terminal.html` โหลด `ESP IP` จาก `/api/settings` แทนการฝังค่าไว้ใน HTML เพื่อลด config drift แบบเดียวกับเคส WiFi
 
 - **chore: align firmware fallback secrets with the active AP/telnet defaults (`include/config.h`, `include/secrets.h`):**
-  - เปลี่ยน fallback SSID/password ใน firmware headers ให้ตรงกับค่าปัจจุบัน `Aquaponics-LAN` / `aqua1234` แทนค่าที่ drift ไปก่อนหน้า
-  - ปรับ fallback `TELNET_PASSWORD` ให้ตรงกับ `secrets.ini` ปัจจุบันเป็น `admin123` เพื่อลดความสับสนเวลา build โดยไม่มี secret overrides
+  - เปลี่ยน fallback SSID/password ใน firmware headers ให้ตรงกับค่า deployment ที่ใช้งานอยู่ในช่วงนั้น แทนค่าที่ drift ไปก่อนหน้า
+  - ปรับ fallback `TELNET_PASSWORD` ให้ตรงกับ secret ที่ใช้งานจริงในเวลานั้น เพื่อลดความสับสนเวลา build โดยไม่มี secret overrides
 
 - **fix: persist full Pi settings schema and sync water defaults to the current Pi baseline (`pi_server/app.py`, `pi_server/settings.html`, `pi_server/settings.json`, `include/config.h`):**
   - เปลี่ยน `POST /api/settings` และ `save_settings()` ให้ deep-merge กับ schema ล่าสุดก่อน save เพื่อไม่ให้ nested settings หรือ block อย่าง `secure` หลุดหายจาก `settings.json`
@@ -408,7 +443,7 @@ All notable changes to the **Smart Aquaponics AI** project will be documented in
 
 - **refactor: WiFi Direct Connect (`wifiConn.cpp`):**
   - เปลี่ยนจาก WiFiManager (AP Portal) → `WiFi.begin()` ต่อตรงไปยัง Pi Hotspot
-  - SSID: `Aquaponics-LAN`, Password: `aqua1234` (จาก `hostapd.conf`)
+  - SSID และรหัสผ่านของ AP ให้ใช้ค่าจาก `hostapd.conf` ปัจจุบันของเครื่องหน้างาน
   - ลบ dependency `WiFiManager` library ออก — ลด Flash usage
   - Auto-reconnect ทุก 10 วินาที (เดิม 30 วินาที)
 - **refactor: Light Controller → Relay (`lightController.cpp`):**

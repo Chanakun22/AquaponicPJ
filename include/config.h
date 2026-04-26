@@ -179,7 +179,7 @@
 #define SECRET_WIFI_AP_NAME Aquaponics-LAN // Default if not defined
 #endif
 #ifndef SECRET_WIFI_AP_PASS
-#define SECRET_WIFI_AP_PASS aqua1234
+#define SECRET_WIFI_AP_PASS __CONFIGURE_ME__
 #endif
 
 #define WIFI_AP_NAME        XSTRINGIFY(SECRET_WIFI_AP_NAME)
@@ -193,9 +193,10 @@
 #define OTA_ENABLED         1       // 1=Enable OTA, 0=Disable
 #define OTA_PORT            3232     // OTA update port
 #define OTA_HOSTNAME        "aquaponics-sensor"  // OTA hostname
+#define UNCONFIGURED_SECRET_SENTINEL "__CONFIGURE_ME__"
 
 #ifndef SECRET_OTA_PASSWORD
-#define SECRET_OTA_PASSWORD admin123
+#define SECRET_OTA_PASSWORD __CONFIGURE_ME__
 #endif
 
 #define OTA_PASSWORD        XSTRINGIFY(SECRET_OTA_PASSWORD)
@@ -228,7 +229,7 @@
 #define TELNET_PORT         23
 
 #ifndef SECRET_TELNET_PASSWORD
-#define SECRET_TELNET_PASSWORD admin123
+#define SECRET_TELNET_PASSWORD __CONFIGURE_ME__
 #endif
 
 #define TELNET_PASSWORD     XSTRINGIFY(SECRET_TELNET_PASSWORD)

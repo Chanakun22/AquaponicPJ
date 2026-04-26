@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, send_file, request, session, redirect, url_for
+from flask import Flask, jsonify, send_file, send_from_directory, request, session, redirect, url_for
 from flask_socketio import SocketIO, emit
 import paho.mqtt.client as mqtt
 import copy
@@ -13,32 +13,94 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # === Authentication Config ===
-AUTH_FILE = "auth_config.json"
+AUTH_FILE = os.path.join(APP_DIR, "auth_config.json")
 SESSION_SECRET_ENV = "AQUAPONICS_SECRET_KEY"
 SESSION_SECURE_ENV = "AQUAPONICS_SESSION_SECURE"
+AUTH_BOOTSTRAP_PASSWORD_ENV = "AQUAPONICS_BOOTSTRAP_ADMIN_PASSWORD"
+OTA_PASSWORD_ENV = "AQUAPONICS_OTA_PASSWORD"
+ALLOWED_USER_ROLES = {"admin", "user"}
 
-def load_auth_config():
-    """Load user credentials from auth config file"""
-    default = {
-        "users": [
+
+def _read_env(name):
+    value = os.environ.get(name, "")
+    if isinstance(value, str):
+        return value.strip()
+    return ""
+
+
+def _app_path(*parts):
+    return os.path.join(APP_DIR, *parts)
+
+
+def _send_local_file(filename):
+    return send_file(_app_path(filename))
+
+
+def _bootstrap_auth_config():
+    bootstrap_password = _read_env(AUTH_BOOTSTRAP_PASSWORD_ENV)
+    config = {
+        "users": [],
+        "bootstrap_required": True,
+    }
+
+    if bootstrap_password:
+        config["users"] = [
             {
                 "username": "admin",
-                "password_hash": generate_password_hash("0824028770zz"),
+                "password_hash": generate_password_hash(bootstrap_password),
                 "role": "admin"
             }
         ]
-    }
+        config["bootstrap_required"] = False
+
+    return config
+
+
+def auth_bootstrap_required(config):
+    users = config.get("users", [])
+    return bool(config.get("bootstrap_required")) and not users
+
+
+def normalize_user_role(role, default="user"):
+    role_value = str(role or default).strip().lower()
+    if role_value in ALLOWED_USER_ROLES:
+        return role_value
+    return None
+
+def load_auth_config():
+    """Load user credentials from auth config file"""
+    loaded_config = {}
     try:
         if os.path.exists(AUTH_FILE):
             with open(AUTH_FILE, "r") as f:
-                return json.load(f)
+                loaded = json.load(f)
+                if isinstance(loaded, dict):
+                    loaded_config = loaded
     except Exception as e:
         print(f"Error loading auth config: {e}")
-    # Save default if not exists
-    save_auth_config(default)
-    return default
+
+    users = loaded_config.get("users", [])
+    if isinstance(users, list) and users:
+        loaded_config["bootstrap_required"] = False
+        return loaded_config
+
+    bootstrap_config = _bootstrap_auth_config()
+    merged = dict(loaded_config)
+    merged["users"] = bootstrap_config["users"]
+    merged["bootstrap_required"] = bootstrap_config["bootstrap_required"]
+
+    if merged["users"]:
+        save_auth_config(merged)
+        return merged
+
+    print(
+        f"WARNING: Admin bootstrap required. Set {AUTH_BOOTSTRAP_PASSWORD_ENV} and restart the service."
+    )
+    save_auth_config(merged)
+    return merged
 
 def save_auth_config(config):
     """Save auth config to file"""
@@ -53,11 +115,11 @@ def save_auth_config(config):
         print(f"Error saving auth config: {e}")
 
 def env_flag_enabled(name):
-    value = os.environ.get(name, "").strip().lower()
+    value = _read_env(name).lower()
     return value in ("1", "true", "yes", "on")
 
 def ensure_session_secret(config):
-    env_secret = os.environ.get(SESSION_SECRET_ENV, "").strip()
+    env_secret = _read_env(SESSION_SECRET_ENV)
     if env_secret:
         return env_secret
 
@@ -114,7 +176,7 @@ def admin_required(f):
     return decorated_function
 
 # === Settings File ===
-SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json")
+SETTINGS_FILE = _app_path("settings.json")
 
 
 def _deep_merge_dict(base, overrides):
@@ -293,7 +355,7 @@ def load_settings():
             "quality": 80
         },
         "secure": {
-            "ota_password": "admin123",
+            "ota_password": "",
             "esp_ip": "192.168.10.10",
             "terminal_ip": "192.168.10.2"
         }
@@ -434,7 +496,7 @@ def get_pi_temp():
 # === Database Setup (SQLite) ===
 import sqlite3
 
-DB_FILE = "aquaponics.db"
+DB_FILE = _app_path("aquaponics.db")
 db_lock = threading.Lock()  # ป้องกัน concurrent write จาก MQTT Thread + Web Thread
 
 def init_db():
@@ -555,7 +617,7 @@ def save_settings(settings):
 
 # === Log Storage (In-Memory + File) ===
 from collections import deque
-LOG_FILE = "system.log"
+LOG_FILE = _app_path("system.log")
 log_buffer = deque(maxlen=50)  # Keep last 50 logs in memory for web
 
 def save_log(msg):
@@ -839,7 +901,7 @@ def start_mqtt():
 def login_page():
     if 'username' in session:
         return redirect('/')
-    return send_file('login.html')
+    return _send_local_file('login.html')
 
 @app.route('/api/login', methods=['POST'])
 def api_login():
@@ -855,6 +917,14 @@ def api_login():
 
         # Find user
         auth_config = load_auth_config()
+        if auth_bootstrap_required(auth_config):
+            return jsonify({
+                "status": "error",
+                "message": (
+                    f"Admin bootstrap required. Set {AUTH_BOOTSTRAP_PASSWORD_ENV} on the Pi and restart the service."
+                )
+            }), 503
+
         user = next((u for u in auth_config.get('users', []) if u['username'] == username), None)
 
         if user and check_password_hash(user['password_hash'], password):
@@ -893,35 +963,35 @@ def api_me():
 # Public (no auth needed)
 @app.route('/base.css')
 def serve_base_css():
-    return send_file('base.css')
+    return _send_local_file('base.css')
 
 @app.route('/header.js')
 def serve_header_js():
-    return send_file('header.js')
+    return _send_local_file('header.js')
 
 @app.route('/pwa/<path:filename>')
 def serve_pwa(filename):
-    return send_file(f'pwa/{filename}')
+    return send_from_directory(_app_path('pwa'), filename)
 
 @app.route('/static/<path:filename>')
 def serve_static_assets(filename):
-    return send_file(f'static/{filename}')
+    return send_from_directory(_app_path('static'), filename)
 
 # Protected pages
 @app.route('/')
 @login_required
 def index():
-    return send_file('index.html')
+    return _send_local_file('index.html')
 
 @app.route('/graphs')
 @login_required
 def graphs_page():
-    return send_file('graphs.html')
+    return _send_local_file('graphs.html')
 
 @app.route('/full_logs')
 @login_required
 def full_logs_page():
-    return send_file('full_logs.html')
+    return _send_local_file('full_logs.html')
 
 @app.route('/api/sensors')
 @login_required
@@ -931,12 +1001,12 @@ def get_sensors():
 @app.route('/settings')
 @admin_required
 def settings_page():
-    return send_file('settings.html')
+    return _send_local_file('settings.html')
 
 @app.route('/live')
 @login_required
 def live_page():
-    return send_file('live.html')
+    return _send_local_file('live.html')
 
 @app.route('/cam-stream')
 @login_required
@@ -1328,12 +1398,12 @@ def get_logs():
 @app.route('/logs_view')
 @login_required
 def logs_view():
-    return send_file('full_logs.html')
+    return _send_local_file('full_logs.html')
 
 @app.route('/graphs_view')
 @login_required
 def graphs_view():
-    return send_file('graphs.html')
+    return _send_local_file('graphs.html')
 
 # === Camera Settings API ===
 @app.route('/api/automation/config', methods=['POST'])
@@ -1584,7 +1654,7 @@ def water_system_config():
 @app.route('/hwtest')
 @admin_required
 def hwtest_page():
-    return send_file('hardware_test.html')
+    return _send_local_file('hardware_test.html')
 
 @app.route('/api/hwtest/command', methods=['POST'])
 @admin_required
@@ -1823,7 +1893,7 @@ ota_tasks = {}
 @app.route('/ota')
 @admin_required
 def ota_page():
-    return send_file('ota.html')
+    return _send_local_file('ota.html')
 
 @app.route('/api/ota/upload', methods=['POST'])
 @admin_required
@@ -1854,8 +1924,15 @@ def ota_upload():
 
         secure_settings = load_settings().get("secure", {})
         esp_ip = str(secure_settings.get("esp_ip", "192.168.10.10")).strip() or "192.168.10.10"
-        ota_password = str(secure_settings.get("ota_password", "admin123")).strip()
-        espota_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'espota.py')
+        ota_password = _read_env(OTA_PASSWORD_ENV) or str(secure_settings.get("ota_password", "")).strip()
+        if not ota_password:
+            return jsonify({
+                "status": "error",
+                "message": (
+                    f"OTA password is not configured. Set secure.ota_password or {OTA_PASSWORD_ENV}."
+                )
+            }), 503
+        espota_script = _app_path('espota.py')
 
         def run_ota():
             try:
@@ -1922,7 +1999,7 @@ import re
 @app.route('/wifi')
 @admin_required
 def wifi_page():
-    return send_file('wifi.html')
+    return _send_local_file('wifi.html')
 
 @app.route('/api/wifi/status')
 @admin_required
@@ -2116,7 +2193,7 @@ _telnet_sessions = {}
 @app.route('/terminal')
 @admin_required
 def terminal_page():
-    return send_file('terminal.html')
+    return _send_local_file('terminal.html')
 
 @socketio.on('terminal_connect')
 def handle_terminal_connect(data):
@@ -2223,12 +2300,12 @@ def handle_ws_disconnect():
 @app.route('/admin/logs')
 @admin_required
 def admin_logs_page():
-    return send_file('admin_logs.html')
+    return _send_local_file('admin_logs.html')
 
 @app.route('/admin/users')
 @admin_required
 def admin_users_page():
-    return send_file('admin_users.html')
+    return _send_local_file('admin_users.html')
 
 @app.route('/api/admin/logs')
 @admin_required
@@ -2306,11 +2383,14 @@ def add_admin_user():
         data = request.get_json()
         username = data.get('username', '').strip()
         password = data.get('password', '')
+        role = normalize_user_role(data.get('role', 'user'))
 
         if not username or not password:
             return jsonify({'status': 'error', 'message': 'Username and password are required'}), 400
         if len(password) < 4:
             return jsonify({'status': 'error', 'message': 'Password must be at least 4 characters'}), 400
+        if role is None:
+            return jsonify({'status': 'error', 'message': 'Role must be admin or user'}), 400
 
         auth_config = load_auth_config()
 
@@ -2321,12 +2401,52 @@ def add_admin_user():
         auth_config['users'].append({
             'username': username,
             'password_hash': generate_password_hash(password),
-            'role': 'user'
+            'role': role
         })
         save_auth_config(auth_config)
-        log_activity(session.get('username', '?'), 'user_mgmt', f'Added user: {username}', request.remote_addr)
-        print(f"👤 User added: {username}")
+        log_activity(session.get('username', '?'), 'user_mgmt', f'Added user: {username} (role={role})', request.remote_addr)
+        print(f"👤 User added: {username} ({role})")
         return jsonify({'status': 'ok', 'message': f'User "{username}" added'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/admin/users/role', methods=['POST'])
+@admin_required
+def update_admin_user_role():
+    """Update a user's role while ensuring at least one admin remains."""
+    global auth_config
+    try:
+        data = request.get_json()
+        username = data.get('username', '').strip()
+        role = normalize_user_role(data.get('role', ''))
+
+        if not username or role is None:
+            return jsonify({'status': 'error', 'message': 'Username and valid role are required'}), 400
+
+        auth_config = load_auth_config()
+        users = auth_config.get('users', [])
+        user = next((u for u in users if u['username'] == username), None)
+        if not user:
+            return jsonify({'status': 'error', 'message': f'User "{username}" not found'}), 404
+
+        current_role = normalize_user_role(user.get('role', 'user')) or 'user'
+        if current_role == role:
+            return jsonify({'status': 'ok', 'message': 'Role unchanged'})
+
+        admin_count = sum(1 for candidate in users if normalize_user_role(candidate.get('role', 'user')) == 'admin')
+        if current_role == 'admin' and role != 'admin' and admin_count <= 1:
+            return jsonify({'status': 'error', 'message': 'Cannot remove the last admin account'}), 400
+
+        if username == session.get('username') and role != 'admin':
+            return jsonify({'status': 'error', 'message': 'You cannot remove your own admin role while logged in'}), 400
+
+        user['role'] = role
+        save_auth_config(auth_config)
+        if username == session.get('username'):
+            session['role'] = role
+        log_activity(session.get('username', '?'), 'user_mgmt', f'Changed role for: {username} -> {role}', request.remote_addr)
+        print(f"🛡️ Role changed for {username}: {current_role} -> {role}")
+        return jsonify({'status': 'ok', 'message': f'Role updated for "{username}"'})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 

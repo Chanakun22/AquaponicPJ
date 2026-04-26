@@ -24,3 +24,5 @@ docs/vault/.DS_Store
 docs
 forTestFlow
 report.md
+test
+pi_server/settings.json

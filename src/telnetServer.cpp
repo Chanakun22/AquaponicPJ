@@ -14,6 +14,10 @@ static bool _isAuthenticated = false;
 static char _inputBuffer[64];
 static size_t _bufferIndex = 0;
 
+static bool telnetPasswordConfigured(void) {
+    return strlen(TELNET_PASSWORD) > 0 && strcmp(TELNET_PASSWORD, UNCONFIGURED_SECRET_SENTINEL) != 0;
+}
+
 static size_t _telnetVprintfInternal(bool bestEffort, const char *format, va_list args) {
     if (!_telnetClient || !_telnetClient.connected() || !_isAuthenticated) return 0;
 
@@ -65,6 +69,12 @@ static size_t _telnetVprintfInternal(bool bestEffort, const char *format, va_lis
 
 
 void telnetSetup(void) {
+    if (!telnetPasswordConfigured()) {
+        memset(_inputBuffer, 0, sizeof(_inputBuffer));
+        _bufferIndex = 0;
+        return;
+    }
+
     _telnetServer.begin();
     _telnetServer.setNoDelay(true);
     memset(_inputBuffer, 0, sizeof(_inputBuffer));
@@ -72,6 +82,10 @@ void telnetSetup(void) {
 }
 
 void telnetLoop(void) {
+    if (!telnetPasswordConfigured()) {
+        return;
+    }
+
     // Check for new clients
     if (_telnetServer.hasClient()) {
         if (!_telnetClient || !_telnetClient.connected()) {

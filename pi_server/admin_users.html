@@ -47,7 +47,7 @@
             display: block; font-size: 0.82rem; font-weight: 500;
             color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.3px;
         }
-        input[type="text"], input[type="password"] {
+        input[type="text"], input[type="password"], select {
             width: 100%;
             background: rgba(0,0,0,0.4);
             border: 1px solid rgba(255,255,255,0.1);
@@ -56,10 +56,14 @@
             font-family: inherit; font-size: 0.92rem;
             transition: all 0.3s ease;
         }
-        input:focus {
+        input:focus, select:focus {
             outline: none; border-color: var(--accent);
             box-shadow: 0 0 0 3px rgba(56,189,248,0.1);
             background: rgba(0,0,0,0.6);
+        }
+        select {
+            appearance: none;
+            cursor: pointer;
         }
 
         .btn {
@@ -106,6 +110,22 @@
             letter-spacing: 0.5px; margin-top: 2px;
         }
         .user-actions { display: flex; gap: 8px; }
+        .role-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .role-select {
+            min-width: 110px;
+            padding: 7px 12px;
+            font-size: 0.82rem;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+        .role-select.dirty {
+            border-color: rgba(0,242,170,0.55);
+            box-shadow: 0 0 0 3px rgba(0,242,170,0.08);
+        }
 
         /* Modals */
         .modal-overlay {
@@ -184,6 +204,13 @@
                 <label>Password</label>
                 <input type="password" id="newPassword" placeholder="Enter password">
             </div>
+            <div class="form-group" style="min-width:150px; margin-bottom:0;">
+                <label>Role</label>
+                <select id="newRole">
+                    <option value="user" selected>User</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
             <button class="btn btn-success" onclick="addUser()" style="height:42px;">
                 <i class="fas fa-plus"></i> Add User
             </button>
@@ -250,6 +277,19 @@
     <script>
     let _deleteTarget = '';
 
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function normalizeRole(role) {
+        return role === 'admin' ? 'admin' : 'user';
+    }
+
     function showToast(msg, isError) {
         const t = document.getElementById('toast');
         t.textContent = msg;
@@ -271,27 +311,58 @@
             }
 
             count.textContent = `(${data.users.length})`;
-            list.innerHTML = data.users.map(u => `
+            list.innerHTML = data.users.map(u => {
+                const role = normalizeRole(u.role);
+                const username = escapeHtml(u.username);
+                return `
                 <div class="user-item">
-                    <div class="user-info">
+                    <div class="user-info" data-username="${username}">
                         <div class="user-avatar">${u.username.charAt(0).toUpperCase()}</div>
                         <div>
-                            <div class="user-name">${u.username}</div>
-                            <div class="user-role">${u.role || 'user'}</div>
+                            <div class="user-name">${username}</div>
+                            <div class="user-role">${role}</div>
                         </div>
                     </div>
                     <div class="user-actions">
-                        <button class="btn btn-sm" onclick="openPasswordModal('${u.username}')">
+                        <div class="role-controls">
+                            <select class="role-select" aria-label="Select role for ${username}">
+                                <option value="user" ${role === 'user' ? 'selected' : ''}>User</option>
+                                <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option>
+                            </select>
+                            <button class="btn btn-sm btn-primary role-save-btn" data-current-role="${role}">
+                                <i class="fas fa-user-shield"></i> Save Role
+                            </button>
+                        </div>
+                        <button class="btn btn-sm" onclick='openPasswordModal(${JSON.stringify(u.username)})'>
                             <i class="fas fa-key"></i> Password
                         </button>
                         ${u.username !== 'admin' ? `
-                            <button class="btn btn-sm btn-danger" onclick="openDeleteModal('${u.username}')">
+                            <button class="btn btn-sm btn-danger" onclick='openDeleteModal(${JSON.stringify(u.username)})'>
                                 <i class="fas fa-trash"></i>
                             </button>
                         ` : ''}
                     </div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
+
+            list.querySelectorAll('.role-select').forEach(select => {
+                select.addEventListener('change', () => {
+                    const button = select.closest('.user-actions').querySelector('.role-save-btn');
+                    const currentRole = button.dataset.currentRole || 'user';
+                    select.classList.toggle('dirty', select.value !== currentRole);
+                });
+            });
+
+            list.querySelectorAll('.role-save-btn').forEach(button => {
+                button.addEventListener('click', async () => {
+                    const container = button.closest('.user-item');
+                    const userInfo = container.querySelector('.user-info');
+                    const select = container.querySelector('.role-select');
+                    const usernameValue = userInfo.dataset.username || '';
+                    await updateUserRole(usernameValue, select.value, button, select);
+                });
+            });
         } catch (err) {
             document.getElementById('userList').innerHTML =
                 '<div style="text-align:center; padding:20px; color:var(--danger);">Error loading users</div>';
@@ -301,6 +372,7 @@
     async function addUser() {
         const username = document.getElementById('newUsername').value.trim();
         const password = document.getElementById('newPassword').value;
+        const role = document.getElementById('newRole').value;
         if (!username || !password) { showToast('Please fill in all fields', true); return; }
         if (password.length < 4) { showToast('Password must be at least 4 characters', true); return; }
 
@@ -308,19 +380,61 @@
             const resp = await fetch('/api/admin/users', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
+                body: JSON.stringify({ username, password, role })
             });
             const data = await resp.json();
             if (data.status === 'ok') {
                 showToast('User added successfully!');
                 document.getElementById('newUsername').value = '';
                 document.getElementById('newPassword').value = '';
+                document.getElementById('newRole').value = 'user';
                 loadUsers();
             } else {
                 showToast(data.message || 'Failed to add user', true);
             }
         } catch (err) {
             showToast('Connection error', true);
+        }
+    }
+
+    async function updateUserRole(username, role, button, select) {
+        if (!username) {
+            showToast('Username is missing', true);
+            return;
+        }
+
+        if ((button.dataset.currentRole || 'user') === role) {
+            showToast('Role is unchanged');
+            return;
+        }
+
+        const originalLabel = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving';
+
+        try {
+            const resp = await fetch('/api/admin/users/role', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, role })
+            });
+            const data = await resp.json();
+            if (data.status === 'ok') {
+                showToast('Role updated successfully!');
+                await loadUsers();
+            } else {
+                showToast(data.message || 'Failed to update role', true);
+            }
+        } catch (err) {
+            showToast('Connection error', true);
+        } finally {
+            if (button.isConnected) {
+                button.disabled = false;
+                button.innerHTML = originalLabel;
+                if (select) {
+                    select.classList.remove('dirty');
+                }
+            }
         }
     }
 

@@ -8,11 +8,14 @@
 
 ### ✅ ด้านความปลอดภัย (Security)
 
-- [ ] **เปลี่ยนรหัสผ่าน:** ตรวจสอบไฟล์ `include/secrets.h` ว่าแก้ไขรหัสผ่านหรือยัง?
-  - `SECRET_WIFI_AP_PASS` (รหัส Hotspot ตอนเน็ตหลุด)
-  - `SECRET_TELNET_PASSWORD` (รหัสเข้าดู Log)
-  - `SECRET_OTA_PASSWORD` (รหัสอัปเดตผ่าน WiFi)
-- [ ] **ความลับ:** ห้ามนำไฟล์ `secrets.h` ขึ้น GitHub หรือแชร์ให้คนอื่นเด็ดขาด
+- [ ] **ตั้งค่า secrets ก่อนใช้งานจริง:** ตรวจสอบว่า `secrets.ini` และ Pi env/config ถูกตั้งค่าครบแล้ว
+   - `SECRET_WIFI_AP_PASS` ใน `secrets.ini`
+   - `SECRET_TELNET_PASSWORD` ใน `secrets.ini`
+   - `SECRET_OTA_PASSWORD` ใน `secrets.ini`
+   - `AQUAPONICS_BOOTSTRAP_ADMIN_PASSWORD` สำหรับสร้าง admin ครั้งแรกของ Pi server
+   - `AQUAPONICS_SECRET_KEY` สำหรับ Flask session secret
+- [ ] **ความลับ:** ห้าม commit ค่าใน `secrets.ini`, `pi_server/auth_config.json`, หรือ `pi_server/settings.json` ที่มี token/password ใช้งานจริง
+- [ ] **หมุนรหัสผ่าน/โทเคนทันที** หาก repo เคยเป็น public หรือเคยมี secret หลุดใน commit เก่า
 
 ### ✅ ด้านฮาร์ดแวร์ (Hardware)
 
@@ -77,7 +80,7 @@
 
 1. เชื่อม WiFi วงเดียวกัน
 2. เปิดแอป **Telnet** ไปที่ IP บอร์ด (Port 23)
-3. ใส่รหัสผ่าน `admin` (หรือที่ตั้งไว้)
+3. ใส่รหัสผ่าน Telnet ที่ตั้งไว้ใน `secrets.ini`
 4. แคปเจอร์หน้าจอ Log ส่งให้ผู้พัฒนา
 
 ---
