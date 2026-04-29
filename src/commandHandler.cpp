@@ -38,6 +38,33 @@ static bool          _pumpTestActive  = false;
 static char _cmdBuffer[64];
 static size_t _cmdIndex = 0;
 
+static const char* _logicLevelLabel(uint8_t level) {
+    return level == LOW ? "LOW" : "HIGH";
+}
+
+static const char* _presenceLabel(bool present) {
+    return present ? "INSTALLED" : "NOT INSTALLED";
+}
+
+static void _formatActiveLevelStatus(char* buffer,
+                                     size_t bufferSize,
+                                     bool present,
+                                     bool triggered,
+                                     uint8_t triggerState) {
+    if (!present) {
+        snprintf(buffer, bufferSize, "NOT INSTALLED");
+        return;
+    }
+
+    const char* activeLevel = _logicLevelLabel(triggerState);
+    const char* idleLevel = _logicLevelLabel(triggerState == LOW ? HIGH : LOW);
+    snprintf(buffer,
+             bufferSize,
+             "%s%s",
+             triggered ? activeLevel : idleLevel,
+             triggered ? " (TRIGGERED)" : "");
+}
+
 static void _showLightController(CommandOutput_t out) {
     LightControlConfig cfg;
     LightControlStatus status;
@@ -81,8 +108,28 @@ static void _showFishFeeder(CommandOutput_t out) {
 static void _showWaterSystem(CommandOutput_t out) {
     WaterSystemConfig cfg;
     WaterSystemStatus status;
+    char sumpLowBuf[32];
+    char sumpHighBuf[32];
+    char overflowBuf[32];
+
     waterSystemGetConfig(&cfg);
     waterSystemGetStatus(&status);
+
+    _formatActiveLevelStatus(sumpLowBuf,
+                             sizeof(sumpLowBuf),
+                             status.hasLevelSensors,
+                             status.levelLow,
+                             WATER_LEVEL_TRIGGER_STATE);
+    _formatActiveLevelStatus(sumpHighBuf,
+                             sizeof(sumpHighBuf),
+                             status.hasLevelSensors,
+                             status.levelHigh,
+                             WATER_LEVEL_TRIGGER_STATE);
+    _formatActiveLevelStatus(overflowBuf,
+                             sizeof(overflowBuf),
+                             status.hasOverflowSensor,
+                             status.overflowAlarm,
+                             OVERFLOW_SENSOR_TRIGGER_STATE);
 
     commandPrintf(out, "\r\n");
     commandPrintf(out, "========== WATER SYSTEM ==========\r\n");
@@ -99,10 +146,15 @@ static void _showWaterSystem(CommandOutput_t out) {
     commandPrintf(out, "  Active Route    : %s\r\n", waterSystemGetRouteString(status.activeRoute));
     commandPrintf(out, "  Circ Output     : %s\r\n", status.circulationOutput ? "ON" : "OFF");
     commandPrintf(out, "  Refill Output   : %s\r\n", status.refillOutput ? "ON" : "OFF");
-    commandPrintf(out, "  Route Valve Out : %s\r\n", status.routeValveOutput ? "DIRECT SUMP" : "FISH TANK");
-    commandPrintf(out, "  Sump Low        : %s\r\n", status.levelLow ? "TRIGGERED" : "NORMAL");
-    commandPrintf(out, "  Sump High       : %s\r\n", status.levelHigh ? "TRIGGERED" : "NORMAL");
-    commandPrintf(out, "  Overflow Alarm  : %s\r\n", status.overflowAlarm ? "TRIGGERED" : "NORMAL");
+    commandPrintf(out, "  Route Valve     : %s\r\n", _presenceLabel(status.hasRouteValve));
+    commandPrintf(out, "  Route Valve Out : %s\r\n", status.hasRouteValve ? (status.routeValveOutput ? "DIRECT SUMP" : "FISH TANK") : "N/A");
+    commandPrintf(out, "  Level Sensors   : %s\r\n", _presenceLabel(status.hasLevelSensors));
+    commandPrintf(out, "  Overflow Sensor : %s\r\n", _presenceLabel(status.hasOverflowSensor));
+    commandPrintf(out, "  Level Logic     : active %s\r\n", _logicLevelLabel(WATER_LEVEL_TRIGGER_STATE));
+    commandPrintf(out, "  Overflow Logic  : active %s\r\n", _logicLevelLabel(OVERFLOW_SENSOR_TRIGGER_STATE));
+    commandPrintf(out, "  SUMP_LEVEL_LOW  : %s\r\n", sumpLowBuf);
+    commandPrintf(out, "  SUMP_LEVEL_HIGH : %s\r\n", sumpHighBuf);
+    commandPrintf(out, "  FISH_OVERFLOW   : %s\r\n", overflowBuf);
     commandPrintf(out, "  Route Blocked   : %s\r\n", status.routeBlocked ? "YES" : "NO");
     commandPrintf(out, "  Fish Ready      : %s\r\n", status.fishRefillReady ? "YES" : "NO");
     commandPrintf(out, "  Fish Wait Left  : %lu ms\r\n", status.fishRefillWaitRemainingMs);

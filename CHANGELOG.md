@@ -2,6 +2,66 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-04-29] - HW Test Water Workflow Refresh
+
+### Changed
+
+- **feat: align HW Test water section with current workflow and active-low sensor inputs (`pi_server/hardware_test.html`, `pi_server/app.py`):**
+  - ปรับข้อความและลำดับการทดสอบในหน้า `/hwtest` ให้ตรงกับ workflow ปัจจุบันของ water system state machine แทนแนวคิด water pump test แบบเก่า
+  - แสดง `SUMP_LEVEL_LOW`, `SUMP_LEVEL_HIGH`, และ `FISH_TANK_OVERFLOW` แบบ `LOW/HIGH` ตาม wiring จริง โดยระบุชัดว่าเป็น `Active LOW` และแยกกรณี `ไม่ได้ติดตั้ง` สำหรับ overflow sensor
+  - เพิ่ม water-status fields ใน WebSocket payload เพื่อให้หน้า hw test อัปเดตสถานะ sensor availability, route valve, preferred route, และ manual refill ได้ครบจากข้อมูลสด
+  - แก้ default sensor availability เป็น `unknown` จนกว่า ESP จะส่งสถานะจริง เพื่อไม่ให้หน้า hw test แสดง `ไม่ได้ติดตั้ง` ผิด ๆ ทั้งที่ตั้ง pin ใน firmware แล้ว
+
+- **feat: show water sensor install/status details in terminal `water` command (`src/commandHandler.cpp`):**
+  - เพิ่ม output ในคำสั่ง terminal/telnet `water` ให้เห็นว่า level sensor และ overflow sensor ติดตั้งหรือไม่
+  - แสดง `SUMP_LEVEL_LOW`, `SUMP_LEVEL_HIGH`, และ `FISH_OVERFLOW` เป็น `LOW/HIGH` พร้อม `(TRIGGERED)` ตาม active level จริง เพื่อให้เทียบกับหน้า HW Test ได้ตรงกัน
+
+- **fix: render SUMP low/high on HW Test as soon as Pi has seen real water status (`pi_server/app.py`, `pi_server/hardware_test.html`):**
+  - เพิ่ม `water_status_seen` เพื่อแยกกรณี "ยังไม่เคยได้ payload ระบบน้ำ" ออกจากกรณี "มี payload แล้วแต่ metadata availability ยังไม่ครบ"
+  - ทำให้ `SUMP_LEVEL_LOW/HIGH` บนหน้า HW Test แสดง `LOW/HIGH` ได้ทันทีหลัง Pi รับ `aquaponics/status/water_system` จาก ESP แล้ว แทนการค้างที่ `รอสถานะจาก ESP`
+
+- **fix: bump PWA cache after HW Test updates (`pi_server/pwa/sw.js`):**
+  - เปลี่ยน `CACHE_NAME` เพื่อบังคับให้ browser/service worker โหลดหน้า `/hwtest` และ script เวอร์ชันใหม่ แทนการติด cache เก่า
+
+- **fix: push water status directly to HW Test over WebSocket (`pi_server/app.py`, `pi_server/hardware_test.html`):**
+  - เพิ่ม event `water_status_update` ทันทีเมื่อ Pi รับ `aquaponics/status/water_system`
+  - ให้หน้า `/hwtest` ใช้ event นี้อัปเดตการ์ด `SUMP_LEVEL_LOW/HIGH` โดยตรง เผื่อ path รวมของ `dashboard_update` ยังไม่สะท้อนสถานะน้ำล่าสุด
+
+- **refactor: make HW Test poll a dedicated water status endpoint (`pi_server/app.py`, `pi_server/hardware_test.html`):**
+  - เพิ่ม `GET /api/water_system/status` ให้หน้า `/hwtest` ดึงสถานะน้ำสดโดยตรง ไม่ต้องพึ่ง settings blob หรือ websocket อย่างเดียว
+  - ให้หน้า HW Test poll ทุก 2 วินาทีเพื่ออัปเดต `SUMP_LEVEL_LOW/HIGH` และ field น้ำอื่น ๆ จากแหล่งข้อมูลเดียวที่ชัดเจน
+
+- **refactor: mirror water status into the main sensor payload as a fallback path (`src/localMqtt.cpp`, `pi_server/app.py`):**
+  - เพิ่ม field สถานะน้ำสำคัญลงใน `aquaponics/sensors` payload เช่น `sump_low`, `sump_high`, `water_state`, `water_reason`, `has_level_sensors`
+  - ให้ Pi sync `water_system` จาก sensor payload และให้ `/api/water_system/status` fallback ไปที่ `last_data` ได้ด้วย เพื่อไม่ให้หน้า HW Test พึ่ง topic `aquaponics/status/water_system` เส้นเดียว
+
+## [2026-04-28] - Deferred Local MQTT Config Apply
+
+### Changed
+
+- **fix: move Local MQTT config/calibration apply work out of the MQTT callback into TaskControl (`src/localMqtt.cpp`, `src/main.cpp`, `include/localMqtt.h`):**
+  - เพิ่ม deferred action queue สำหรับคำสั่ง config และ calibration ที่เข้ามาจาก Pi แล้วให้ `TaskControl` รับไป apply ทีละรายการ แทนการเรียก NVS/calibration path ตรงใน `PubSubClient` callback
+  - เพิ่ม network request/status publish coordination แบบ thread-safe เพื่อให้การขอ NETPIE shadow sync และ feedback status ยังทำงานครบ แม้งาน apply จะถูกย้ายไปอีก task
+  - ลดโอกาสที่ Networking task จะค้างจาก flash/NVS writes หรือ calibration logic โดยยังคง contract ของ MQTT topics และพฤติกรรมของ dashboard เหมือนเดิม
+
+## [2026-04-28] - MQTT Config NVS Batch Save
+
+### Changed
+
+- **fix: batch-save config changes that arrive through Local MQTT to reduce blocking in TaskNetworking (`src/localMqtt.cpp`, `src/lightController.cpp`, `src/fishFeeder.cpp`):**
+  - เพิ่ม `lightCtrlSetConfig()` และ `fishFeederSetConfig()` เพื่อรวมการอัปเดตค่าหลาย field จาก dashboard แล้ว save ลง NVS เพียงครั้งเดียว
+  - เปลี่ยน Local MQTT callback ให้เลิกเรียก setter ย่อยหลายตัวติดกันสำหรับ light และ fish feeder ซึ่งเคยทำให้ Networking task ไปเขียน flash ซ้ำหลายรอบต่อ MQTT message เดียว
+  - คงผลลัพธ์ของ config ที่ถูก apply และ feedback ที่ส่งกลับ dashboard เหมือนเดิม แต่ลด latency ในเส้นทางที่เสี่ยงชน Task WDT
+
+## [2026-04-28] - Task WDT Networking Burst Fix
+
+### Changed
+
+- **fix: reduce TaskNetworking watchdog risk without changing user-facing behavior (`src/localMqtt.cpp`, `src/netpie.cpp`):**
+  - เปลี่ยน Local MQTT status feedback หลัง reconnect และหลังรับ config ให้ถูก queue และทยอย publish ทีละรายการ แทนการยิงหลาย topic ติดกันในรอบเดียว
+  - เพิ่ม heartbeat/WDT checkpoint ภายในจุดที่อาจ block ของ Local MQTT และ NETPIE เช่น mDNS query, MQTT connect, keepalive loop, และ publish เพื่อไม่ให้ stage `local_mqtt_loop` หรือ `netpie_loop` ดูค้างยาวทั้งก้อน
+  - คง flow การทำงานเดิมของ MQTT, dashboard feedback, และ reconnect logic เอาไว้ แต่ลดโอกาสสะสมเวลา block จนชน Task WDT
+
 ## [2026-04-26] - Login Password Visibility Toggle
 
 ### Changed

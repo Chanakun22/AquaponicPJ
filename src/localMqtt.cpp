@@ -12,6 +12,9 @@
 #include <PubSubClient.h>
 #include <ESPmDNS.h>
 #include <ArduinoJson.h>
+#if defined(ESP32) && WATCHDOG_ENABLED
+#include "esp_task_wdt.h"
+#endif
 #include "netpie.h"
 #include "automator.h"
 #include "TdsSensor.h"  // For TDS calibration
@@ -33,6 +36,7 @@
 static WiFiClient _localWifiClient;
 static PubSubClient _localMqtt(_localWifiClient);
 static QueueHandle_t _logQueue = NULL;
+static QueueHandle_t _deferredActionQueue = NULL;
 static unsigned long _lastReconnectAttempt = 0;
 static unsigned long _lastPublishTime = 0;
 static unsigned long _lastWaterStatusPublishTime = 0;
@@ -50,6 +54,106 @@ static const uint16_t LOCAL_MQTT_PACKET_BUFFER_SIZE = 2048;
 static const uint8_t LOCAL_MQTT_MAX_LOGS_PER_LOOP = 1;
 static StaticJsonDocument<1792> _sensorPublishDoc;
 static char _sensorPublishPayload[LOCAL_MQTT_PACKET_BUFFER_SIZE];
+static volatile uint8_t _pendingStatusPublishes = 0;
+static volatile uint8_t _pendingNetworkRequests = 0;
+static portMUX_TYPE _pendingWorkMux = portMUX_INITIALIZER_UNLOCKED;
+
+static const uint8_t LOCAL_MQTT_MAX_DEFERRED_ACTIONS_PER_LOOP = 1;
+static const uint8_t LOCAL_MQTT_DEFERRED_QUEUE_LENGTH = 12;
+
+enum LocalStatusPublishMask : uint8_t {
+    LOCAL_STATUS_PUBLISH_SENSOR_CONFIG = 1 << 0,
+    LOCAL_STATUS_PUBLISH_PH_CAL = 1 << 1,
+    LOCAL_STATUS_PUBLISH_WATER = 1 << 2,
+    LOCAL_STATUS_PUBLISH_FAN = 1 << 3,
+    LOCAL_STATUS_PUBLISH_LIGHT = 1 << 4,
+    LOCAL_STATUS_PUBLISH_FEEDER = 1 << 5,
+};
+
+enum LocalNetworkRequestMask : uint8_t {
+    LOCAL_NETWORK_REQUEST_NETPIE_SHADOW_SYNC = 1 << 0,
+};
+
+enum LocalDeferredActionType : uint8_t {
+    LOCAL_DEFERRED_TDS_CAL = 0,
+    LOCAL_DEFERRED_PH_CAL,
+    LOCAL_DEFERRED_SENSOR_CONFIG,
+    LOCAL_DEFERRED_AUTOMATION_CONFIG,
+    LOCAL_DEFERRED_LIGHT_CONFIG,
+    LOCAL_DEFERRED_FEEDER_CONFIG,
+    LOCAL_DEFERRED_FAN_CONFIG,
+    LOCAL_DEFERRED_WATER_CONFIG,
+};
+
+enum LocalPhCalibrationAction : uint8_t {
+    LOCAL_PH_CAL_686 = 0,
+    LOCAL_PH_CAL_401,
+    LOCAL_PH_CAL_918,
+    LOCAL_PH_CAL_CLEAR,
+};
+
+typedef struct {
+    uint8_t type;
+    union {
+        struct {
+            float lowPpm;
+            float lowVoltage;
+            float highPpm;
+            float highVoltage;
+        } tdsCal;
+        struct {
+            uint8_t action;
+        } phCal;
+        struct {
+            bool states[SENSOR_COUNT];
+        } sensors;
+        struct {
+            bool enabled;
+            float targetTds;
+            float targetPh;
+        } automation;
+        struct {
+            CommandSource source;
+            bool enabled;
+            bool manualState;
+            int onDay;
+            int offDay;
+            char onTime[6];
+            char offTime[6];
+            bool requestNetpieShadowSync;
+        } light;
+        struct {
+            CommandSource source;
+            bool enabled;
+            int feedDay;
+            char feedTime[6];
+            unsigned long durationMs;
+            bool triggerFeed;
+        } feeder;
+        struct {
+            bool enabled;
+            bool autoMode;
+            bool manualState;
+            float tempOnC;
+            float tempOffC;
+            float humidityOnPct;
+            float humidityOffPct;
+        } fan;
+        struct {
+            bool circulationEnabled;
+            bool refillEnabled;
+            unsigned long refillMaxRuntimeMs;
+            unsigned long refillMinIntervalMs;
+            WaterRefillRoute preferredRoute;
+            bool allowDirectSumpRefill;
+            unsigned long fishRefillIntervalMs;
+            unsigned long fishRefillMaxRuntimeMs;
+            bool manualRefill;
+            bool applyManualRefill;
+            bool clearAlarm;
+        } water;
+    } data;
+} LocalDeferredAction;
 
 // HW Test: deadline-based pump auto-off handled in TaskNetworking tick.
 static bool _hwTestPumpActive = false;
@@ -66,6 +170,107 @@ static void _publishFanStatus(void);
 static void _publishLightStatus(void);
 static void _publishFishFeederStatus(void);
 static void _serviceScheduledStatusPublishes(void);
+static bool _enqueueDeferredAction(const LocalDeferredAction* action);
+static void _queueNetworkRequest(uint8_t mask);
+static bool _takePendingStatusPublish(uint8_t mask);
+static bool _takePendingNetworkRequest(uint8_t mask);
+static void _processDeferredAction(const LocalDeferredAction* action);
+
+static void _networkTaskCheckpoint(const char* stage) {
+    systemSetTaskProgress(TASK_NETWORKING, stage);
+    systemTaskHeartbeat(TASK_NETWORKING);
+
+    #if defined(ESP32) && WATCHDOG_ENABLED
+    esp_task_wdt_reset();
+    #endif
+}
+
+static void _queueStatusPublish(uint8_t mask) {
+    portENTER_CRITICAL(&_pendingWorkMux);
+    _pendingStatusPublishes |= mask;
+    portEXIT_CRITICAL(&_pendingWorkMux);
+}
+
+static void _queueNetworkRequest(uint8_t mask) {
+    portENTER_CRITICAL(&_pendingWorkMux);
+    _pendingNetworkRequests |= mask;
+    portEXIT_CRITICAL(&_pendingWorkMux);
+}
+
+static void _queueReconnectStatusPublishes(void) {
+    _queueStatusPublish(
+        LOCAL_STATUS_PUBLISH_LIGHT |
+        LOCAL_STATUS_PUBLISH_FEEDER |
+        LOCAL_STATUS_PUBLISH_FAN |
+        LOCAL_STATUS_PUBLISH_WATER
+    );
+}
+
+static bool _takePendingStatusPublish(uint8_t mask) {
+    bool hasPending = false;
+    portENTER_CRITICAL(&_pendingWorkMux);
+    if ((_pendingStatusPublishes & mask) != 0) {
+        _pendingStatusPublishes &= (uint8_t)~mask;
+        hasPending = true;
+    }
+    portEXIT_CRITICAL(&_pendingWorkMux);
+    return hasPending;
+}
+
+static bool _takePendingNetworkRequest(uint8_t mask) {
+    bool hasPending = false;
+    portENTER_CRITICAL(&_pendingWorkMux);
+    if ((_pendingNetworkRequests & mask) != 0) {
+        _pendingNetworkRequests &= (uint8_t)~mask;
+        hasPending = true;
+    }
+    portEXIT_CRITICAL(&_pendingWorkMux);
+    return hasPending;
+}
+
+static bool _publishOnePendingStatus(void) {
+    if (!_localMqtt.connected()) {
+        return false;
+    }
+
+    if (_takePendingStatusPublish(LOCAL_STATUS_PUBLISH_SENSOR_CONFIG)) {
+        _networkTaskCheckpoint("local_status_sensor_cfg");
+        _publishSensorConfig();
+        return true;
+    }
+
+    if (_takePendingStatusPublish(LOCAL_STATUS_PUBLISH_PH_CAL)) {
+        _networkTaskCheckpoint("local_status_ph_cal");
+        _publishPhCalibrationStatus();
+        return true;
+    }
+
+    if (_takePendingStatusPublish(LOCAL_STATUS_PUBLISH_WATER)) {
+        _networkTaskCheckpoint("local_status_water");
+        _publishWaterSystemStatus();
+        return true;
+    }
+
+    if (_takePendingStatusPublish(LOCAL_STATUS_PUBLISH_FAN)) {
+        _networkTaskCheckpoint("local_status_fan");
+        _publishFanStatus();
+        return true;
+    }
+
+    if (_takePendingStatusPublish(LOCAL_STATUS_PUBLISH_LIGHT)) {
+        _networkTaskCheckpoint("local_status_light");
+        _publishLightStatus();
+        return true;
+    }
+
+    if (_takePendingStatusPublish(LOCAL_STATUS_PUBLISH_FEEDER)) {
+        _networkTaskCheckpoint("local_status_feeder");
+        _publishFishFeederStatus();
+        return true;
+    }
+
+    return false;
+}
 
 static CommandSource _parseCommandSource(const char* sourceValue, CommandSource fallback) {
     if (sourceValue == NULL || sourceValue[0] == '\0') {
@@ -107,6 +312,18 @@ static void _stopHwTestPumpOutputs(bool resumeAutomator) {
 }
 
 static void _serviceScheduledStatusPublishes(void) {
+    if (_takePendingNetworkRequest(LOCAL_NETWORK_REQUEST_NETPIE_SHADOW_SYNC)) {
+        _networkTaskCheckpoint("local_netpie_shadow_sync");
+        if (!netpieRequestShadowSync()) {
+            _queueNetworkRequest(LOCAL_NETWORK_REQUEST_NETPIE_SHADOW_SYNC);
+        }
+        return;
+    }
+
+    if (_publishOnePendingStatus()) {
+        return;
+    }
+
     unsigned long now = millis();
 
     for (uint8_t offset = 0; offset < 4; offset++) {
@@ -190,7 +407,9 @@ static bool _resolveBrokerIp() {
 
     // Query mDNS with SHORT timeout (200ms) to minimize blocking of Networking task
     // ลดจาก 1000ms เหลือ 200ms เพื่อลด blocking time เมื่อ Pi offline
+    _networkTaskCheckpoint("local_mdns_query");
     IPAddress ip = MDNS.queryHost(LOCAL_MQTT_HOSTNAME, 200);
+    _networkTaskCheckpoint("local_mdns_done");
     
     if (ip != IPAddress(0, 0, 0, 0)) {
         _brokerIp = ip;
@@ -209,6 +428,205 @@ static bool _resolveBrokerIp() {
     }
 }
 
+static bool _enqueueDeferredAction(const LocalDeferredAction* action) {
+    if (_deferredActionQueue == NULL || action == NULL) {
+        return false;
+    }
+
+    if (xQueueSend(_deferredActionQueue, action, 0) == pdTRUE) {
+        return true;
+    }
+
+    LOG_WARN("Deferred MQTT action queue full; dropping action type=%u", (unsigned int)action->type);
+    return false;
+}
+
+static void _processDeferredAction(const LocalDeferredAction* action) {
+    if (action == NULL) {
+        return;
+    }
+
+    switch (action->type) {
+        case LOCAL_DEFERRED_TDS_CAL:
+            tdsSetCalibration(
+                action->data.tdsCal.lowPpm,
+                action->data.tdsCal.lowVoltage,
+                action->data.tdsCal.highPpm,
+                action->data.tdsCal.highVoltage
+            );
+            LOG_INFO("TDS Calibration received from Pi!");
+            break;
+
+        case LOCAL_DEFERRED_PH_CAL:
+            switch (action->data.phCal.action) {
+                case LOCAL_PH_CAL_686:
+                    if (phIsReady()) {
+                        phCalibratePh686();
+                        LOG_INFO("pH 6.86 Calibration triggered from Pi Dashboard!");
+                        _queueStatusPublish(LOCAL_STATUS_PUBLISH_PH_CAL);
+                    } else {
+                        LOG_ERROR("pH sensor not ready for calibration");
+                    }
+                    break;
+                case LOCAL_PH_CAL_401:
+                    if (phIsReady()) {
+                        phCalibratePh401();
+                        LOG_INFO("pH 4.01 Calibration triggered from Pi Dashboard!");
+                        _queueStatusPublish(LOCAL_STATUS_PUBLISH_PH_CAL);
+                    } else {
+                        LOG_ERROR("pH sensor not ready for calibration");
+                    }
+                    break;
+                case LOCAL_PH_CAL_918:
+                    if (phIsReady()) {
+                        phCalibratePh918();
+                        LOG_INFO("pH 9.18 Calibration triggered from Pi Dashboard!");
+                        _queueStatusPublish(LOCAL_STATUS_PUBLISH_PH_CAL);
+                    } else {
+                        LOG_ERROR("pH sensor not ready for calibration");
+                    }
+                    break;
+                case LOCAL_PH_CAL_CLEAR:
+                    phClearCalibration();
+                    LOG_INFO("pH Calibration cleared from Pi Dashboard!");
+                    _queueStatusPublish(LOCAL_STATUS_PUBLISH_PH_CAL);
+                    break;
+                default:
+                    break;
+            }
+            break;
+
+        case LOCAL_DEFERRED_SENSOR_CONFIG:
+        {
+            bool states[SENSOR_COUNT];
+            for (int i = 0; i < SENSOR_COUNT; i++) {
+                states[i] = action->data.sensors.states[i];
+            }
+            systemSetAllSensorsEnabled(states);
+            LOG_INFO("Sensor config updated via MQTT (batch)");
+            _queueStatusPublish(LOCAL_STATUS_PUBLISH_SENSOR_CONFIG);
+            break;
+        }
+
+        case LOCAL_DEFERRED_AUTOMATION_CONFIG:
+            automatorSetConfig(
+                action->data.automation.enabled,
+                action->data.automation.targetTds,
+                action->data.automation.targetPh
+            );
+            LOG_INFO(
+                "Automation Config updated: En=%d, TDS=%.1f, pH=%.1f",
+                action->data.automation.enabled,
+                action->data.automation.targetTds,
+                action->data.automation.targetPh
+            );
+            break;
+
+        case LOCAL_DEFERRED_LIGHT_CONFIG:
+            lightCtrlSetConfig(
+                action->data.light.source,
+                action->data.light.enabled,
+                action->data.light.manualState,
+                action->data.light.onDay,
+                action->data.light.onTime,
+                action->data.light.offDay,
+                action->data.light.offTime
+            );
+            LOG_INFO(
+                "Light config updated from Local Web: Enabled=%d, Manual=%d, On=%d %s, Off=%d %s",
+                action->data.light.enabled,
+                action->data.light.manualState,
+                action->data.light.onDay,
+                action->data.light.onTime,
+                action->data.light.offDay,
+                action->data.light.offTime
+            );
+            _queueStatusPublish(LOCAL_STATUS_PUBLISH_LIGHT);
+            if (action->data.light.requestNetpieShadowSync) {
+                _queueNetworkRequest(LOCAL_NETWORK_REQUEST_NETPIE_SHADOW_SYNC);
+            }
+            break;
+
+        case LOCAL_DEFERRED_FEEDER_CONFIG:
+            fishFeederSetConfig(
+                action->data.feeder.source,
+                action->data.feeder.enabled,
+                action->data.feeder.feedDay,
+                action->data.feeder.feedTime,
+                action->data.feeder.durationMs
+            );
+            if (action->data.feeder.triggerFeed) {
+                fishFeederStartManualFeed("Manual feed triggered from Local Web");
+            }
+            LOG_INFO(
+                "Fish feeder config updated from Local Web: Enabled=%d, Day=%d, Time=%s, Duration=%lu",
+                action->data.feeder.enabled,
+                action->data.feeder.feedDay,
+                action->data.feeder.feedTime,
+                action->data.feeder.durationMs
+            );
+            _queueStatusPublish(LOCAL_STATUS_PUBLISH_FEEDER);
+            break;
+
+        case LOCAL_DEFERRED_FAN_CONFIG:
+            fanCtrlSetConfig(
+                action->data.fan.enabled,
+                action->data.fan.autoMode,
+                action->data.fan.manualState,
+                action->data.fan.tempOnC,
+                action->data.fan.tempOffC,
+                action->data.fan.humidityOnPct,
+                action->data.fan.humidityOffPct
+            );
+            LOG_INFO(
+                "Fan Config updated: En=%d, Auto=%d, Manual=%d, T=%.1f/%.1f, H=%.1f/%.1f",
+                action->data.fan.enabled,
+                action->data.fan.autoMode,
+                action->data.fan.manualState,
+                action->data.fan.tempOnC,
+                action->data.fan.tempOffC,
+                action->data.fan.humidityOnPct,
+                action->data.fan.humidityOffPct
+            );
+            _queueStatusPublish(LOCAL_STATUS_PUBLISH_FAN);
+            break;
+
+        case LOCAL_DEFERRED_WATER_CONFIG:
+            waterSystemSetConfig(
+                action->data.water.circulationEnabled,
+                action->data.water.refillEnabled,
+                action->data.water.refillMaxRuntimeMs,
+                action->data.water.refillMinIntervalMs,
+                action->data.water.preferredRoute,
+                action->data.water.allowDirectSumpRefill,
+                action->data.water.fishRefillIntervalMs,
+                action->data.water.fishRefillMaxRuntimeMs
+            );
+            if (action->data.water.applyManualRefill) {
+                waterSystemSetManualRefill(action->data.water.manualRefill);
+            }
+            if (action->data.water.clearAlarm) {
+                waterSystemClearAlarm();
+            }
+            LOG_INFO(
+                "Water System config updated: Circ=%d, Refill=%d, Route=%s, Direct=%d, Max=%lu ms, MinInt=%lu ms, FishInt=%lu ms, FishMax=%lu ms",
+                action->data.water.circulationEnabled,
+                action->data.water.refillEnabled,
+                waterSystemGetRouteString(action->data.water.preferredRoute),
+                action->data.water.allowDirectSumpRefill,
+                action->data.water.refillMaxRuntimeMs,
+                action->data.water.refillMinIntervalMs,
+                action->data.water.fishRefillIntervalMs,
+                action->data.water.fishRefillMaxRuntimeMs
+            );
+            _queueStatusPublish(LOCAL_STATUS_PUBLISH_WATER);
+            break;
+
+        default:
+            break;
+    }
+}
+
 /**
  * @brief MQTT Callback for receiving commands from Pi
  */
@@ -224,14 +642,16 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
     
     // Handle TDS Calibration
     if (strcmp(topic, "aquaponics/config/tds_cal") == 0) {
-        float lowPpm = doc["low_ppm"] | 0.0f;
-        float lowVoltage = doc["low_voltage"] | 0.0f;
-        float highPpm = doc["high_ppm"] | 0.0f;
-        float highVoltage = doc["high_voltage"] | 0.0f;
-        
-        if (lowVoltage > 0 && highVoltage > 0 && lowVoltage != highVoltage) {
-            tdsSetCalibration(lowPpm, lowVoltage, highPpm, highVoltage);
-            LOG_INFO("TDS Calibration received from Pi!");
+        LocalDeferredAction action = {};
+        action.type = LOCAL_DEFERRED_TDS_CAL;
+        action.data.tdsCal.lowPpm = doc["low_ppm"] | 0.0f;
+        action.data.tdsCal.lowVoltage = doc["low_voltage"] | 0.0f;
+        action.data.tdsCal.highPpm = doc["high_ppm"] | 0.0f;
+        action.data.tdsCal.highVoltage = doc["high_voltage"] | 0.0f;
+
+        if (action.data.tdsCal.lowVoltage > 0 && action.data.tdsCal.highVoltage > 0 &&
+            action.data.tdsCal.lowVoltage != action.data.tdsCal.highVoltage) {
+            _enqueueDeferredAction(&action);
         } else {
             LOG_ERROR("Invalid TDS calibration data received");
         }
@@ -242,206 +662,149 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
         const char* action = doc["action"] | "";
         
         if (strcmp(action, "cal686") == 0 || strcmp(action, "cal7") == 0) {
-            if (phIsReady()) {
-                phCalibratePh686();
-                LOG_INFO("pH 6.86 Calibration triggered from Pi Dashboard!");
-                _publishPhCalibrationStatus();
-            } else {
-                LOG_ERROR("pH sensor not ready for calibration");
-            }
+            LocalDeferredAction deferred = {};
+            deferred.type = LOCAL_DEFERRED_PH_CAL;
+            deferred.data.phCal.action = LOCAL_PH_CAL_686;
+            _enqueueDeferredAction(&deferred);
         } else if (strcmp(action, "cal401") == 0 || strcmp(action, "cal4") == 0) {
-            if (phIsReady()) {
-                phCalibratePh401();
-                LOG_INFO("pH 4.01 Calibration triggered from Pi Dashboard!");
-                _publishPhCalibrationStatus();
-            } else {
-                LOG_ERROR("pH sensor not ready for calibration");
-            }
+            LocalDeferredAction deferred = {};
+            deferred.type = LOCAL_DEFERRED_PH_CAL;
+            deferred.data.phCal.action = LOCAL_PH_CAL_401;
+            _enqueueDeferredAction(&deferred);
         } else if (strcmp(action, "cal918") == 0) {
-            if (phIsReady()) {
-                phCalibratePh918();
-                LOG_INFO("pH 9.18 Calibration triggered from Pi Dashboard!");
-                _publishPhCalibrationStatus();
-            } else {
-                LOG_ERROR("pH sensor not ready for calibration");
-            }
+            LocalDeferredAction deferred = {};
+            deferred.type = LOCAL_DEFERRED_PH_CAL;
+            deferred.data.phCal.action = LOCAL_PH_CAL_918;
+            _enqueueDeferredAction(&deferred);
         } else if (strcmp(action, "clear") == 0) {
-            phClearCalibration();
-            LOG_INFO("pH Calibration cleared from Pi Dashboard!");
-            _publishPhCalibrationStatus();
+            LocalDeferredAction deferred = {};
+            deferred.type = LOCAL_DEFERRED_PH_CAL;
+            deferred.data.phCal.action = LOCAL_PH_CAL_CLEAR;
+            _enqueueDeferredAction(&deferred);
         }
     }
     
     // Handle Sensor Toggle Configuration (batch update to prevent NVS race condition)
     if (strcmp(topic, LOCAL_MQTT_TOPIC_CONFIG_SENSORS) == 0) {
-        bool states[SENSOR_COUNT];
+        LocalDeferredAction action = {};
+        action.type = LOCAL_DEFERRED_SENSOR_CONFIG;
         // Read current states as defaults
         for (int i = 0; i < SENSOR_COUNT; i++) {
-            states[i] = systemGetSensorEnabled((SensorId_t)i);
+            action.data.sensors.states[i] = systemGetSensorEnabled((SensorId_t)i);
         }
         
         // Override with values from MQTT message
-        if (doc.containsKey("tds")) states[SENSOR_TDS] = doc["tds"];
-        if (doc.containsKey("ph")) states[SENSOR_PH] = doc["ph"];
-        if (doc.containsKey("water")) states[SENSOR_WATER_TEMP] = doc["water"];
-        if (doc.containsKey("air")) states[SENSOR_AIR_TEMP] = doc["air"];
-        if (doc.containsKey("light")) states[SENSOR_LIGHT] = doc["light"];
-        
-        // Single NVS transaction for all sensors
-        systemSetAllSensorsEnabled(states);
-        
-        LOG_INFO("Sensor config updated via MQTT (batch)");
-        
-        // Send feedback
-        _publishSensorConfig();
+        if (doc.containsKey("tds")) action.data.sensors.states[SENSOR_TDS] = doc["tds"];
+        if (doc.containsKey("ph")) action.data.sensors.states[SENSOR_PH] = doc["ph"];
+        if (doc.containsKey("water")) action.data.sensors.states[SENSOR_WATER_TEMP] = doc["water"];
+        if (doc.containsKey("air")) action.data.sensors.states[SENSOR_AIR_TEMP] = doc["air"];
+        if (doc.containsKey("light")) action.data.sensors.states[SENSOR_LIGHT] = doc["light"];
+        _enqueueDeferredAction(&action);
     }
     
     // Handle Automation Target Config
     if (strcmp(topic, LOCAL_MQTT_TOPIC_CONFIG_AUTOMATION) == 0) {
-        bool enabled = doc["enabled"] | false;
-        float tgtTds = doc["target_tds"] | AUTOMATOR_DEFAULT_TDS;
-        float tgtPh  = doc["target_ph"] | AUTOMATOR_DEFAULT_PH;
-        
-        automatorSetConfig(enabled, tgtTds, tgtPh);
-        LOG_INFO("Automation Config updated: En=%d, TDS=%.1f, pH=%.1f", enabled, tgtTds, tgtPh);
+        LocalDeferredAction action = {};
+        action.type = LOCAL_DEFERRED_AUTOMATION_CONFIG;
+        action.data.automation.enabled = doc["enabled"] | false;
+        action.data.automation.targetTds = doc["target_tds"] | AUTOMATOR_DEFAULT_TDS;
+        action.data.automation.targetPh = doc["target_ph"] | AUTOMATOR_DEFAULT_PH;
+        _enqueueDeferredAction(&action);
     }
 
     if (strcmp(topic, LOCAL_MQTT_TOPIC_CONFIG_LIGHT_CONTROL) == 0) {
         LightControlConfig cfg;
         lightCtrlGetConfig(&cfg);
-        CommandSource previousSource = cfg.commandSource;
+        CommandSource targetSource = cfg.commandSource;
         bool switchedToNetpie = false;
 
         if (doc.containsKey("command_source")) {
-            lightCtrlSetCommandSource(_parseCommandSource(doc["command_source"] | "", cfg.commandSource));
-            lightCtrlGetConfig(&cfg);
-            switchedToNetpie = (previousSource != cfg.commandSource && cfg.commandSource == COMMAND_SOURCE_NETPIE);
+            targetSource = _parseCommandSource(doc["command_source"] | "", cfg.commandSource);
+            switchedToNetpie = (cfg.commandSource != targetSource && targetSource == COMMAND_SOURCE_NETPIE);
         }
 
-        if (lightCtrlAllowsLocalControl()) {
-            bool enabled = doc.containsKey("enabled") ? doc["enabled"].as<bool>() : cfg.enabled;
-            bool manualState = doc.containsKey("manual_state") ? doc["manual_state"].as<bool>() : cfg.manualState;
-            int onDay = doc.containsKey("on_day") ? doc["on_day"].as<int>() : cfg.onDay;
-            int offDay = doc.containsKey("off_day") ? doc["off_day"].as<int>() : cfg.offDay;
-            const char* onTime = doc.containsKey("on_time") ? doc["on_time"] | cfg.onTime : cfg.onTime;
-            const char* offTime = doc.containsKey("off_time") ? doc["off_time"] | cfg.offTime : cfg.offTime;
-
-            lightCtrlSetEnabled(enabled ? 1 : 0);
-            lightCtrlSetManualState(manualState);
-            lightCtrlSetOnDay(onDay);
-            lightCtrlSetOnTime(onTime);
-            lightCtrlSetOffDay(offDay);
-            lightCtrlSetOffTime(offTime);
-            LOG_INFO("Light config updated from Local Web: Enabled=%d, Manual=%d, On=%d %s, Off=%d %s",
-                     enabled, manualState, onDay, onTime, offDay, offTime);
+        if (cfg.commandSource == COMMAND_SOURCE_LOCAL_WEB || doc.containsKey("command_source")) {
+            LocalDeferredAction action = {};
+            action.type = LOCAL_DEFERRED_LIGHT_CONFIG;
+            action.data.light.source = targetSource;
+            bool allowFieldUpdates = (targetSource == COMMAND_SOURCE_LOCAL_WEB);
+            action.data.light.enabled = allowFieldUpdates && doc.containsKey("enabled") ? doc["enabled"].as<bool>() : cfg.enabled;
+            action.data.light.manualState = allowFieldUpdates && doc.containsKey("manual_state") ? doc["manual_state"].as<bool>() : cfg.manualState;
+            action.data.light.onDay = allowFieldUpdates && doc.containsKey("on_day") ? doc["on_day"].as<int>() : cfg.onDay;
+            action.data.light.offDay = allowFieldUpdates && doc.containsKey("off_day") ? doc["off_day"].as<int>() : cfg.offDay;
+            snprintf(action.data.light.onTime, sizeof(action.data.light.onTime), "%s", allowFieldUpdates && doc.containsKey("on_time") ? (doc["on_time"] | cfg.onTime) : cfg.onTime);
+            snprintf(action.data.light.offTime, sizeof(action.data.light.offTime), "%s", allowFieldUpdates && doc.containsKey("off_time") ? (doc["off_time"] | cfg.offTime) : cfg.offTime);
+            action.data.light.requestNetpieShadowSync = switchedToNetpie;
+            _enqueueDeferredAction(&action);
         } else {
             LOG_WARN("Local Web light config ignored because control source is not local_web");
         }
-
-        if (switchedToNetpie) {
-            if (!netpieRequestShadowSync()) {
-                LOG_WARN("Switched light source to NETPIE but could not request shadow refresh yet");
-            }
-        }
-
-        _publishLightStatus();
     }
 
     if (strcmp(topic, LOCAL_MQTT_TOPIC_CONFIG_FISH_FEEDER) == 0) {
         FishFeederConfig cfg;
         fishFeederGetConfig(&cfg);
+        CommandSource targetSource = cfg.commandSource;
 
         if (doc.containsKey("command_source")) {
-            fishFeederSetCommandSource(_parseCommandSource(doc["command_source"] | "", cfg.commandSource));
-            fishFeederGetConfig(&cfg);
+            targetSource = _parseCommandSource(doc["command_source"] | "", cfg.commandSource);
         }
 
-        if (fishFeederAllowsLocalControl()) {
-            bool enabled = doc.containsKey("enabled") ? doc["enabled"].as<bool>() : cfg.enabled;
-            int feedDay = doc.containsKey("feed_day") ? doc["feed_day"].as<int>() : cfg.feedDay;
-            const char* feedTime = doc.containsKey("feed_time") ? doc["feed_time"] | cfg.feedTime : cfg.feedTime;
-            unsigned long durationMs = doc.containsKey("duration_ms") ? doc["duration_ms"].as<unsigned long>() : cfg.durationMs;
-
-            fishFeederSetEnabled(enabled);
-            fishFeederSetFeedDay(feedDay);
-            fishFeederSetFeedTime(feedTime);
-            fishFeederSetDurationMs(durationMs);
-
-            if (doc["trigger_feed"] | false) {
-                fishFeederStartManualFeed("Manual feed triggered from Local Web");
-            }
-
-            LOG_INFO("Fish feeder config updated from Local Web: Enabled=%d, Day=%d, Time=%s, Duration=%lu",
-                     enabled, feedDay, feedTime, durationMs);
+        if (cfg.commandSource == COMMAND_SOURCE_LOCAL_WEB || doc.containsKey("command_source")) {
+            LocalDeferredAction action = {};
+            action.type = LOCAL_DEFERRED_FEEDER_CONFIG;
+            action.data.feeder.source = targetSource;
+            bool allowFieldUpdates = (targetSource == COMMAND_SOURCE_LOCAL_WEB);
+            action.data.feeder.enabled = allowFieldUpdates && doc.containsKey("enabled") ? doc["enabled"].as<bool>() : cfg.enabled;
+            action.data.feeder.feedDay = allowFieldUpdates && doc.containsKey("feed_day") ? doc["feed_day"].as<int>() : cfg.feedDay;
+            snprintf(action.data.feeder.feedTime, sizeof(action.data.feeder.feedTime), "%s", allowFieldUpdates && doc.containsKey("feed_time") ? (doc["feed_time"] | cfg.feedTime) : cfg.feedTime);
+            action.data.feeder.durationMs = allowFieldUpdates && doc.containsKey("duration_ms") ? doc["duration_ms"].as<unsigned long>() : cfg.durationMs;
+            action.data.feeder.triggerFeed = allowFieldUpdates && (doc["trigger_feed"] | false);
+            _enqueueDeferredAction(&action);
         } else {
             LOG_WARN("Local Web fish feeder config ignored because control source is not local_web");
         }
-
-        _publishFishFeederStatus();
     }
 
     if (strcmp(topic, LOCAL_MQTT_TOPIC_CONFIG_FAN_CONTROL) == 0) {
         FanControlConfig cfg;
         fanCtrlGetConfig(&cfg);
 
-        bool enabled = doc.containsKey("enabled") ? doc["enabled"].as<bool>() : cfg.enabled;
-        bool autoMode = doc.containsKey("auto_mode") ? doc["auto_mode"].as<bool>() : cfg.autoMode;
-        bool manualState = doc.containsKey("manual_state") ? doc["manual_state"].as<bool>() : cfg.manualState;
-        float tempOnC = doc.containsKey("temp_on_c") ? doc["temp_on_c"].as<float>() : cfg.tempOnC;
-        float tempOffC = doc.containsKey("temp_off_c") ? doc["temp_off_c"].as<float>() : cfg.tempOffC;
-        float humidityOnPct = doc.containsKey("humidity_on_pct") ? doc["humidity_on_pct"].as<float>() : cfg.humidityOnPct;
-        float humidityOffPct = doc.containsKey("humidity_off_pct") ? doc["humidity_off_pct"].as<float>() : cfg.humidityOffPct;
-
-        fanCtrlSetConfig(enabled, autoMode, manualState, tempOnC, tempOffC, humidityOnPct, humidityOffPct);
-        LOG_INFO("Fan Config updated: En=%d, Auto=%d, Manual=%d, T=%.1f/%.1f, H=%.1f/%.1f",
-                 enabled, autoMode, manualState, tempOnC, tempOffC, humidityOnPct, humidityOffPct);
-        _publishFanStatus();
+        LocalDeferredAction action = {};
+        action.type = LOCAL_DEFERRED_FAN_CONFIG;
+        action.data.fan.enabled = doc.containsKey("enabled") ? doc["enabled"].as<bool>() : cfg.enabled;
+        action.data.fan.autoMode = doc.containsKey("auto_mode") ? doc["auto_mode"].as<bool>() : cfg.autoMode;
+        action.data.fan.manualState = doc.containsKey("manual_state") ? doc["manual_state"].as<bool>() : cfg.manualState;
+        action.data.fan.tempOnC = doc.containsKey("temp_on_c") ? doc["temp_on_c"].as<float>() : cfg.tempOnC;
+        action.data.fan.tempOffC = doc.containsKey("temp_off_c") ? doc["temp_off_c"].as<float>() : cfg.tempOffC;
+        action.data.fan.humidityOnPct = doc.containsKey("humidity_on_pct") ? doc["humidity_on_pct"].as<float>() : cfg.humidityOnPct;
+        action.data.fan.humidityOffPct = doc.containsKey("humidity_off_pct") ? doc["humidity_off_pct"].as<float>() : cfg.humidityOffPct;
+        _enqueueDeferredAction(&action);
     }
 
     if (strcmp(topic, LOCAL_MQTT_TOPIC_CONFIG_WATER_SYSTEM) == 0) {
         WaterSystemConfig cfg;
         waterSystemGetConfig(&cfg);
 
-        bool circulationEnabled = doc.containsKey("circulation_enabled") ? doc["circulation_enabled"].as<bool>() : cfg.circulationEnabled;
-        bool refillEnabled = doc.containsKey("refill_enabled") ? doc["refill_enabled"].as<bool>() : cfg.refillEnabled;
-        unsigned long refillMaxRuntimeMs = doc.containsKey("refill_max_runtime_ms") ? doc["refill_max_runtime_ms"].as<unsigned long>() : cfg.refillMaxRuntimeMs;
-        unsigned long refillMinIntervalMs = doc.containsKey("refill_min_interval_ms") ? doc["refill_min_interval_ms"].as<unsigned long>() : cfg.refillMinIntervalMs;
-        WaterRefillRoute preferredRoute = cfg.preferredRoute;
-        bool allowDirectSumpRefill = doc.containsKey("allow_direct_sump_refill") ? doc["allow_direct_sump_refill"].as<bool>() : cfg.allowDirectSumpRefill;
-        unsigned long fishRefillIntervalMs = doc.containsKey("fish_refill_interval_ms") ? doc["fish_refill_interval_ms"].as<unsigned long>() : cfg.fishRefillIntervalMs;
-        unsigned long fishRefillMaxRuntimeMs = doc.containsKey("fish_refill_max_runtime_ms") ? doc["fish_refill_max_runtime_ms"].as<unsigned long>() : cfg.fishRefillMaxRuntimeMs;
+        LocalDeferredAction action = {};
+        action.type = LOCAL_DEFERRED_WATER_CONFIG;
+        action.data.water.circulationEnabled = doc.containsKey("circulation_enabled") ? doc["circulation_enabled"].as<bool>() : cfg.circulationEnabled;
+        action.data.water.refillEnabled = doc.containsKey("refill_enabled") ? doc["refill_enabled"].as<bool>() : cfg.refillEnabled;
+        action.data.water.refillMaxRuntimeMs = doc.containsKey("refill_max_runtime_ms") ? doc["refill_max_runtime_ms"].as<unsigned long>() : cfg.refillMaxRuntimeMs;
+        action.data.water.refillMinIntervalMs = doc.containsKey("refill_min_interval_ms") ? doc["refill_min_interval_ms"].as<unsigned long>() : cfg.refillMinIntervalMs;
+        action.data.water.preferredRoute = cfg.preferredRoute;
+        action.data.water.allowDirectSumpRefill = doc.containsKey("allow_direct_sump_refill") ? doc["allow_direct_sump_refill"].as<bool>() : cfg.allowDirectSumpRefill;
+        action.data.water.fishRefillIntervalMs = doc.containsKey("fish_refill_interval_ms") ? doc["fish_refill_interval_ms"].as<unsigned long>() : cfg.fishRefillIntervalMs;
+        action.data.water.fishRefillMaxRuntimeMs = doc.containsKey("fish_refill_max_runtime_ms") ? doc["fish_refill_max_runtime_ms"].as<unsigned long>() : cfg.fishRefillMaxRuntimeMs;
+        action.data.water.applyManualRefill = doc.containsKey("manual_refill");
+        action.data.water.manualRefill = action.data.water.applyManualRefill ? doc["manual_refill"].as<bool>() : false;
+        action.data.water.clearAlarm = doc["clear_alarm"] | false;
 
         if (doc.containsKey("preferred_route")) {
-            preferredRoute = _parseWaterRoute(doc["preferred_route"] | "", cfg.preferredRoute);
+            action.data.water.preferredRoute = _parseWaterRoute(doc["preferred_route"] | "", cfg.preferredRoute);
         }
 
-        waterSystemSetConfig(circulationEnabled,
-                     refillEnabled,
-                     refillMaxRuntimeMs,
-                     refillMinIntervalMs,
-                     preferredRoute,
-                     allowDirectSumpRefill,
-                     fishRefillIntervalMs,
-                     fishRefillMaxRuntimeMs);
-
-        if (doc.containsKey("manual_refill")) {
-            waterSystemSetManualRefill(doc["manual_refill"].as<bool>());
-        }
-
-        if (doc["clear_alarm"] | false) {
-            waterSystemClearAlarm();
-        }
-
-        LOG_INFO("Water System config updated: Circ=%d, Refill=%d, Route=%s, Direct=%d, Max=%lu ms, MinInt=%lu ms, FishInt=%lu ms, FishMax=%lu ms",
-                 circulationEnabled,
-                 refillEnabled,
-                 waterSystemGetRouteString(preferredRoute),
-                 allowDirectSumpRefill,
-             refillMaxRuntimeMs,
-             refillMinIntervalMs,
-             fishRefillIntervalMs,
-             fishRefillMaxRuntimeMs);
-        _publishWaterSystemStatus();
+        _enqueueDeferredAction(&action);
     }
     
     // Handle Hardware Test Commands (Pi Dashboard → ESP32)
@@ -590,7 +953,9 @@ static bool _reconnect() {
     char clientId[32];
     snprintf(clientId, sizeof(clientId), "ESP32-Aquaponics-%04x", (unsigned int)random(0xffff));
 
+    _networkTaskCheckpoint("local_mqtt_connect");
     if (_localMqtt.connect(clientId)) {
+        _networkTaskCheckpoint("local_mqtt_connected");
         LOG_INFO("✅ Connected to Local MQTT!");
         _connectionFailCount = 0; // Reset counter on success
         
@@ -606,13 +971,11 @@ static bool _reconnect() {
         _localMqtt.subscribe(LOCAL_MQTT_TOPIC_HW_TEST_CMD, 1);
         LOG_INFO("Subscribed to MQTT topics (QoS 1)");
 
-        _publishLightStatus();
-        _publishFishFeederStatus();
-        _publishFanStatus();
-        _publishWaterSystemStatus();
+        _queueReconnectStatusPublishes();
         
         return true;
     } else {
+        _networkTaskCheckpoint("local_mqtt_connect_fail");
         LOG_WARN("Local MQTT connect failed, rc=%d", _localMqtt.state());
         _connectionFailCount++;
         return false;
@@ -634,6 +997,7 @@ void localMqttSetup(void) {
     
     // Create a queue for passing logs across tasks safely (20 items of 128 bytes)
     _logQueue = xQueueCreate(20, 128);
+    _deferredActionQueue = xQueueCreate(LOCAL_MQTT_DEFERRED_QUEUE_LENGTH, sizeof(LocalDeferredAction));
 }
 
 void localMqttLoop(void) {
@@ -653,7 +1017,9 @@ void localMqttLoop(void) {
             }
         }
     } else {
+        _networkTaskCheckpoint("local_mqtt_poll");
         _localMqtt.loop();
+        _networkTaskCheckpoint("local_mqtt_post_poll");
         _serviceScheduledStatusPublishes();
         
         // Process cross-core log queue safely in the Networking Task
@@ -662,6 +1028,7 @@ void localMqttLoop(void) {
             int count = 0;
             // Process a small number of logs per loop to avoid long publish bursts.
             while (count < LOCAL_MQTT_MAX_LOGS_PER_LOOP && xQueueReceive(_logQueue, logBuff, 0) == pdTRUE) {
+                _networkTaskCheckpoint("local_mqtt_log_publish");
                 _localMqtt.publish(LOCAL_MQTT_TOPIC_LOGS, logBuff);
                 count++;
             }
@@ -700,8 +1067,23 @@ void localMqttHwTestTick(void) {
         result["status"] = "completed";
         char buf[128];
         serializeJson(result, buf, sizeof(buf));
+        _networkTaskCheckpoint("local_hwtest_done");
         _localMqtt.publish(LOCAL_MQTT_TOPIC_HW_TEST_RESULT, buf);
         LOG_INFO("[HW TEST] Published 'completed' for %s", _hwTestCompletedCmd);
+    }
+}
+
+void localMqttProcessDeferredActions(void) {
+    if (_deferredActionQueue == NULL) {
+        return;
+    }
+
+    LocalDeferredAction action;
+    uint8_t processed = 0;
+    while (processed < LOCAL_MQTT_MAX_DEFERRED_ACTIONS_PER_LOOP &&
+           xQueueReceive(_deferredActionQueue, &action, 0) == pdTRUE) {
+        _processDeferredAction(&action);
+        processed++;
     }
 }
 
@@ -715,6 +1097,11 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
     }
     
     if (!localMqttIsConnected()) return;
+
+    // Flush keepalive / detect stale connection before expensive publish
+    _networkTaskCheckpoint("local_sensor_preloop");
+    _localMqtt.loop();
+    if (!_localMqtt.connected()) return;
     
     _lastPublishTime = millis();
 
@@ -794,6 +1181,37 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
     _sensorPublishDoc["feeder_state"] = fishFeederGetStateString(feederStatus.state);
     _sensorPublishDoc["feeder_source"] = commandSourceToString(feederCfg.commandSource);
 
+    WaterSystemConfig waterCfg;
+    WaterSystemStatus waterStatus;
+    waterSystemGetConfig(&waterCfg);
+    waterSystemGetStatus(&waterStatus);
+    _sensorPublishDoc["water_status_seen"] = true;
+    _sensorPublishDoc["water_state"] = waterSystemGetStateString(waterStatus.state);
+    _sensorPublishDoc["water_state_label_th"] = waterSystemGetStateLabelTh(waterStatus.state);
+    _sensorPublishDoc["water_reason"] = waterStatus.reason;
+    _sensorPublishDoc["preferred_route"] = waterSystemGetRouteString(waterCfg.preferredRoute);
+    _sensorPublishDoc["active_route"] = waterSystemGetRouteString(waterStatus.activeRoute);
+    _sensorPublishDoc["allow_direct_sump_refill"] = waterCfg.allowDirectSumpRefill;
+    _sensorPublishDoc["manual_refill"] = waterCfg.manualRefill;
+    _sensorPublishDoc["water_alarm"] = waterStatus.alarmActive;
+    _sensorPublishDoc["route_blocked"] = waterStatus.routeBlocked;
+    _sensorPublishDoc["route_valve_output"] = waterStatus.routeValveOutput;
+    _sensorPublishDoc["has_route_valve"] = waterStatus.hasRouteValve;
+    _sensorPublishDoc["circulation_pump_output"] = waterStatus.circulationPumpOutput;
+    _sensorPublishDoc["fish_tank_refill_output"] = waterStatus.fishTankRefillOutput;
+    _sensorPublishDoc["mix_tank_refill_output"] = waterStatus.mixTankRefillOutput;
+    _sensorPublishDoc["water_dilution_active"] = waterStatus.waterDilutionActive;
+    _sensorPublishDoc["mix_tank_settling_active"] = waterStatus.mixTankSettlingActive;
+    _sensorPublishDoc["mix_tank_control_zone"] = waterStatus.mixTankControlZone;
+    _sensorPublishDoc["dilution_hold_remaining_ms"] = waterStatus.dilutionHoldRemainingMs;
+    _sensorPublishDoc["fish_refill_ready"] = waterStatus.fishRefillReady;
+    _sensorPublishDoc["fish_refill_wait_remaining_ms"] = waterStatus.fishRefillWaitRemainingMs;
+    _sensorPublishDoc["sump_low"] = waterStatus.levelLow;
+    _sensorPublishDoc["sump_high"] = waterStatus.levelHigh;
+    _sensorPublishDoc["has_level_sensors"] = waterStatus.hasLevelSensors;
+    _sensorPublishDoc["fish_overflow"] = waterStatus.overflowAlarm;
+    _sensorPublishDoc["has_overflow_sensor"] = waterStatus.hasOverflowSensor;
+
     size_t payloadLen = serializeJson(_sensorPublishDoc, _sensorPublishPayload, sizeof(_sensorPublishPayload));
 
     if (payloadLen == 0 || payloadLen >= sizeof(_sensorPublishPayload) - 1) {
@@ -801,9 +1219,12 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
         return;
     }
 
+    _networkTaskCheckpoint("local_sensor_publish");
     if (_localMqtt.publish(LOCAL_MQTT_TOPIC_SENSORS, _sensorPublishPayload)) {
+        _networkTaskCheckpoint("local_sensor_publish_ok");
         LOG_DEBUG("Local MQTT Publish: %s", _sensorPublishPayload);
     } else {
+        _networkTaskCheckpoint("local_sensor_publish_fail");
         LOG_ERROR("Local MQTT Publish Failed (len=%u, state=%d)",
                   (unsigned int)payloadLen,
                   _localMqtt.state());

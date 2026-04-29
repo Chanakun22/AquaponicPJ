@@ -244,6 +244,35 @@ bool fishFeederAllowsLocalControl(void) {
     return _commandSource == COMMAND_SOURCE_LOCAL_WEB;
 }
 
+void fishFeederSetConfig(CommandSource source,
+                        bool enabled,
+                        int feedDay,
+                        const char* feedTime,
+                        unsigned long durationMs) {
+    _commandSource = source;
+    _enabled = enabled;
+    _feedDay = feedDay;
+    _durationMs = durationMs;
+
+    if (feedTime != NULL && strlen(feedTime) >= 4) {
+        _feedHour = atoi(feedTime);
+        const char* colon = strchr(feedTime, ':');
+        if (colon != NULL) {
+            _feedMinute = atoi(colon + 1);
+        }
+    }
+
+    _sanitizeConfig();
+
+    if (!_enabled && (_status.running || _feedPending)) {
+        _feedPending = false;
+        _writeOutput(false);
+    }
+
+    _saveConfig();
+    _setReason(source == COMMAND_SOURCE_NETPIE ? "Control source set to NETPIE" : "Control source set to Local Web");
+}
+
 void fishFeederSetEnabled(bool enabled) {
     _enabled = enabled;
     if (!_enabled && (_status.running || _feedPending)) {

@@ -69,11 +69,11 @@
 #endif
 
 #ifndef SUMP_LEVEL_LOW_PIN
-#define SUMP_LEVEL_LOW_PIN   -1     // เซ็นเซอร์ระดับน้ำต่ำถังรวม
+#define SUMP_LEVEL_LOW_PIN   40     // เซ็นเซอร์ระดับน้ำต่ำถังรวม
 #endif
 
 #ifndef SUMP_LEVEL_HIGH_PIN
-#define SUMP_LEVEL_HIGH_PIN  -1     // เซ็นเซอร์ระดับน้ำสูงถังรวม
+#define SUMP_LEVEL_HIGH_PIN  41     // เซ็นเซอร์ระดับน้ำสูงถังรวม
 #endif
 
 #ifndef FISH_TANK_OVERFLOW_PIN

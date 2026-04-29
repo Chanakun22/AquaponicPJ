@@ -45,6 +45,12 @@ void localMqttPublishLog(const char* logMsg);
  */
 void localMqttHwTestTick(void);
 
+/**
+ * @brief Apply one deferred Local MQTT config/calibration action in TaskControl context
+ * @note MUST be called from TaskControl loop, not from TaskNetworking
+ */
+void localMqttProcessDeferredActions(void);
+
 
 
 #endif // LOCAL_MQTT_H

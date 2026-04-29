@@ -14,6 +14,9 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#if defined(ESP32) && WATCHDOG_ENABLED
+#include "esp_task_wdt.h"
+#endif
 
 // ============================================================================
 // PRIVATE VARIABLES
@@ -39,6 +42,15 @@ static const unsigned long MAX_NETPIE_RECONNECT_INTERVAL = 60000;   // Max 60s
 static void _mqttCallback(char* topic, byte* payload, unsigned int length);
 static bool _mqttReconnect(void);
 static void _parseShadowData(const char* json);
+
+static void _networkTaskCheckpoint(const char* stage) {
+    systemSetTaskProgress(TASK_NETWORKING, stage);
+    systemTaskHeartbeat(TASK_NETWORKING);
+
+    #if defined(ESP32) && WATCHDOG_ENABLED
+    esp_task_wdt_reset();
+    #endif
+}
 
 // ============================================================================
 // PRIVATE FUNCTIONS
@@ -248,7 +260,9 @@ static bool _mqttReconnect(void) {
     );
     
     // NETPIE_CLIENT_ID, NETPIE_TOKEN, NETPIE_SECRET are macros from config.h/secrets.ini
+    _networkTaskCheckpoint("netpie_connect");
     if (_mqtt.connect(NETPIE_CLIENT_ID, NETPIE_TOKEN, NETPIE_SECRET)) {
+        _networkTaskCheckpoint("netpie_connected");
         LOG_INFO("MQTT connected!");
         
         // Subscribe topics
@@ -260,11 +274,13 @@ static bool _mqttReconnect(void) {
         LOG_DEBUG("Subscribed to MQTT topics");
         
         // Request shadow data
+        _networkTaskCheckpoint("netpie_shadow_request");
         _mqtt.publish("@shadow/data/get", "{}");
         _shadowRequested = true;
         
         return true;
     } else {
+        _networkTaskCheckpoint("netpie_connect_fail");
         LOG_WARN("MQTT connection failed, rc=%d", _mqtt.state());
         return false;
     }
@@ -308,6 +324,7 @@ void netpieLoop(void) {
             }
         }
     } else {
+        _networkTaskCheckpoint("netpie_poll");
         _mqtt.loop();
     }
 }
@@ -323,6 +340,13 @@ void netpiePublishData(float waterTemp, float airTemp, float humidity, float tds
     _lastPublishTime = millis();
     
     if (!netpieIsConnected()) {
+        return;
+    }
+    
+    // Flush keepalive / detect stale connection before expensive publish
+    _networkTaskCheckpoint("netpie_preloop");
+    _mqtt.loop();
+    if (!_mqtt.connected()) {
         return;
     }
     
@@ -364,9 +388,12 @@ void netpiePublishData(float waterTemp, float airTemp, float humidity, float tds
     char payload[512];
     serializeJson(doc, payload);
     
+    _networkTaskCheckpoint("netpie_publish");
     if (_mqtt.publish("@shadow/data/update", payload)) {
+        _networkTaskCheckpoint("netpie_publish_ok");
         LOG_DEBUG("Published to NETPIE: %s", payload);
     } else {
+        _networkTaskCheckpoint("netpie_publish_fail");
         LOG_ERROR("NETPIE publish failed!");
     }
 }
@@ -384,6 +411,7 @@ bool netpieRequestShadowSync(void) {
         return false;
     }
 
+    _networkTaskCheckpoint("netpie_shadow_sync");
     bool published = _mqtt.publish("@shadow/data/get", "{}");
     if (published) {
         _shadowRequested = true;

@@ -409,7 +409,11 @@ def load_settings():
             "overflow_alarm": False,
             "route_blocked": False,
             "route_valve_output": False,
-            "has_route_valve": False
+            "has_route_valve": False,
+            "has_level_sensors": None,
+            "has_overflow_sensor": None,
+            "status_seen": False,
+            "status_updated_at": None
         },
         "fan_control": {
             "enabled": False,
@@ -852,8 +856,11 @@ def on_message(client, userdata, msg):
                 water_status = json.loads(payload)
                 previous_water = dict(app_settings.get("water_system", {}))
                 app_settings.setdefault("water_system", {})
+                app_settings["water_system"]["status_seen"] = True
+                app_settings["water_system"]["status_updated_at"] = int(time.time())
                 app_settings["water_system"].update(water_status)
                 print(f"🔄 Water system status updated: {water_status}")
+                socketio.emit('water_status_update', dict(app_settings["water_system"]))
 
                 if water_status.get("alarm_active") and (
                     not previous_water.get("alarm_active") or
@@ -900,6 +907,41 @@ def on_message(client, userdata, msg):
         data = json.loads(payload)
         for key in data:
             last_data[key] = data[key]
+
+        if any(key in data for key in [
+            "water_status_seen", "water_state", "water_reason", "sump_low", "sump_high",
+            "has_level_sensors", "fish_overflow", "has_overflow_sensor", "active_route"
+        ]):
+            app_settings.setdefault("water_system", {})
+            app_settings["water_system"].update({
+                "status_seen": bool(data.get("water_status_seen", app_settings["water_system"].get("status_seen", False))),
+                "status_updated_at": int(time.time()),
+                "state": data.get("water_state", app_settings["water_system"].get("state", "IDLE")),
+                "state_label_th": data.get("water_state_label_th", app_settings["water_system"].get("state_label_th", "พร้อมทำงาน")),
+                "reason": data.get("water_reason", app_settings["water_system"].get("reason", "Waiting for ESP32 status")),
+                "preferred_route": data.get("preferred_route", app_settings["water_system"].get("preferred_route", "AUTO")),
+                "active_route": data.get("active_route", app_settings["water_system"].get("active_route", "NONE")),
+                "allow_direct_sump_refill": data.get("allow_direct_sump_refill", app_settings["water_system"].get("allow_direct_sump_refill", False)),
+                "manual_refill": data.get("manual_refill", app_settings["water_system"].get("manual_refill", False)),
+                "alarm_active": data.get("water_alarm", app_settings["water_system"].get("alarm_active", False)),
+                "route_blocked": data.get("route_blocked", app_settings["water_system"].get("route_blocked", False)),
+                "route_valve_output": data.get("route_valve_output", app_settings["water_system"].get("route_valve_output", False)),
+                "has_route_valve": data.get("has_route_valve", app_settings["water_system"].get("has_route_valve", False)),
+                "circulation_pump_output": data.get("circulation_pump_output", app_settings["water_system"].get("circulation_pump_output", False)),
+                "fish_tank_refill_output": data.get("fish_tank_refill_output", app_settings["water_system"].get("fish_tank_refill_output", False)),
+                "mix_tank_refill_output": data.get("mix_tank_refill_output", app_settings["water_system"].get("mix_tank_refill_output", False)),
+                "water_dilution_active": data.get("water_dilution_active", app_settings["water_system"].get("water_dilution_active", False)),
+                "mix_tank_settling_active": data.get("mix_tank_settling_active", app_settings["water_system"].get("mix_tank_settling_active", False)),
+                "mix_tank_control_zone": data.get("mix_tank_control_zone", app_settings["water_system"].get("mix_tank_control_zone", True)),
+                "dilution_hold_remaining_ms": data.get("dilution_hold_remaining_ms", app_settings["water_system"].get("dilution_hold_remaining_ms", 0)),
+                "fish_refill_ready": data.get("fish_refill_ready", app_settings["water_system"].get("fish_refill_ready", True)),
+                "fish_refill_wait_remaining_ms": data.get("fish_refill_wait_remaining_ms", app_settings["water_system"].get("fish_refill_wait_remaining_ms", 0)),
+                "sump_low": data.get("sump_low", app_settings["water_system"].get("sump_low", False)),
+                "sump_high": data.get("sump_high", app_settings["water_system"].get("sump_high", False)),
+                "has_level_sensors": data.get("has_level_sensors", app_settings["water_system"].get("has_level_sensors")),
+                "overflow_alarm": data.get("fish_overflow", app_settings["water_system"].get("overflow_alarm", False)),
+                "has_overflow_sensor": data.get("has_overflow_sensor", app_settings["water_system"].get("has_overflow_sensor")),
+            })
             
         # Check for automation state change (for LINE notify)
         new_auto_state = data.get("auto_state")
@@ -1169,6 +1211,44 @@ def camera_status():
 def get_settings():
     global app_settings
     return jsonify(app_settings)
+
+@app.route('/api/water_system/status', methods=['GET'])
+@admin_required
+def get_water_system_status():
+    global app_settings
+    water_status = dict(app_settings.get('water_system', {}))
+    water_status_fallbacks = {
+        'status_seen': last_data.get('water_status_seen', water_status.get('status_seen', False)),
+        'state': last_data.get('water_state', water_status.get('state', 'IDLE')),
+        'state_label_th': last_data.get('water_state_label_th', water_status.get('state_label_th', 'พร้อมทำงาน')),
+        'reason': last_data.get('water_reason', water_status.get('reason', 'Waiting for ESP32 status')),
+        'preferred_route': last_data.get('preferred_route', water_status.get('preferred_route', 'AUTO')),
+        'active_route': last_data.get('active_route', water_status.get('active_route', 'NONE')),
+        'allow_direct_sump_refill': last_data.get('allow_direct_sump_refill', water_status.get('allow_direct_sump_refill', False)),
+        'manual_refill': last_data.get('manual_refill', water_status.get('manual_refill', False)),
+        'alarm_active': last_data.get('water_alarm', water_status.get('alarm_active', False)),
+        'route_blocked': last_data.get('route_blocked', water_status.get('route_blocked', False)),
+        'route_valve_output': last_data.get('route_valve_output', water_status.get('route_valve_output', False)),
+        'has_route_valve': last_data.get('has_route_valve', water_status.get('has_route_valve', False)),
+        'circulation_pump_output': last_data.get('circulation_pump_output', water_status.get('circulation_pump_output', False)),
+        'fish_tank_refill_output': last_data.get('fish_tank_refill_output', water_status.get('fish_tank_refill_output', False)),
+        'mix_tank_refill_output': last_data.get('mix_tank_refill_output', water_status.get('mix_tank_refill_output', False)),
+        'water_dilution_active': last_data.get('water_dilution_active', water_status.get('water_dilution_active', False)),
+        'mix_tank_settling_active': last_data.get('mix_tank_settling_active', water_status.get('mix_tank_settling_active', False)),
+        'mix_tank_control_zone': last_data.get('mix_tank_control_zone', water_status.get('mix_tank_control_zone', True)),
+        'dilution_hold_remaining_ms': last_data.get('dilution_hold_remaining_ms', water_status.get('dilution_hold_remaining_ms', 0)),
+        'fish_refill_ready': last_data.get('fish_refill_ready', water_status.get('fish_refill_ready', True)),
+        'fish_refill_wait_remaining_ms': last_data.get('fish_refill_wait_remaining_ms', water_status.get('fish_refill_wait_remaining_ms', 0)),
+        'sump_low': last_data.get('sump_low', water_status.get('sump_low', False)),
+        'sump_high': last_data.get('sump_high', water_status.get('sump_high', False)),
+        'has_level_sensors': last_data.get('has_level_sensors', water_status.get('has_level_sensors')),
+        'overflow_alarm': last_data.get('fish_overflow', water_status.get('overflow_alarm', False)),
+        'has_overflow_sensor': last_data.get('has_overflow_sensor', water_status.get('has_overflow_sensor')),
+    }
+    water_status.update(water_status_fallbacks)
+    water_status.setdefault('status_seen', False)
+    water_status.setdefault('status_updated_at', None)
+    return jsonify(water_status)
 
 @app.route('/api/settings', methods=['POST'])
 @admin_required
@@ -1955,7 +2035,12 @@ def build_dashboard_data():
     water_status = app_settings.get("water_system", {})
     dashboard_sensors.update({
         "active_route": water_status.get("active_route", dashboard_sensors.get("active_route", "NONE")),
+        "preferred_route": water_status.get("preferred_route", dashboard_sensors.get("preferred_route", "AUTO")),
+        "allow_direct_sump_refill": water_status.get("allow_direct_sump_refill", dashboard_sensors.get("allow_direct_sump_refill", False)),
+        "manual_refill": water_status.get("manual_refill", dashboard_sensors.get("manual_refill", False)),
         "route_blocked": water_status.get("route_blocked", dashboard_sensors.get("route_blocked", False)),
+        "route_valve_output": water_status.get("route_valve_output", dashboard_sensors.get("route_valve_output", False)),
+        "has_route_valve": water_status.get("has_route_valve", dashboard_sensors.get("has_route_valve", False)),
         "circulation_pump_output": water_status.get("circulation_pump_output", dashboard_sensors.get("circulation_pump_output", False)),
         "fish_tank_refill_output": water_status.get("fish_tank_refill_output", dashboard_sensors.get("fish_tank_refill_output", False)),
         "mix_tank_refill_output": water_status.get("mix_tank_refill_output", dashboard_sensors.get("mix_tank_refill_output", False)),
@@ -1967,6 +2052,9 @@ def build_dashboard_data():
         "fish_refill_wait_remaining_ms": water_status.get("fish_refill_wait_remaining_ms", dashboard_sensors.get("fish_refill_wait_remaining_ms", 0)),
         "sump_low": water_status.get("sump_low", dashboard_sensors.get("sump_low", False)),
         "sump_high": water_status.get("sump_high", dashboard_sensors.get("sump_high", False)),
+        "has_level_sensors": water_status.get("has_level_sensors", dashboard_sensors.get("has_level_sensors")),
+        "has_overflow_sensor": water_status.get("has_overflow_sensor", dashboard_sensors.get("has_overflow_sensor")),
+        "water_status_seen": water_status.get("status_seen", dashboard_sensors.get("water_status_seen", False)),
         "fish_overflow": water_status.get("overflow_alarm", dashboard_sensors.get("fish_overflow", False)),
         "water_alarm": water_status.get("alarm_active", dashboard_sensors.get("water_alarm", False)),
         "water_state": water_status.get("state", dashboard_sensors.get("water_state", "IDLE")),

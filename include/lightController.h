@@ -52,6 +52,13 @@ void lightCtrlSetOnDay(int day);
 void lightCtrlSetOnTime(const char* onTime);
 void lightCtrlSetOffDay(int day);
 void lightCtrlSetOffTime(const char* offTime);
+void lightCtrlSetConfig(CommandSource source,
+	bool enabled,
+	bool manualState,
+	int onDay,
+	const char* onTime,
+	int offDay,
+	const char* offTime);
 void lightCtrlPrintSchedule(void);
 
 /**

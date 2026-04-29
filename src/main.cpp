@@ -154,6 +154,11 @@ void TaskNetworking(void *pvParameters) {
                     taskCheckpoint(TASK_NETWORKING, "netpie_publish");
                     netpiePublishData(currentWaterTemp, currentAirTemp, currentHumidity, currentTds, currentLight, currentPh);
                 }
+                
+                // Yield between publish calls — each publish may block up to 5s on TCP timeout
+                taskCheckpoint(TASK_NETWORKING, "yield_between_publish");
+                vTaskDelay(pdMS_TO_TICKS(10));
+                
                 taskCheckpoint(TASK_NETWORKING, "local_publish");
                 localMqttPublishData(currentWaterTemp, currentAirTemp, currentHumidity, currentTds, currentLight, currentPh);
                 taskCheckpoint(TASK_NETWORKING, "post_publish");
@@ -161,7 +166,7 @@ void TaskNetworking(void *pvParameters) {
         }
         
         // Yield to other tasks
-        systemSetTaskProgress(TASK_NETWORKING, "idle_yield");
+        taskCheckpoint(TASK_NETWORKING, "idle_yield");
         vTaskDelay(pdMS_TO_TICKS(10)); // 10ms delay to prevent WDT and allow other tasks
     }
 }
@@ -266,6 +271,10 @@ void TaskControl(void *pvParameters) {
         taskCheckpoint(TASK_CONTROL, "system_loop");
         systemLoop();
 
+        // Apply Local MQTT config/calibration requests outside TaskNetworking
+        taskCheckpoint(TASK_CONTROL, "local_mqtt_deferred");
+        localMqttProcessDeferredActions();
+
         // Water circulation / refill controller
         taskCheckpoint(TASK_CONTROL, "water_system");
         waterSystemLoop();
@@ -285,6 +294,10 @@ void TaskControl(void *pvParameters) {
         // Automation Engine (Process State Machine)
         taskCheckpoint(TASK_CONTROL, "automator");
         automatorLoop();
+
+        // Yield before health checks (NVS writes can be slow)
+        taskCheckpoint(TASK_CONTROL, "mid_yield");
+        vTaskDelay(pdMS_TO_TICKS(10));
         
         // Check task heartbeats (detect stuck tasks)
         taskCheckpoint(TASK_CONTROL, "task_health_check");
@@ -390,7 +403,7 @@ void setup() {
     );
     
     xTaskCreatePinnedToCore(
-        TaskControl,      "Control",      4096,  NULL,  1,  &hCtrl,  1 // Core 1
+        TaskControl,      "Control",      6144,  NULL,  2,  &hCtrl,  1 // Core 1, priority 2 (higher than Sensors)
     );
     
     // Register task handles for stack monitoring

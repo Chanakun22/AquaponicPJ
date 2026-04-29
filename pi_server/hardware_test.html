@@ -271,6 +271,24 @@
             gap: 10px;
         }
 
+        .workflow-list {
+            margin: 0;
+            padding-left: 18px;
+            color: var(--text-main);
+            line-height: 1.7;
+        }
+
+        .workflow-list li + li {
+            margin-top: 6px;
+        }
+
+        .sensor-detail {
+            margin-top: 4px;
+            font-size: 0.76rem;
+            color: var(--text-muted);
+            line-height: 1.45;
+        }
+
         .sensor-grid {
             grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
         }
@@ -441,7 +459,7 @@
         <div class="page-stack">
             <div class="intro">
                 ใช้หน้านี้สำหรับทดสอบ <strong>ของที่ firmware รองรับจริงตอนนี้</strong>: อ่านเซ็นเซอร์, ทดสอบปั๊มโดส A/B, เปิดปิดไฟผ่านรีเลย์, และทดสอบระบบน้ำตาม flow ปัจจุบันของเส้นทางเติม, การเติมน้ำด้วยมือ, ปั๊มหมุนน้ำ, และ alarm.<br>
-                ระหว่างทดสอบปั๊มโดส ระบบ automation จะ pause ชั่วคราวและ resume เองหลัง test จบ.
+                ระหว่างทดสอบปั๊มโดส ระบบ automation จะ pause ชั่วคราวและ resume เองหลัง test จบ. สำหรับ input น้ำในหน้านี้ให้ตีความตาม wiring ปัจจุบัน: <strong>`SUMP_LEVEL_LOW`, `SUMP_LEVEL_HIGH`, `FISH_TANK_OVERFLOW` เป็น Active LOW</strong> ดังนั้นค่า `LOW` หมายถึง sensor ตัวนั้นกำลัง trigger อยู่.
             </div>
 
             <div class="summary-grid">
@@ -498,9 +516,16 @@
 
                 <div class="card">
                     <div class="section-head">
-                        <div class="section-title"><i class="fas fa-circle-info"></i> ขอบเขตการทดสอบ</div>
+                        <div class="section-title"><i class="fas fa-circle-info"></i> Workflow ปัจจุบัน</div>
                     </div>
-                    <div class="section-note">หน้าทดสอบนี้ตั้งใจให้ตรงกับความสามารถปัจจุบันของ firmware: ไม่มี water pump test แบบเก่าแล้ว เพราะ flow น้ำตอนนี้ควบคุมผ่าน water system state machine ไม่ใช่ command test แยกตัว</div>
+                    <div class="section-note">หน้าทดสอบนี้ตั้งใจให้ตรงกับความสามารถปัจจุบันของ firmware: ไม่มี water pump test แบบเก่าแล้ว เพราะ flow น้ำตอนนี้วิ่งผ่าน water system state machine และใช้ sensor น้ำเป็นตัวตัดสินใจ</div>
+                    <ol class="workflow-list">
+                        <li>กด `รีเฟรชค่าน้ำ` ก่อนทุกครั้ง เพื่อดึง config และ state ล่าสุดจาก Pi/ESP32</li>
+                        <li>ดูการ์ด `SUMP_LEVEL_LOW`, `SUMP_LEVEL_HIGH`, `FISH_TANK_OVERFLOW` ด้านล่าง โดย `LOW = trigger`, `HIGH = ปกติ`</li>
+                        <li>ค่อยทดสอบ `ปั๊มหมุนน้ำ`, `เติมน้ำอัตโนมัติ`, `Preferred Route`, และ `เติมน้ำด้วยมือ` ตามลำดับ</li>
+                        <li>จบงานหรือมีพฤติกรรมผิดปกติ ให้กด `หยุด output ที่กำลังทดสอบ` แล้วค่อยเปิด auto refill กลับเองเมื่อพร้อม</li>
+                    </ol>
+                    <div class="section-note" style="margin-top:14px;">ถ้า `FISH_TANK_OVERFLOW` ขึ้นว่า `ไม่ได้ติดตั้ง` แปลว่าบอร์ดนี้ยังไม่มี overflow sensor ต่ออยู่ ไม่ใช่ว่า sensor ปกติ</div>
                     <div class="water-status-grid">
                         <div class="water-stat"><div class="water-stat-label">ปั๊มโดส</div><div class="water-stat-value">เฉพาะ Pump A / B</div></div>
                         <div class="water-stat"><div class="water-stat-label">ไฟ</div><div class="water-stat-value">รีเลย์ เปิด / ปิด</div></div>
@@ -609,7 +634,7 @@
                     <div class="section-title"><i class="fas fa-water"></i> ทดสอบระบบน้ำ</div>
                     <button class="test-btn" onclick="refreshWaterConfig()"><i class="fas fa-arrows-rotate"></i> รีเฟรชค่าน้ำ</button>
                 </div>
-                <div class="section-note">ส่วนนี้ใช้ logic เดียวกับหน้า settings: ปรับ config แล้วส่งไป ESP32, ดู state สด, และสั่งเติมน้ำด้วยมือหรือล้าง alarm ได้ตรงจากหน้า test</div>
+                <div class="section-note">ส่วนนี้ใช้ logic เดียวกับหน้า settings: ปรับ config แล้วส่งไป ESP32, ดู state สด, และสั่งเติมน้ำด้วยมือหรือล้าง alarm ได้ตรงจากหน้า test โดย workflow ปัจจุบันคือดู sensor input ก่อน แล้วค่อยไล่ route/state machine ตามลำดับ</div>
 
                 <div class="water-status-grid">
                     <div class="water-stat"><div class="water-stat-label">สถานะ</div><div class="water-stat-value" id="waterState">ไม่ทราบ</div></div>
@@ -624,9 +649,9 @@
                     <div class="water-stat"><div class="water-stat-label">ถังผสมกำลังนิ่งค่า</div><div class="water-stat-value" id="waterSettling">ไม่ทราบ</div></div>
                     <div class="water-stat"><div class="water-stat-label">โซนควบคุมหลัก</div><div class="water-stat-value" id="waterMixZone">ไม่ทราบ</div></div>
                     <div class="water-stat"><div class="water-stat-label">เวลารอค่าน้ำนิ่ง</div><div class="water-stat-value" id="waterDilutionHold">-</div></div>
-                    <div class="water-stat"><div class="water-stat-label">ระดับต่ำถังผสม</div><div class="water-stat-value" id="waterLow">ไม่ทราบ</div></div>
-                    <div class="water-stat"><div class="water-stat-label">ระดับสูงถังผสม</div><div class="water-stat-value" id="waterHigh">ไม่ทราบ</div></div>
-                    <div class="water-stat"><div class="water-stat-label">ล้นตู้ปลา</div><div class="water-stat-value" id="waterOverflow">ไม่ทราบ</div></div>
+                    <div class="water-stat"><div class="water-stat-label">SUMP_LEVEL_LOW</div><div class="water-stat-value" id="waterLow">ไม่ทราบ</div><div class="sensor-detail">Active LOW: `LOW` = ระดับต่ำ trigger</div></div>
+                    <div class="water-stat"><div class="water-stat-label">SUMP_LEVEL_HIGH</div><div class="water-stat-value" id="waterHigh">ไม่ทราบ</div><div class="sensor-detail">Active LOW: `LOW` = ระดับสูง trigger</div></div>
+                    <div class="water-stat"><div class="water-stat-label">FISH_TANK_OVERFLOW</div><div class="water-stat-value" id="waterOverflow">ไม่ทราบ</div><div class="sensor-detail">Active LOW: `LOW` = overflow trigger</div></div>
                     <div class="water-stat"><div class="water-stat-label">วาล์วสลับทางเติม</div><div class="water-stat-value" id="waterValve">ไม่ทราบ</div></div>
                     <div class="water-stat wide"><div class="water-stat-label">เหตุผล</div><div class="water-stat-value" id="waterReason">กำลังรอสถานะระบบน้ำ</div></div>
                 </div>
@@ -813,6 +838,16 @@
             return value ? 'ใช่' : 'ไม่';
         }
 
+        function formatActiveLowSensor(triggered, hasSensor = null) {
+            if (hasSensor === null || typeof hasSensor === 'undefined') {
+                return 'รอสถานะจาก ESP';
+            }
+            if (hasSensor === false) {
+                return 'ไม่ได้ติดตั้ง';
+            }
+            return triggered ? 'LOW (trigger)' : 'HIGH';
+        }
+
         function formatWaterState(value) {
             const labels = {
                 IDLE: 'พร้อมทำงาน',
@@ -888,6 +923,14 @@
             return response.json();
         }
 
+        async function fetchWaterStatus() {
+            const response = await fetch('/api/water_system/status', { cache: 'no-store' });
+            if (!response.ok) {
+                throw new Error(`โหลดสถานะระบบน้ำไม่สำเร็จ (HTTP ${response.status})`);
+            }
+            return response.json();
+        }
+
         function applyWaterConfigFromSettings(settings) {
             const ws = settings.water_system || {};
             waterConfig = {
@@ -914,9 +957,15 @@
         function getLiveWaterState() {
             return {
                 state: liveSensors.water_state,
+                status_seen: liveSensors.water_status_seen,
                 active_route: liveSensors.active_route,
+                preferred_route: liveSensors.preferred_route,
+                allow_direct_sump_refill: liveSensors.allow_direct_sump_refill,
+                manual_refill: liveSensors.manual_refill,
                 water_alarm: liveSensors.water_alarm,
                 route_blocked: liveSensors.route_blocked,
+                route_valve_output: liveSensors.route_valve_output,
+                has_route_valve: liveSensors.has_route_valve,
                 circ_running: liveSensors.circ_running,
                 refill_running: liveSensors.refill_running,
                 fish_tank_refill_output: liveSensors.fish_tank_refill_output,
@@ -929,11 +978,10 @@
                 fish_refill_wait_remaining_ms: liveSensors.fish_refill_wait_remaining_ms,
                 sump_low: liveSensors.sump_low,
                 sump_high: liveSensors.sump_high,
+                has_level_sensors: liveSensors.has_level_sensors,
                 fish_overflow: liveSensors.fish_overflow,
+                has_overflow_sensor: liveSensors.has_overflow_sensor,
                 reason: liveSensors.water_reason,
-                preferred_route: liveSensors.preferred_route,
-                allow_direct_sump_refill: liveSensors.allow_direct_sump_refill,
-                manual_refill: liveSensors.manual_refill
             };
         }
 
@@ -947,6 +995,17 @@
             } catch (error) {
                 if (!silent) {
                     addLog(`❌ โหลดสถานะระบบน้ำไม่สำเร็จ: ${error.message}`);
+                }
+            }
+        }
+
+        async function refreshWaterStatus(silent = true) {
+            try {
+                const status = await fetchWaterStatus();
+                handleWaterStatusUpdate(status);
+            } catch (error) {
+                if (!silent) {
+                    addLog(`❌ โหลดสถานะสดระบบน้ำไม่สำเร็จ: ${error.message}`);
                 }
             }
         }
@@ -967,24 +1026,27 @@
             const liveWater = getLiveWaterState();
             const status = { ...waterConfig, ...waterStatus };
 
-            const stateText = formatWaterState(liveWater.state || status.state || 'UNKNOWN');
-            const activeRoute = formatWaterRoute(liveWater.active_route || status.active_route || 'NONE');
-            const preferredRoute = formatWaterRoute(liveWater.preferred_route || status.preferred_route || waterConfig.preferred_route || 'AUTO');
-            const directFallback = liveWater.allow_direct_sump_refill ?? status.allow_direct_sump_refill ?? waterConfig.allow_direct_sump_refill;
-            const alarmActive = liveWater.water_alarm ?? status.alarm_active;
-            const routeBlocked = liveWater.route_blocked ?? status.route_blocked;
-            const circOutput = liveWater.circ_running ?? status.circulation_output ?? status.circulation_pump_output;
-            const refillOutput = liveWater.refill_running ?? status.refill_output;
-            const fishTankRefill = liveWater.fish_tank_refill_output ?? status.fish_tank_refill_output;
-            const mixTankRefill = liveWater.mix_tank_refill_output ?? status.mix_tank_refill_output;
-            const waterDilution = liveWater.water_dilution_active ?? status.water_dilution_active;
-            const mixTankSettling = liveWater.mix_tank_settling_active ?? status.mix_tank_settling_active;
-            const mixTankControlZone = liveWater.mix_tank_control_zone ?? status.mix_tank_control_zone ?? true;
-            const dilutionHold = liveWater.dilution_hold_remaining_ms ?? status.dilution_hold_remaining_ms ?? 0;
-            const sumpLow = liveWater.sump_low ?? status.sump_low;
-            const sumpHigh = liveWater.sump_high ?? status.sump_high;
-            const overflowAlarm = liveWater.fish_overflow ?? status.overflow_alarm;
-            const reasonText = liveWater.reason || status.reason || 'กำลังรอสถานะระบบน้ำ';
+            const stateText = formatWaterState(status.state || liveWater.state || 'UNKNOWN');
+            const activeRoute = formatWaterRoute(status.active_route || liveWater.active_route || 'NONE');
+            const preferredRoute = formatWaterRoute(status.preferred_route || liveWater.preferred_route || waterConfig.preferred_route || 'AUTO');
+            const directFallback = status.allow_direct_sump_refill ?? liveWater.allow_direct_sump_refill ?? waterConfig.allow_direct_sump_refill;
+            const alarmActive = status.alarm_active ?? liveWater.water_alarm;
+            const routeBlocked = status.route_blocked ?? liveWater.route_blocked;
+            const circOutput = status.circulation_output ?? status.circulation_pump_output ?? liveWater.circ_running;
+            const refillOutput = status.refill_output ?? liveWater.refill_running;
+            const fishTankRefill = status.fish_tank_refill_output ?? liveWater.fish_tank_refill_output;
+            const mixTankRefill = status.mix_tank_refill_output ?? liveWater.mix_tank_refill_output;
+            const waterDilution = status.water_dilution_active ?? liveWater.water_dilution_active;
+            const mixTankSettling = status.mix_tank_settling_active ?? liveWater.mix_tank_settling_active;
+            const mixTankControlZone = status.mix_tank_control_zone ?? liveWater.mix_tank_control_zone ?? true;
+            const dilutionHold = status.dilution_hold_remaining_ms ?? liveWater.dilution_hold_remaining_ms ?? 0;
+            const sumpLow = status.sump_low ?? liveWater.sump_low;
+            const sumpHigh = status.sump_high ?? liveWater.sump_high;
+            const overflowAlarm = status.overflow_alarm ?? liveWater.fish_overflow;
+            const waterStatusSeen = status.status_seen ?? liveWater.status_seen ?? false;
+            const hasLevelSensors = status.has_level_sensors ?? liveWater.has_level_sensors ?? (waterStatusSeen ? true : null);
+            const hasOverflowSensor = status.has_overflow_sensor ?? liveWater.has_overflow_sensor ?? null;
+            const reasonText = status.reason || liveWater.reason || 'กำลังรอสถานะระบบน้ำ';
 
             document.getElementById('waterState').textContent = stateText;
             document.getElementById('waterRoute').textContent = activeRoute;
@@ -998,10 +1060,12 @@
             document.getElementById('waterSettling').textContent = formatBool(Boolean(mixTankSettling));
             document.getElementById('waterMixZone').textContent = formatBool(Boolean(mixTankControlZone));
             document.getElementById('waterDilutionHold').textContent = formatHoldMs(dilutionHold);
-            document.getElementById('waterLow').textContent = formatBool(Boolean(sumpLow));
-            document.getElementById('waterHigh').textContent = formatBool(Boolean(sumpHigh));
-            document.getElementById('waterOverflow').textContent = formatBool(Boolean(overflowAlarm));
-            document.getElementById('waterValve').textContent = status.has_route_valve ? (status.route_valve_output ? 'เข้าถังผสมตรง' : 'ผ่านตู้ปลา') : 'ไม่มีวาล์ว';
+            document.getElementById('waterLow').textContent = formatActiveLowSensor(Boolean(sumpLow), hasLevelSensors);
+            document.getElementById('waterHigh').textContent = formatActiveLowSensor(Boolean(sumpHigh), hasLevelSensors);
+            document.getElementById('waterOverflow').textContent = formatActiveLowSensor(Boolean(overflowAlarm), hasOverflowSensor);
+            document.getElementById('waterValve').textContent = (status.has_route_valve ?? liveWater.has_route_valve)
+                ? ((status.route_valve_output ?? liveWater.route_valve_output) ? 'เข้าถังผสมตรง' : 'ผ่านตู้ปลา')
+                : 'ไม่มีวาล์ว';
             document.getElementById('waterReason').textContent = reasonText;
 
             document.getElementById('sumWaterState').textContent = stateText;
@@ -1283,6 +1347,15 @@
             renderWaterStatus();
         }
 
+        function handleWaterStatusUpdate(data) {
+            if (!data || typeof data !== 'object') {
+                return;
+            }
+
+            waterStatus = { ...waterStatus, ...data };
+            renderWaterStatus();
+        }
+
         function handleHwTestResult(data) {
             const cmd = data.cmd;
             const status = data.status;
@@ -1370,6 +1443,10 @@
             updateLiveSummary(data.sensors || {});
         });
 
+        socket.on('water_status_update', (data) => {
+            handleWaterStatusUpdate(data);
+        });
+
         socket.on('hwtest_result', (data) => {
             handleHwTestResult(data);
         });
@@ -1379,7 +1456,9 @@
         initializePumpTestUi();
         setPumpButtonsDisabled(false);
         refreshWaterConfig(true);
+        refreshWaterStatus(true);
         window.setInterval(() => refreshWaterConfig(true), 10000);
+        window.setInterval(() => refreshWaterStatus(true), 2000);
     </script>
 </body>
 </html>

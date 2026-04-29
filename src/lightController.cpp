@@ -394,6 +394,53 @@ void lightCtrlSetOffTime(const char* offTime) {
     }
 }
 
+void lightCtrlSetConfig(CommandSource source,
+                        bool enabled,
+                        bool manualState,
+                        int onDay,
+                        const char* onTime,
+                        int offDay,
+                        const char* offTime) {
+    int parsedOnHour = _onHour;
+    int parsedOnMinute = _onMinute;
+    int parsedOffHour = _offHour;
+    int parsedOffMinute = _offMinute;
+
+    if (onTime != NULL && strlen(onTime) >= 4) {
+        if (!_parseTime(onTime, &parsedOnHour, &parsedOnMinute)) {
+            LOG_WARN("Ignoring invalid light ON time: %s", onTime);
+            parsedOnHour = _onHour;
+            parsedOnMinute = _onMinute;
+        }
+    }
+
+    if (offTime != NULL && strlen(offTime) >= 4) {
+        if (!_parseTime(offTime, &parsedOffHour, &parsedOffMinute)) {
+            LOG_WARN("Ignoring invalid light OFF time: %s", offTime);
+            parsedOffHour = _offHour;
+            parsedOffMinute = _offMinute;
+        }
+    }
+
+    _commandSource = source;
+    _lightEnabled = enabled;
+    _manualState = manualState;
+    _onDay = onDay;
+    _offDay = offDay;
+    _onHour = parsedOnHour;
+    _onMinute = parsedOnMinute;
+    _offHour = parsedOffHour;
+    _offMinute = parsedOffMinute;
+    _sanitizeSchedule();
+
+    if (!_lightEnabled) {
+        lightCtrlSetState(_manualState);
+    }
+
+    _saveSchedule();
+    _setReason(source == COMMAND_SOURCE_NETPIE ? "Control source set to NETPIE" : "Control source set to Local Web");
+}
+
 void lightCtrlPrintSchedule(void) {
     static const char* dayNames[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Everyday"};
     LOG_INFO("=== Current Light Schedule ===");

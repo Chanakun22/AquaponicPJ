@@ -40,6 +40,11 @@ void fishFeederSetCommandSource(CommandSource source);
 CommandSource fishFeederGetCommandSource(void);
 bool fishFeederAllowsNetpieControl(void);
 bool fishFeederAllowsLocalControl(void);
+void fishFeederSetConfig(CommandSource source,
+    bool enabled,
+    int feedDay,
+    const char* feedTime,
+    unsigned long durationMs);
 void fishFeederSetEnabled(bool enabled);
 void fishFeederSetFeedDay(int day);
 void fishFeederSetFeedTime(const char* timeStr);
