@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>👥 User Management - Smart Aquaponics</title>
+    <title>👥 จัดการผู้ใช้ - ระบบอควาโปนิกส์อัจฉริยะ</title>
     <link rel="manifest" href="/pwa/manifest.json">
     <meta name="theme-color" content="#00f2aa">
     <link href="/static/fonts/fonts.css" rel="stylesheet">
@@ -185,8 +185,8 @@
             <div class="brand">
                 <i class="fas fa-users-cog"></i>
                 <div>
-                    <h1>User Management</h1>
-                    <div class="subtitle">Manage Dashboard Users</div>
+                    <h1>จัดการผู้ใช้</h1>
+                    <div class="subtitle">จัดการบัญชีผู้ใช้ของหน้า Dashboard</div>
                 </div>
             </div>
         </div>
@@ -197,18 +197,18 @@
         <h2><i class="fas fa-user-plus"></i> Add New User</h2>
         <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
             <div class="form-group" style="flex:1; min-width:150px; margin-bottom:0;">
-                <label>Username</label>
-                <input type="text" id="newUsername" placeholder="Enter username">
+                <label>ชื่อผู้ใช้</label>
+                <input type="text" id="newUsername" placeholder="กรอกชื่อผู้ใช้">
             </div>
             <div class="form-group" style="flex:1; min-width:150px; margin-bottom:0;">
-                <label>Password</label>
-                <input type="password" id="newPassword" placeholder="Enter password">
+                <label>รหัสผ่าน</label>
+                <input type="password" id="newPassword" placeholder="กรอกรหัสผ่าน">
             </div>
             <div class="form-group" style="min-width:150px; margin-bottom:0;">
-                <label>Role</label>
+                <label>สิทธิ์</label>
                 <select id="newRole">
-                    <option value="user" selected>User</option>
-                    <option value="admin">Admin</option>
+                    <option value="user" selected>ผู้ใช้ทั่วไป</option>
+                    <option value="admin">ผู้ดูแล</option>
                 </select>
             </div>
             <button class="btn btn-success" onclick="addUser()" style="height:42px;">
@@ -222,7 +222,7 @@
         <h2><i class="fas fa-users"></i> Users <span id="userCount" style="font-size:0.8rem; color:var(--text-muted); font-weight:400;"></span></h2>
         <div class="user-list" id="userList">
             <div style="text-align:center; padding:20px; color:var(--text-muted);">
-                <i class="fas fa-spinner fa-spin"></i> Loading...
+                <i class="fas fa-spinner fa-spin"></i> กำลังโหลด...
             </div>
         </div>
     </div>
@@ -235,18 +235,18 @@
             <button class="modal-close" onclick="closeModal()">&times;</button>
             <h3><i class="fas fa-key" style="color:var(--accent);"></i> Change Password</h3>
             <div class="form-group">
-                <label>User: <strong id="modalUser"></strong></label>
+                <label>ผู้ใช้: <strong id="modalUser"></strong></label>
             </div>
             <div class="form-group">
-                <label>New Password</label>
-                <input type="password" id="modalPassword" placeholder="Enter new password">
+                <label>รหัสผ่านใหม่</label>
+                <input type="password" id="modalPassword" placeholder="กรอกรหัสผ่านใหม่">
             </div>
             <div class="form-group">
-                <label>Confirm Password</label>
-                <input type="password" id="modalPasswordConfirm" placeholder="Confirm new password">
+                <label>ยืนยันรหัสผ่าน</label>
+                <input type="password" id="modalPasswordConfirm" placeholder="ยืนยันรหัสผ่านใหม่">
             </div>
             <div class="modal-actions">
-                <button class="btn" onclick="closeModal()">Cancel</button>
+                <button class="btn" onclick="closeModal()">ยกเลิก</button>
                 <button class="btn btn-primary" onclick="changePassword()">
                     <i class="fas fa-save"></i> Save
                 </button>
@@ -258,15 +258,15 @@
     <div class="modal-overlay" id="deleteModal">
         <div class="modal">
             <button class="modal-close" onclick="closeDeleteModal()">&times;</button>
-            <h3><i class="fas fa-exclamation-triangle" style="color:var(--danger);"></i> Delete User</h3>
+            <h3><i class="fas fa-exclamation-triangle" style="color:var(--danger);"></i> ลบผู้ใช้</h3>
             <p style="color:var(--text-muted); margin-bottom:8px;">
-                Are you sure you want to delete user <strong id="deleteUser" style="color:var(--danger);"></strong>?
+                คุณแน่ใจหรือไม่ว่าต้องการลบผู้ใช้ <strong id="deleteUser" style="color:var(--danger);"></strong>?
             </p>
             <p style="color:var(--text-muted); font-size:0.85rem;">This action cannot be undone.</p>
             <div class="modal-actions">
-                <button class="btn" onclick="closeDeleteModal()">Cancel</button>
+                <button class="btn" onclick="closeDeleteModal()">ยกเลิก</button>
                 <button class="btn btn-danger" onclick="confirmDelete()">
-                    <i class="fas fa-trash"></i> Delete
+                    <i class="fas fa-trash"></i> ลบ
                 </button>
             </div>
         </div>
@@ -326,8 +326,8 @@
                     <div class="user-actions">
                         <div class="role-controls">
                             <select class="role-select" aria-label="Select role for ${username}">
-                                <option value="user" ${role === 'user' ? 'selected' : ''}>User</option>
-                                <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option>
+                                <option value="user" ${role === 'user' ? 'selected' : ''}>ผู้ใช้ทั่วไป</option>
+                                <option value="admin" ${role === 'admin' ? 'selected' : ''}>ผู้ดูแล</option>
                             </select>
                             <button class="btn btn-sm btn-primary role-save-btn" data-current-role="${role}">
                                 <i class="fas fa-user-shield"></i> Save Role
@@ -365,7 +365,7 @@
             });
         } catch (err) {
             document.getElementById('userList').innerHTML =
-                '<div style="text-align:center; padding:20px; color:var(--danger);">Error loading users</div>';
+                '<div style="text-align:center; padding:20px; color:var(--danger);">โหลดรายชื่อผู้ใช้ไม่สำเร็จ</div>';
         }
     }
 
@@ -497,11 +497,11 @@
             });
             const data = await resp.json();
             if (data.status === 'ok') {
-                showToast('User deleted');
+                showToast('ลบผู้ใช้แล้ว');
                 closeDeleteModal();
                 loadUsers();
             } else {
-                showToast(data.message || 'Failed to delete', true);
+                showToast(data.message || 'ลบผู้ใช้ไม่สำเร็จ', true);
             }
         } catch (err) {
             showToast('Connection error', true);

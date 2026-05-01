@@ -2,7 +2,7 @@
 
 **ระบบตรวจสอบคุณภาพน้ำอัจฉริยะสำหรับฟาร์มอควาโปนิกส์**
 
-> Firmware v2.3.0 · ESP32-S3-DevKitC-1 · Raspberry Pi Zero 2 W · PlatformIO + Arduino Framework
+> Firmware v2.3.0 · ESP32-S3-DevKitC-1-N16R8 · Raspberry Pi Zero 2 W · PlatformIO + Arduino Framework
 
 ---
 
@@ -123,7 +123,7 @@ Pi ทำหน้าที่เป็น **Access Point (AP)** ชื่อ `A
 
 ### บอร์ด
 
-- **ESP32-S3-DevKitC-1** (16MB Flash, PSRAM)
+- **ESP32-S3-DevKitC-1-N16R8** (16MB QIO Flash, 8MB OPI PSRAM)
 - **Raspberry Pi Zero 2 W** (Server + AP + Camera)
 
 ### การต่อสาย (Pin Configuration)
@@ -146,10 +146,14 @@ Pi ทำหน้าที่เป็น **Access Point (AP)** ชื่อ `A
 ### ข้อกำหนดเบื้องต้น
 
 - [PlatformIO](https://platformio.org/) (แนะนำ VS Code Extension)
-- ESP32-S3-DevKitC-1
+- ESP32-S3-DevKitC-1-N16R8
 - Raspberry Pi Zero 2 W (สำหรับ Dashboard)
 
 ### ESP32 Firmware
+
+> โปรเจกต์นี้ใช้ custom PlatformIO board manifest ที่ [boards/esp32-s3-devkitc-1-n16r8.json](boards/esp32-s3-devkitc-1-n16r8.json) เพื่อให้ค่าของ 16MB flash และ 8MB OPI PSRAM ตรงกับบอร์ดจริง
+>
+> OTA ใช้ `default_16MB.csv` ซึ่งแบ่ง app slot ไว้ประมาณ 6.25MB ต่อ slot เพียงพอกับขนาด firmware ปัจจุบันที่ build ได้ราว 0.94MB
 
 1. **Clone โปรเจค**
 
@@ -385,7 +389,7 @@ Dashboard รองรับทั้ง Desktop และ Mobile ผ่าน W
 
 | Component        | Technology                  | Version                       |
 | ---------------- | --------------------------- | ----------------------------- |
-| **MCU**          | ESP32-S3-DevKitC-1          | 240MHz, 320KB RAM, 16MB Flash |
+| **MCU**          | ESP32-S3-DevKitC-1-N16R8    | 240MHz, 320KB RAM, 16MB Flash, 8MB OPI PSRAM |
 | **Platform**     | Espressif 32                | 6.4.0                         |
 | **Framework**    | Arduino Core for ESP32      | 2.0.11                        |
 | **RTOS**         | FreeRTOS                    | (built-in)                    |

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>📋 System Logs - Aquaponics</title>
+    <title>📋 บันทึกระบบ - ระบบอควาโปนิกส์อัจฉริยะ</title>
     <link href="/static/fonts/fonts.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/fa/css/all.min.css">
     <link href="/base.css" rel="stylesheet">
@@ -250,8 +250,8 @@
                 <div class="brand">
                     <i class="fas fa-scroll"></i>
                     <div>
-                        <h1>System Logs</h1>
-                        <div class="subtitle">Filter, inspect, and maintain runtime logs</div>
+                        <h1>บันทึกระบบ</h1>
+                        <div class="subtitle">กรอง ตรวจดู และติดตามบันทึกขณะทำงาน</div>
                     </div>
                 </div>
             </div>
@@ -269,12 +269,12 @@
                 <label><i class="fas fa-calendar-alt" style="margin-right:4px;"></i> Date</label>
                 <div style="display:flex;gap:4px;align-items:center;">
                     <input type="date" id="filterDate" title="Click to pick a date">
-                    <button onclick="document.getElementById('filterDate').value='';applyFilters();" class="btn-clear" title="Show all dates">✕ All</button>
+                    <button onclick="document.getElementById('filterDate').value='';applyFilters();" class="btn-clear" title="แสดงทุกวัน">✕ ทั้งหมด</button>
                 </div>
             </div>
 
             <div class="toolbar-group">
-                <label>Type</label>
+                <label>ประเภท</label>
                 <div class="pills">
                     <span class="pill active" data-t="all" onclick="setType(this)">ALL</span>
                     <span class="pill" data-t="info" onclick="setType(this)">INFO</span>
@@ -285,8 +285,8 @@
             </div>
 
             <div class="toolbar-group">
-                <label>Search</label>
-                <input type="text" id="filterSearch" placeholder="Search logs..." oninput="applyFilters()">
+                <label>ค้นหา</label>
+                <input type="text" id="filterSearch" placeholder="ค้นหาในบันทึก..." oninput="applyFilters()">
             </div>
 
             <div class="stats">
@@ -299,7 +299,7 @@
             <div class="notice-copy">
                 <i class="fas fa-info-circle"></i>
                 <div>
-                    <strong id="logsNoticeTitle">Logs will update here</strong>
+                    <strong id="logsNoticeTitle">บันทึกจะอัปเดตที่นี่</strong>
                     <div id="logsNoticeDetail">The latest fetch status and destructive action results will appear here.</div>
                 </div>
             </div>
@@ -532,9 +532,9 @@
             detailText = 'Try clearing the date, search text, or log type filter to show more entries.';
         } else if (type === 'error') {
             icon = 'fas fa-exclamation-triangle';
-            text = 'Could not load logs';
-            detailText = details || 'Unknown error';
-            actionHtml = '<button class="btn" onclick="fetchLogs()"><i class="fas fa-sync-alt"></i> Try Again</button>';
+            text = 'ไม่สามารถโหลดบันทึกได้';
+            detailText = details || 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ';
+            actionHtml = '<button class="btn" onclick="fetchLogs()"><i class="fas fa-sync-alt"></i> ลองอีกครั้ง</button>';
         }
 
         scroll.innerHTML = '<div class="state-box"><i class="' + icon + '"></i><p>' + text + '</p><div class="state-detail">' + escapeHtml(detailText) + '</div>' + actionHtml + '</div>';

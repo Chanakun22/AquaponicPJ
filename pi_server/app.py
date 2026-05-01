@@ -1036,22 +1036,46 @@ def normalize_history_value(sensor_key, value):
 
 # === Start MQTT in Background Thread ===
 mqtt_client = None  # Global reference for publishing
+MQTT_RETRY_DELAY_SEC = 5
+
+
+def on_disconnect(client, userdata, rc):
+    if rc != 0:
+        message = f"MQTT disconnected unexpectedly (rc={rc}); waiting for reconnect"
+        print(f"⚠️ {message}")
+        save_log(message)
 
 
 
 def start_mqtt():
     global mqtt_client
-    mqtt_client = mqtt.Client()
-    mqtt_client.on_connect = on_connect
-    mqtt_client.on_message = on_message
-    
-    try:
-        # "localhost" เพราะ Mosquitto อยู่เครื่องเดียวกับ app.py
-        mqtt_client.connect("localhost", 1883, 60)
-        mqtt_client.loop_forever()
-    except Exception as e:
-        print(f"❌ Could not connect to MQTT Broker: {e}")
-        save_log(f"MQTT Error: {e}")
+    while True:
+        client = mqtt.Client()
+        client.on_connect = on_connect
+        client.on_message = on_message
+        client.on_disconnect = on_disconnect
+        client.reconnect_delay_set(min_delay=1, max_delay=30)
+        mqtt_client = client
+
+        try:
+            # "localhost" เพราะ Mosquitto อยู่เครื่องเดียวกับ app.py
+            print("🔌 Connecting to local MQTT broker...")
+            client.connect("localhost", 1883, 60)
+            client.loop_forever()
+
+            message = "MQTT loop stopped unexpectedly; retrying"
+            print(f"⚠️ {message}")
+            save_log(message)
+        except Exception as e:
+            print(f"❌ Could not connect to MQTT Broker: {e}")
+            save_log(f"MQTT Error: {e}")
+        finally:
+            try:
+                client.disconnect()
+            except Exception:
+                pass
+
+        time.sleep(MQTT_RETRY_DELAY_SEC)
 
 # === Auth Routes (Public) ===
 @app.route('/login')
@@ -1936,6 +1960,11 @@ def get_full_logs_file():
             return f.read()
     except:
         return "No logs found."
+
+@app.route('/api/dashboard_snapshot')
+@login_required
+def get_dashboard_snapshot():
+    return jsonify(build_dashboard_data())
 
 @app.route('/api/clear_logs', methods=['POST'])
 @admin_required

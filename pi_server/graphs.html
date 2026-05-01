@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aquaponics - Historical Graphs</title>
+    <title>กราฟย้อนหลัง - ระบบอควาโปนิกส์อัจฉริยะ</title>
     <!-- Chart.js + Zoom Plugin (local) -->
     <script src="/static/js/chart.umd.min.js"></script>
     <script src="/static/js/hammer.min.js"></script>
@@ -192,8 +192,8 @@
                 <div class="brand">
                     <i class="fas fa-chart-line"></i>
                     <div>
-                        <h1>Historical Graphs</h1>
-                        <div class="subtitle">Sensor Data Over Time</div>
+                        <h1>กราฟย้อนหลัง</h1>
+                        <div class="subtitle">ข้อมูลเซ็นเซอร์ตามช่วงเวลา</div>
                     </div>
                 </div>
             </div>
@@ -209,7 +209,7 @@
                 <div class="state-copy">
                     <i class="fas fa-spinner fa-spin"></i>
                     <div>
-                        <strong id="chartsStateTitle">Loading chart data...</strong>
+                        <strong id="chartsStateTitle">กำลังโหลดข้อมูลกราฟ...</strong>
                         <div class="state-detail" id="chartsStateDetail">Fetching history from the Pi server.</div>
                     </div>
                 </div>
@@ -294,7 +294,7 @@
         async function loadCharts(options = {}) {
             const silent = options.silent === true;
             if (!silent || !chartsHaveData) {
-                setChartsState('loading', 'Loading chart data...', 'Fetching history from the Pi server.', chartsHaveData ? document.getElementById('chartsLastUpdated').textContent : 'Waiting for first successful load');
+                setChartsState('loading', 'กำลังโหลดข้อมูลกราฟ...', 'กำลังดึงประวัติจาก Pi server', chartsHaveData ? document.getElementById('chartsLastUpdated').textContent : 'กำลังรอการโหลดสำเร็จครั้งแรก');
             }
 
             try {

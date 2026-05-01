@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚙️ Settings - Smart Aquaponics</title>
+    <title>⚙️ ตั้งค่าระบบ - ระบบอควาโปนิกส์อัจฉริยะ</title>
 
     <!-- PWA -->
     <link rel="manifest" href="/pwa/manifest.json">
@@ -24,6 +24,111 @@
             -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
         }
         .container { max-width: 1200px; }
+
+        .page-hero {
+            margin: 18px 0 22px;
+            padding: 24px;
+            border-radius: 22px;
+            border: 1px solid rgba(56,189,248,0.18);
+            background:
+                radial-gradient(circle at top right, rgba(56,189,248,0.14), transparent 34%),
+                radial-gradient(circle at bottom left, rgba(16,185,129,0.12), transparent 36%),
+                linear-gradient(180deg, rgba(24,27,33,0.96), rgba(15,17,21,0.98));
+            box-shadow: 0 18px 36px rgba(3,8,20,0.28);
+        }
+
+        .page-hero-copy {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+
+        .page-hero-kicker {
+            font-size: 0.76rem;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--accent);
+        }
+
+        .page-hero h2 {
+            font-size: clamp(1.5rem, 2.4vw, 2.2rem);
+            letter-spacing: -0.04em;
+            color: var(--text-main);
+        }
+
+        .page-hero p {
+            color: var(--text-soft);
+            line-height: 1.7;
+            max-width: 72ch;
+        }
+
+        .hero-meta-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .hero-meta-card {
+            padding: 16px 18px;
+            border-radius: 18px;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.04);
+        }
+
+        .hero-meta-label {
+            font-size: 0.74rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .hero-meta-value {
+            font-size: 1.02rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 6px;
+        }
+
+        .hero-meta-sub {
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            line-height: 1.5;
+        }
+
+        .jump-links {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .jump-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: 999px;
+            text-decoration: none;
+            color: var(--text-main);
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.08);
+            font-size: 0.86rem;
+            font-weight: 600;
+            transition: transform 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+        }
+
+        .jump-link:hover {
+            transform: translateY(-1px);
+            background: rgba(255,255,255,0.08);
+            border-color: rgba(255,255,255,0.16);
+        }
+
+        .settings-section-anchor {
+            scroll-margin-top: 22px;
+        }
 
         /* === Section Titles === */
         .section-title {
@@ -87,13 +192,6 @@
             right: 0;
             height: 3px;
             background: linear-gradient(90deg, var(--primary), var(--secondary));
-            .form-row {
-                flex-wrap: wrap;
-            }
-            .form-row input[type="time"] {
-                flex: 1 1 140px;
-                width: 100%;
-            }
             opacity: 0;
             transition: opacity 0.3s ease;
         }
@@ -427,6 +525,31 @@
             margin-bottom: 0;
         }
 
+        .duration-input-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .duration-input-row input {
+            flex: 1 1 0;
+            min-width: 0;
+        }
+
+        .duration-input-row select {
+            flex: 0 0 110px;
+            width: 110px;
+        }
+
+        .duration-summary {
+            display: block;
+            margin-top: 8px;
+            color: #67e8f9;
+            font-size: 0.76rem;
+            font-weight: 600;
+            line-height: 1.4;
+        }
+
         .water-status-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -694,12 +817,15 @@
             body { padding: 12px; }
             .header-top { flex-direction: column; text-align: center; padding: 16px; gap: 12px; }
             .brand { justify-content: center; }
+            .page-hero { padding: 18px; }
+            .jump-links { justify-content: center; }
             .nav-pills { justify-content: center; }
             .settings-grid { grid-template-columns: 1fr; gap: 14px; }
             .card { padding: 18px; border-radius: 16px; }
             .card h2 { font-size: 0.95rem; }
             .form-row { flex-direction: column; gap: 8px; }
             .form-row input { width: 100%; }
+            .form-row input[type="time"] { flex: 1 1 140px; width: 100%; min-width: 0; }
             .btn { padding: 9px 14px; font-size: 0.85rem; }
             input[type="number"], input[type="text"], input[type="time"], select { font-size: 0.88rem; padding: 9px 12px; }
             .footer-actions { padding: 16px; }
@@ -720,26 +846,59 @@
             <div class="brand">
                 <i class="fas fa-cog"></i>
                 <div>
-                    <h1>Settings</h1>
-                    <div class="subtitle">System Configuration</div>
+                    <h1>ตั้งค่าระบบ</h1>
+                    <div class="subtitle">ระบบอัตโนมัติ • ระบบน้ำ • เซ็นเซอร์</div>
                 </div>
             </div>
         </div>
     </header>
 
+    <section class="page-hero">
+        <div class="page-hero-copy">
+            <div class="page-hero-kicker">คู่มือการตั้งค่า</div>
+            <h2>เริ่มจากสิ่งที่ต้องเปลี่ยนก่อน แล้วค่อยลงลึกทีละหมวด</h2>
+            <p>หน้านี้ถูกจัดใหม่ให้เข้าใจง่ายขึ้น: ด้านบนจะบอกว่าอะไรเป็นการส่งค่าไป ESP32 ทันที, อะไรต้องกดบันทึกรวมด้านล่าง, และมีลิงก์ลัดไปยังหมวดที่ใช้บ่อยที่สุดเพื่อลดการเลื่อนหา</p>
+        </div>
+
+        <div class="hero-meta-grid">
+            <div class="hero-meta-card">
+                <div class="hero-meta-label">ส่งทันที</div>
+                <div class="hero-meta-value">ส่งค่าไป ESP32 ทันที</div>
+                <div class="hero-meta-sub">เหมาะกับระบบอัตโนมัติ, ไฟ, เครื่องให้อาหาร, ระบบน้ำ และพัดลมที่ต้องเห็นผลทันทีหลังปรับ</div>
+            </div>
+            <div class="hero-meta-card">
+                <div class="hero-meta-label">บันทึกทีเดียว</div>
+                <div class="hero-meta-value">บันทึกพร้อมกันที่ปุ่มด้านล่าง</div>
+                <div class="hero-meta-sub">ใช้กับค่าทั่วไปที่ไม่ต้องส่งไปยัง firmware ทันที เช่น ชื่ออุปกรณ์, การแจ้งเตือน และการจัดการเซ็นเซอร์</div>
+            </div>
+            <div class="hero-meta-card">
+                <div class="hero-meta-label">การปรับเทียบ</div>
+                <div class="hero-meta-value">ทำเมื่ออุปกรณ์พร้อมจริง</div>
+                <div class="hero-meta-sub">ถ้าจะคาลิเบรต pH หรือ TDS ให้เตรียมสารมาตรฐานและอ่านคำอธิบายก่อนทุกครั้ง</div>
+            </div>
+        </div>
+
+        <div class="jump-links">
+            <a class="jump-link" href="#general-settings"><i class="fas fa-sliders"></i> ตั้งค่าหลัก</a>
+            <a class="jump-link" href="#water-system-card"><i class="fas fa-water"></i> ระบบน้ำ</a>
+            <a class="jump-link" href="#calibration-settings"><i class="fas fa-compass-drafting"></i> คาลิเบรต</a>
+            <a class="jump-link" href="#health-settings"><i class="fas fa-heart-pulse"></i> สุขภาพระบบ</a>
+        </div>
+    </section>
+
     <!-- General Settings Section -->
-    <div class="section-title">📊 General Settings</div>
-    <div class="section-hint">Cards marked <strong>Apply Now</strong> send changes immediately. Cards marked <strong>Save All</strong> are stored together with the footer button.</div>
+    <div class="section-title settings-section-anchor" id="general-settings">📊 การตั้งค่าทั่วไป</div>
+    <div class="section-hint">การ์ดที่มีป้าย <strong>ส่งทันที</strong> จะส่งค่าไปใช้งานเลย ส่วนการ์ดที่มีป้าย <strong>บันทึกทีเดียว</strong> จะเก็บพร้อมกันจากปุ่มด้านล่าง</div>
 
     <div class="settings-grid">
         <!-- Automation Targets -->
         <div class="card">
-            <h2><i class="fas fa-robot"></i> Automation Targets <span class="card-mode apply-now">Apply Now</span></h2>
-            <div class="card-hint">Applies target values to the ESP32 immediately.</div>
+            <h2><i class="fas fa-robot"></i> เป้าหมายระบบอัตโนมัติ <span class="card-mode apply-now">ส่งทันที</span></h2>
+            <div class="card-hint">ส่งค่าเป้าหมายไปยัง ESP32 ทันที</div>
             
             <div class="form-group">
                 <div class="toggle-container" style="justify-content: space-between; margin-bottom: 20px;">
-                    <span style="font-weight:600; color:var(--text-main)">Enable Auto-Dosing</span>
+                    <span style="font-weight:600; color:var(--text-main)">เปิดการจ่ายสารอัตโนมัติ</span>
                     <label class="toggle">
                         <input type="checkbox" id="auto_enabled">
                         <span class="toggle-slider"></span>
@@ -748,27 +907,27 @@
             </div>
 
             <div class="form-group">
-                <label>Target TDS (ppm)</label>
-                <input type="number" id="auto_tgt_tds" step="10" placeholder="e.g. 800">
-                <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 5px;">Nutrient A/B will dose when TDS falls below this value.</span>
+                <label>ค่า TDS เป้าหมาย (ppm)</label>
+                <input type="number" id="auto_tgt_tds" step="10" placeholder="เช่น 800">
+                <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 5px;">ระบบจะจ่ายสารอาหาร A/B เมื่อค่า TDS ต่ำกว่าค่านี้</span>
             </div>
 
             <div class="form-group">
-                <label>Target pH</label>
-                <input type="number" id="auto_tgt_ph" step="0.1" placeholder="e.g. 6.5">
+                <label>ค่า pH เป้าหมาย</label>
+                <input type="number" id="auto_tgt_ph" step="0.1" placeholder="เช่น 6.5">
             </div>
             
             <button class="btn btn-primary" onclick="saveAutomationConfig()" style="width: 100%; margin-top: 10px;">
-                <i class="fas fa-save"></i> Apply Auto Config
+                <i class="fas fa-save"></i> ส่งค่าระบบอัตโนมัติ
             </button>
         </div>
 
         <div class="card">
-            <h2><i class="fas fa-lightbulb"></i> Light Control <span class="card-mode apply-now">Apply Now</span></h2>
+            <h2><i class="fas fa-lightbulb"></i> ควบคุมไฟ <span class="card-mode apply-now">ส่งทันที</span></h2>
             <div class="card-hint">เลือกว่าจะให้คำสั่งไฟมาจาก NETPIE หรือจากเว็บนี้ แล้วตั้ง schedule/manual ตาม source ที่เลือก</div>
 
             <div class="form-group">
-                <label>Command Source</label>
+                <label>แหล่งคำสั่ง</label>
                 <select id="light_command_source">
                     <option value="netpie">NETPIE</option>
                     <option value="local_web">Local Web</option>
@@ -778,7 +937,7 @@
 
             <div class="form-group">
                 <div class="toggle-container" style="justify-content: space-between; margin-bottom: 20px;">
-                    <span style="font-weight:600; color:var(--text-main)">Enable Schedule</span>
+                    <span style="font-weight:600; color:var(--text-main)">เปิดตารางเวลา</span>
                     <label class="toggle">
                         <input type="checkbox" id="light_enabled">
                         <span class="toggle-slider"></span>
@@ -788,81 +947,81 @@
             </div>
 
             <div class="form-group">
-                <label>Light ON Schedule</label>
+                <label>ตารางเวลาเปิดไฟ</label>
                 <div class="form-row">
                     <select id="light_on_day">
-                        <option value="7">Everyday</option>
-                        <option value="0">Sunday</option>
-                        <option value="1">Monday</option>
-                        <option value="2">Tuesday</option>
-                        <option value="3">Wednesday</option>
-                        <option value="4">Thursday</option>
-                        <option value="5">Friday</option>
-                        <option value="6">Saturday</option>
+                        <option value="7">ทุกวัน</option>
+                        <option value="0">อาทิตย์</option>
+                        <option value="1">จันทร์</option>
+                        <option value="2">อังคาร</option>
+                        <option value="3">พุธ</option>
+                        <option value="4">พฤหัสบดี</option>
+                        <option value="5">ศุกร์</option>
+                        <option value="6">เสาร์</option>
                     </select>
                     <input type="time" id="light_on_time">
                 </div>
             </div>
 
             <div class="form-group">
-                <label>Light OFF Schedule</label>
+                <label>ตารางเวลาปิดไฟ</label>
                 <div class="form-row">
                     <select id="light_off_day">
-                        <option value="7">Everyday</option>
-                        <option value="0">Sunday</option>
-                        <option value="1">Monday</option>
-                        <option value="2">Tuesday</option>
-                        <option value="3">Wednesday</option>
-                        <option value="4">Thursday</option>
-                        <option value="5">Friday</option>
-                        <option value="6">Saturday</option>
+                        <option value="7">ทุกวัน</option>
+                        <option value="0">อาทิตย์</option>
+                        <option value="1">จันทร์</option>
+                        <option value="2">อังคาร</option>
+                        <option value="3">พุธ</option>
+                        <option value="4">พฤหัสบดี</option>
+                        <option value="5">ศุกร์</option>
+                        <option value="6">เสาร์</option>
                     </select>
                     <input type="time" id="light_off_time">
                 </div>
             </div>
 
             <button class="btn btn-primary" id="light_apply_btn" onclick="saveLightConfig()" style="width: 100%; margin-top: 10px;">
-                <i class="fas fa-save"></i> Apply Light Config
+                <i class="fas fa-save"></i> ส่งค่าควบคุมไฟ
             </button>
             <div class="action-feedback" id="light_feedback">
                 <i class="fas fa-info-circle"></i>
                 <div>
-                    <strong>Ready to apply</strong>
-                    Changes in this card will be sent to ESP32 when you press Apply Light Config.
+                    <strong>พร้อมส่งค่า</strong>
+                    ค่าจากการ์ดนี้จะถูกส่งไปยัง ESP32 เมื่อกดปุ่มส่งค่าควบคุมไฟ
                 </div>
             </div>
 
             <details class="advanced-panel" id="light_advanced_panel">
                 <summary>
-                    <span>Advanced Controls &amp; Status</span>
-                    <span class="advanced-hint" id="light_advanced_hint">Manual controls and runtime status</span>
+                    <span>สถานะและคำสั่งเพิ่มเติม</span>
+                    <span class="advanced-hint" id="light_advanced_hint">สถานะปัจจุบันและคำสั่งแบบกำหนดเอง</span>
                 </summary>
                 <div class="advanced-body">
                     <div class="status-block">
-                        Running: <strong id="light_running_text">NO</strong><br>
-                        NTP Synced: <strong id="light_ntp_text">NO</strong><br>
-                        Reason: <span id="light_reason_text">-</span>
+                        กำลังทำงาน: <strong id="light_running_text">ไม่</strong><br>
+                        NTP พร้อม: <strong id="light_ntp_text">ไม่พร้อม</strong><br>
+                        เหตุผล: <span id="light_reason_text">-</span>
                     </div>
 
                     <div class="action-row" style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
                         <button class="btn" id="light_manual_on_btn" onclick="setLightManual(true)" style="flex:1; min-width:140px;">
-                            <i class="fas fa-sun"></i> Manual ON
+                            <i class="fas fa-sun"></i> เปิดไฟเอง
                         </button>
                         <button class="btn" id="light_manual_off_btn" onclick="setLightManual(false)" style="flex:1; min-width:140px;">
-                            <i class="fas fa-moon"></i> Manual OFF
+                            <i class="fas fa-moon"></i> ปิดไฟเอง
                         </button>
                     </div>
-                    <span class="action-status" id="light_action_status">Manual ON/OFF จะพร้อมใช้เมื่อเลือก Light Command Source เป็น Local Web</span>
+                    <span class="action-status" id="light_action_status">ปุ่มเปิดหรือปิดไฟเองจะพร้อมใช้เมื่อเลือกแหล่งคำสั่งไฟเป็น Local Web</span>
                 </div>
             </details>
         </div>
 
         <div class="card">
-            <h2><i class="fas fa-fish"></i> Fish Feeder <span class="card-mode apply-now">Apply Now</span></h2>
-            <div class="card-hint">ตั้ง schedule ให้อาหารปลา หรือเลือกให้ NETPIE เป็นคนคุม ถ้าจะกด Feed Now จากเว็บต้องใช้ source เป็น Local Web</div>
+            <h2><i class="fas fa-fish"></i> เครื่องให้อาหารปลา <span class="card-mode apply-now">ส่งทันที</span></h2>
+            <div class="card-hint">ตั้งเวลาการให้อาหารปลา หรือเลือกให้ NETPIE เป็นคนคุม ถ้าจะกดให้อาหารทันทีจากเว็บต้องใช้แหล่งคำสั่งเป็น Local Web</div>
 
             <div class="form-group">
-                <label>Command Source</label>
+                <label>แหล่งคำสั่ง</label>
                 <select id="feeder_command_source">
                     <option value="local_web">Local Web</option>
                     <option value="netpie">NETPIE</option>
@@ -871,7 +1030,7 @@
 
             <div class="form-group">
                 <div class="toggle-container" style="justify-content: space-between; margin-bottom: 20px;">
-                    <span style="font-weight:600; color:var(--text-main)">Enable Feed Schedule</span>
+                    <span style="font-weight:600; color:var(--text-main)">เปิดตารางเวลาให้อาหาร</span>
                     <label class="toggle">
                         <input type="checkbox" id="feeder_enabled">
                         <span class="toggle-slider"></span>
@@ -880,64 +1039,64 @@
             </div>
 
             <div class="form-group">
-                <label>Feed Schedule</label>
+                <label>ตารางเวลาให้อาหาร</label>
                 <div class="form-row">
                     <select id="feeder_day">
-                        <option value="7">Everyday</option>
-                        <option value="0">Sunday</option>
-                        <option value="1">Monday</option>
-                        <option value="2">Tuesday</option>
-                        <option value="3">Wednesday</option>
-                        <option value="4">Thursday</option>
-                        <option value="5">Friday</option>
-                        <option value="6">Saturday</option>
+                        <option value="7">ทุกวัน</option>
+                        <option value="0">อาทิตย์</option>
+                        <option value="1">จันทร์</option>
+                        <option value="2">อังคาร</option>
+                        <option value="3">พุธ</option>
+                        <option value="4">พฤหัสบดี</option>
+                        <option value="5">ศุกร์</option>
+                        <option value="6">เสาร์</option>
                     </select>
                     <input type="time" id="feeder_time">
                 </div>
             </div>
 
             <div class="form-group">
-                <label>Feed Duration (ms)</label>
-                <input type="number" id="feeder_duration_ms" step="100" min="250" max="10000" placeholder="e.g. 2000">
+                <label>ระยะเวลาให้อาหาร (ms)</label>
+                <input type="number" id="feeder_duration_ms" step="100" min="250" max="10000" placeholder="เช่น 2000">
                 <span class="field-tip">เวลาที่จะเปิด output ของ feeder ต่อครั้ง ใช้ให้ตรงกับอุปกรณ์จริงเพื่อลดการให้อาหารเกิน</span>
             </div>
 
             <button class="btn btn-primary" id="feeder_apply_btn" onclick="saveFishFeederConfig()" style="width: 100%; margin-top: 10px;">
-                <i class="fas fa-save"></i> Apply Feeder Config
+                <i class="fas fa-save"></i> ส่งค่าเครื่องให้อาหาร
             </button>
             <div class="action-feedback" id="feeder_feedback">
                 <i class="fas fa-info-circle"></i>
                 <div>
-                    <strong>Ready to apply</strong>
-                    Schedule and duration changes will be sent to ESP32 when you press Apply Feeder Config.
+                    <strong>พร้อมส่งค่า</strong>
+                    ตารางเวลาและระยะเวลาทำงานจะถูกส่งไปยัง ESP32 เมื่อกดปุ่มส่งค่าเครื่องให้อาหาร
                 </div>
             </div>
 
             <details class="advanced-panel" id="feeder_advanced_panel">
                 <summary>
-                    <span>Advanced Controls &amp; Status</span>
-                    <span class="advanced-hint" id="feeder_advanced_hint">Manual actions and runtime status</span>
+                    <span>สถานะและคำสั่งเพิ่มเติม</span>
+                    <span class="advanced-hint" id="feeder_advanced_hint">สั่งงานทันทีและดูสถานะปัจจุบัน</span>
                 </summary>
                 <div class="advanced-body">
                     <div class="status-block">
-                        State: <strong id="feeder_state_text">UNKNOWN</strong><br>
-                        Running: <strong id="feeder_running_text">NO</strong><br>
-                        Last Feed: <strong id="feeder_last_feed_text">Never</strong><br>
-                        Reason: <span id="feeder_reason_text">-</span>
+                        สถานะ: <strong id="feeder_state_text">ไม่ทราบ</strong><br>
+                        กำลังทำงาน: <strong id="feeder_running_text">ไม่</strong><br>
+                        ให้อาหารล่าสุด: <strong id="feeder_last_feed_text">ยังไม่เคย</strong><br>
+                        เหตุผล: <span id="feeder_reason_text">-</span>
                     </div>
 
                     <div class="action-row" style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
                         <button class="btn" id="feeder_feed_now_btn" onclick="triggerFeedNow()" style="flex:1; min-width:140px;">
-                            <i class="fas fa-bowl-food"></i> Feed Now
+                            <i class="fas fa-bowl-food"></i> ให้อาหารทันที
                         </button>
                     </div>
-                    <span class="action-status" id="feeder_action_status">Feed Now จะพร้อมใช้เมื่อเลือก Fish Feeder Command Source เป็น Local Web</span>
+                    <span class="action-status" id="feeder_action_status">ปุ่มให้อาหารทันทีจะพร้อมใช้เมื่อเลือกแหล่งคำสั่งของเครื่องให้อาหารเป็น Local Web</span>
                 </div>
             </details>
         </div>
 
-        <div class="card">
-            <h2><i class="fas fa-water"></i> Water System <span class="card-mode apply-now">Apply Now</span></h2>
+        <div class="card" id="water-system-card">
+            <h2><i class="fas fa-water"></i> ระบบน้ำ <span class="card-mode apply-now">ส่งทันที</span></h2>
             <div class="card-hint">รวมค่าหลักของระบบน้ำทั้งหมดไว้ในการ์ดเดียว ทั้ง circulation, refill policy, fish-safe refill limit, route fallback, สถานะจริงจาก ESP32 และปุ่มสั่งงานทันที</div>
 
             <div class="form-group">
@@ -963,31 +1122,64 @@
             <div class="water-section-title">Refill Policy</div>
             <div class="water-panel-grid">
                 <div class="form-group">
-                    <label>Max Refill Time (ms)</label>
-                    <input type="number" id="water_refill_max_runtime_ms" step="1000" min="1000" placeholder="e.g. 120000">
+                    <label>เวลาสูงสุดต่อรอบเติม</label>
+                    <div class="duration-input-row">
+                        <input type="number" id="water_refill_max_runtime_value" step="1" min="1" placeholder="เช่น 2">
+                        <select id="water_refill_max_runtime_unit">
+                            <option value="sec">วินาที</option>
+                            <option value="min">นาที</option>
+                            <option value="hour">ชั่วโมง</option>
+                        </select>
+                    </div>
+                    <span class="duration-summary" id="water_refill_max_runtime_summary">เวลาสูงสุดของรอบเติมรวม</span>
                     <span class="field-tip">เวลาสูงสุดของรอบเติมรวม ถ้าเกินค่านี้แล้วยังไม่ถึงระดับที่ควรได้ ระบบจะเข้า alarm</span>
                 </div>
 
                 <div class="form-group">
-                    <label>Mix Refill Min Interval (sec)</label>
-                    <input type="number" id="water_refill_min_interval_sec" step="1" min="0" placeholder="e.g. 300">
+                    <label>ช่วงพักขั้นต่ำก่อนเติมถังผสม</label>
+                    <div class="duration-input-row">
+                        <input type="number" id="water_refill_min_interval_value" step="1" min="0" placeholder="เช่น 5">
+                        <select id="water_refill_min_interval_unit">
+                            <option value="sec">วินาที</option>
+                            <option value="min">นาที</option>
+                            <option value="hour">ชั่วโมง</option>
+                        </select>
+                    </div>
+                    <span class="duration-summary" id="water_refill_min_interval_summary">ช่วงพักขั้นต่ำหลังเติมถังผสม</span>
                     <span class="field-tip">ช่วงพักขั้นต่ำหลังเติมถังผสมจบรอบ เพื่อกันการเติมถี่เกินไป</span>
                 </div>
 
                 <div class="form-group">
-                    <label>Fish Refill Max Time (sec)</label>
-                    <input type="number" id="water_fish_refill_max_runtime_sec" step="1" min="1" placeholder="e.g. 10">
+                    <label>เวลาสูงสุดต่อรอบเติมผ่านตู้ปลา</label>
+                    <div class="duration-input-row">
+                        <input type="number" id="water_fish_refill_max_runtime_value" step="1" min="1" placeholder="เช่น 30">
+                        <select id="water_fish_refill_max_runtime_unit">
+                            <option value="sec">วินาที</option>
+                            <option value="min">นาที</option>
+                            <option value="hour">ชั่วโมง</option>
+                        </select>
+                    </div>
+                    <span class="duration-summary" id="water_fish_refill_max_runtime_summary">จำกัดเวลาปั๊มเติมผ่านตู้ปลาในแต่ละรอบ</span>
                     <span class="field-tip">จำกัดเวลาปั๊มเติมผ่านตู้ปลาในแต่ละรอบ เพื่อไม่ให้น้ำ overflow ไหลลงถังผสมมากเกินไป</span>
                 </div>
 
                 <div class="form-group">
-                    <label>Fish Refill Cooldown (sec)</label>
-                    <input type="number" id="water_fish_refill_interval_sec" step="1" min="0" placeholder="e.g. 600">
+                    <label>ช่วงพักหลังเติมผ่านตู้ปลา</label>
+                    <div class="duration-input-row">
+                        <input type="number" id="water_fish_refill_interval_value" step="1" min="0" placeholder="เช่น 7">
+                        <select id="water_fish_refill_interval_unit">
+                            <option value="min">นาที</option>
+                            <option value="hour">ชั่วโมง</option>
+                            <option value="day">วัน</option>
+                            <option value="sec">วินาที</option>
+                        </select>
+                    </div>
+                    <span class="duration-summary" id="water_fish_refill_interval_summary">ช่วงพักก่อนอนุญาต route ผ่านตู้ปลาอีกครั้ง</span>
                     <span class="field-tip">ช่วงพักก่อนอนุญาตให้ใช้ route ผ่านตู้ปลาได้อีกครั้ง หลังหยุดเพราะครบเวลา หรือ overflow sensor ทำงาน</span>
                 </div>
             </div>
 
-            <div class="water-section-title">Route Strategy</div>
+            <div class="water-section-title">เส้นทางเติมน้ำ</div>
             <div class="form-group">
                 <label>เส้นทางเติมน้ำ</label>
                 <select id="water_preferred_route">
@@ -1009,80 +1201,80 @@
                 <span class="field-tip" id="water_route_hint">ใช้ตอนเลือก `อัตโนมัติ` เท่านั้น ถ้าเปิดไว้ระบบจะยอม fallback ไปทางเข้าถังผสมตรงเมื่อรอบเติมผ่านตู้ปลาหยุดแล้ว แต่ถังผสมยังไม่ถึงระดับที่ต้องการ</span>
             </div>
 
-            <div class="water-section-title">Live Status</div>
+            <div class="water-section-title">สถานะสด</div>
             <div class="water-status-grid">
                 <div class="water-status-card">
-                    <span>State</span>
-                    <strong id="water_state_text">UNKNOWN</strong>
+                    <span>สถานะ</span>
+                    <strong id="water_state_text">ไม่ทราบ</strong>
                 </div>
                 <div class="water-status-card">
-                    <span>Configured Route</span>
+                    <span>เส้นทางที่ตั้งไว้</span>
                     <strong id="water_preferred_route_text">อัตโนมัติ</strong>
                 </div>
                 <div class="water-status-card">
-                    <span>Active Route</span>
+                    <span>เส้นทางที่กำลังใช้</span>
                     <strong id="water_active_route_text">ไม่มี</strong>
                 </div>
                 <div class="water-status-card">
-                    <span>Fish Refill Ready</span>
-                    <strong id="water_fish_ready_text">YES</strong>
+                    <span>พร้อมเติมผ่านตู้ปลา</span>
+                    <strong id="water_fish_ready_text">พร้อม</strong>
                 </div>
                 <div class="water-status-card">
-                    <span>Fish Wait Remaining</span>
+                    <span>เวลารอฝั่งตู้ปลา</span>
                     <strong id="water_fish_wait_text">0s</strong>
                 </div>
                 <div class="water-status-card">
-                    <span>Dilution Hold</span>
+                    <span>เวลารอการเจือจาง</span>
                     <strong id="water_dilution_hold_text">0s</strong>
                 </div>
             </div>
 
             <details class="advanced-panel" open>
                 <summary>
-                    <span>Runtime Details &amp; Manual Actions</span>
-                    <span class="advanced-hint">Status from ESP32 and direct commands</span>
+                    <span>รายละเอียดขณะทำงานและคำสั่งทันที</span>
+                    <span class="advanced-hint">สถานะจาก ESP32 และคำสั่งตรง</span>
                 </summary>
                 <div class="advanced-body">
                     <div class="water-status-grid">
                         <div class="water-status-card">
-                            <span>Circulation Output</span>
-                            <strong id="water_circulation_output_text">NO</strong>
+                            <span>ปั๊มหมุนน้ำ</span>
+                            <strong id="water_circulation_output_text">ไม่</strong>
                         </div>
                         <div class="water-status-card">
-                            <span>Fish Tank Refill</span>
-                            <strong id="water_fish_refill_text">NO</strong>
+                            <span>เติมผ่านตู้ปลา</span>
+                            <strong id="water_fish_refill_text">ไม่</strong>
                         </div>
                         <div class="water-status-card">
-                            <span>Mix Tank Refill</span>
-                            <strong id="water_mix_refill_text">NO</strong>
+                            <span>เติมถังผสม</span>
+                            <strong id="water_mix_refill_text">ไม่</strong>
                         </div>
                         <div class="water-status-card">
-                            <span>Route Blocked</span>
-                            <strong id="water_route_blocked_text">NO</strong>
+                            <span>เส้นทางถูกบล็อก</span>
+                            <strong id="water_route_blocked_text">ไม่</strong>
                         </div>
                         <div class="water-status-card">
-                            <span>Water Dilution</span>
-                            <strong id="water_dilution_text">NO</strong>
+                            <span>กำลังเจือจางน้ำ</span>
+                            <strong id="water_dilution_text">ไม่</strong>
                         </div>
                         <div class="water-status-card">
-                            <span>Mix Settling</span>
-                            <strong id="water_settling_text">NO</strong>
+                            <span>ถังผสมกำลังนิ่ง</span>
+                            <strong id="water_settling_text">ไม่</strong>
                         </div>
                         <div class="water-status-card">
-                            <span>Mix Zone</span>
-                            <strong id="water_mix_zone_text">YES</strong>
+                            <span>โซนควบคุมถังผสม</span>
+                            <strong id="water_mix_zone_text">ใช่</strong>
                         </div>
                         <div class="water-status-card">
-                            <span>Level Low / High</span>
+                            <span>ระดับต่ำ / สูง</span>
                             <strong id="water_level_text">NO / NO</strong>
                         </div>
                         <div class="water-status-card">
-                            <span>Overflow Sensor</span>
-                            <strong id="water_overflow_text">NO</strong>
+                            <span>เซ็นเซอร์ overflow</span>
+                            <strong id="water_overflow_text">ไม่</strong>
                         </div>
                         <div class="water-status-card">
                             <span>Alarm</span>
-                            <strong id="water_alarm_text">NO</strong>
+                            <strong id="water_alarm_text">ไม่</strong>
                         </div>
                     </div>
 
@@ -1092,13 +1284,13 @@
 
                     <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
                         <button class="btn btn-primary" onclick="saveWaterSystemConfig()" style="flex:1; min-width:170px;">
-                            <i class="fas fa-save"></i> Apply Water Config
+                            <i class="fas fa-save"></i> ส่งค่าระบบน้ำ
                         </button>
                         <button class="btn" onclick="manualRefill(true)" style="flex:1; min-width:140px;">
-                            <i class="fas fa-fill-drip"></i> Manual Refill On
+                            <i class="fas fa-fill-drip"></i> เริ่มเติมน้ำด้วยมือ
                         </button>
                         <button class="btn" onclick="manualRefill(false)" style="flex:1; min-width:140px;">
-                            <i class="fas fa-stop"></i> Manual Refill Off
+                            <i class="fas fa-stop"></i> หยุดเติมน้ำด้วยมือ
                         </button>
                         <button class="btn btn-danger" onclick="clearWaterAlarm()" style="flex:1; min-width:140px;">
                             <i class="fas fa-shield-alt"></i> Clear Alarm
@@ -1110,12 +1302,12 @@
         </div>
 
         <div class="card">
-            <h2><i class="fas fa-fan"></i> Exhaust Fan <span class="card-mode apply-now">Apply Now</span></h2>
+            <h2><i class="fas fa-fan"></i> พัดลมระบายอากาศ <span class="card-mode apply-now">ส่งทันที</span></h2>
             <div class="card-hint">คุมพัดลมระบายอากาศจากอุณหภูมิและความชื้นของ DHT หรือสั่ง manual ได้ทันทีจากหน้าเว็บ</div>
 
             <div class="form-group">
                 <div class="toggle-container" style="justify-content: space-between; margin-bottom: 12px;">
-                    <span style="font-weight:600; color:var(--text-main)">Enable Fan Controller</span>
+                    <span style="font-weight:600; color:var(--text-main)">เปิดตัวควบคุมพัดลม</span>
                     <label class="toggle">
                         <input type="checkbox" id="fan_enabled">
                         <span class="toggle-slider"></span>
@@ -1124,7 +1316,7 @@
                 <span class="field-tip">ปิดไว้ถ้า relay/pin พัดลมยังไม่ได้ต่อจริง หรือยังไม่ต้องการให้ระบบคุมพัดลม</span>
 
                 <div class="toggle-container" style="justify-content: space-between; margin-bottom: 20px;">
-                    <span style="font-weight:600; color:var(--text-main)">Auto Mode</span>
+                    <span style="font-weight:600; color:var(--text-main)">โหมดอัตโนมัติ</span>
                     <label class="toggle">
                         <input type="checkbox" id="fan_auto_mode">
                         <span class="toggle-slider"></span>
@@ -1134,7 +1326,7 @@
             </div>
 
             <div class="form-group">
-                <label>Air Temp ON / OFF (°C)</label>
+                <label>อุณหภูมิอากาศ ON / OFF (°C)</label>
                 <div class="form-row">
                     <input type="number" id="fan_temp_on_c" step="0.1" placeholder="e.g. 32">
                     <span>to</span>
@@ -1144,7 +1336,7 @@
             </div>
 
             <div class="form-group">
-                <label>Humidity ON / OFF (%)</label>
+                <label>ความชื้น ON / OFF (%)</label>
                 <div class="form-row">
                     <input type="number" id="fan_humidity_on_pct" step="1" placeholder="e.g. 80">
                     <span>to</span>
@@ -1154,34 +1346,34 @@
             </div>
 
             <div class="form-group" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 18px;">
-                State: <strong id="fan_state_text">UNKNOWN</strong><br>
-                Mode: <strong id="fan_mode_text">AUTO</strong><br>
-                Running: <strong id="fan_running_text">NO</strong><br>
-                Reason: <span id="fan_reason_text">-</span>
+                สถานะ: <strong id="fan_state_text">ไม่ทราบ</strong><br>
+                โหมด: <strong id="fan_mode_text">AUTO</strong><br>
+                กำลังทำงาน: <strong id="fan_running_text">ไม่</strong><br>
+                เหตุผล: <span id="fan_reason_text">-</span>
                 <span class="field-tip">สถานะนี้มาจาก ESP32 โดยตรง ใช้ดูว่าพัดลมกำลังหมุนอยู่ไหม, อยู่ในโหมด auto/manual, และเปิดเพราะอะไร</span>
             </div>
 
             <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
                 <button class="btn btn-primary" onclick="saveFanConfig()" style="flex:1; min-width:170px;">
-                    <i class="fas fa-save"></i> Apply Fan Config
+                    <i class="fas fa-save"></i> ส่งค่าพัดลม
                 </button>
                 <button class="btn" onclick="setFanManual(true)" style="flex:1; min-width:140px;">
-                    <i class="fas fa-wind"></i> Fan Manual On
+                    <i class="fas fa-wind"></i> เปิดพัดลมเอง
                 </button>
                 <button class="btn" onclick="setFanManual(false)" style="flex:1; min-width:140px;">
-                    <i class="fas fa-stop"></i> Fan Manual Off
+                    <i class="fas fa-stop"></i> ปิดพัดลมเอง
                 </button>
                 <button class="btn" onclick="setFanAutoMode()" style="flex:1; min-width:140px;">
-                    <i class="fas fa-rotate"></i> Return Auto
+                    <i class="fas fa-rotate"></i> กลับสู่โหมดอัตโนมัติ
                 </button>
             </div>
-            <span class="field-tip">Manual On/Off จะบังคับโหมดเป็น manual ทันที ส่วน Return Auto จะให้ระบบกลับไปคุมตาม threshold อีกครั้ง</span>
+            <span class="field-tip">การเปิดหรือปิดเองจะบังคับให้ระบบเข้าโหมดกำหนดเองทันที ส่วนกลับสู่อัตโนมัติจะคืนการควบคุมตาม threshold เหมือนเดิม</span>
         </div>
 
         <!-- Thresholds -->
         <div class="card">
-            <h2><i class="fas fa-thermometer-half"></i> Sensor Thresholds <span class="card-mode apply-now">Apply Now</span></h2>
-            <div class="card-hint">Saves only threshold values without touching other general settings cards.</div>
+            <h2><i class="fas fa-thermometer-half"></i> ช่วงค่าของเซ็นเซอร์ <span class="card-mode apply-now">ส่งทันที</span></h2>
+            <div class="card-hint">บันทึกเฉพาะช่วงค่าเตือน โดยไม่กระทบการ์ดตั้งค่าทั่วไปอื่น</div>
             
             <div class="form-group">
                 <label>pH Range</label>
@@ -1229,7 +1421,7 @@
             </div>
 
             <button class="btn btn-primary" onclick="saveThresholdsConfig()" style="width: 100%; margin-top: 10px;">
-                <i class="fas fa-save"></i> Apply Thresholds
+                <i class="fas fa-save"></i> ส่งค่าช่วงเซ็นเซอร์
             </button>
         </div>
 
@@ -1237,13 +1429,13 @@
 
         <!-- Sensor Management -->
         <div class="card">
-            <h2><i class="fas fa-microchip"></i> Sensor Management <span class="card-mode save-all">Save All</span></h2>
-            <div class="card-hint">Stored with the footer save button.</div>
+            <h2><i class="fas fa-microchip"></i> จัดการเซ็นเซอร์ <span class="card-mode save-all">บันทึกทีเดียว</span></h2>
+            <div class="card-hint">เก็บค่าพร้อมปุ่มบันทึกด้านล่าง</div>
             <div class="form-group">
-                <label>Active Sensors</label>
+                <label>เซ็นเซอร์ที่เปิดใช้งาน</label>
                 
                 <div class="toggle-container" style="justify-content: space-between; margin-bottom: 10px;">
-                    <span>TDS Sensor</span>
+                    <span>เซ็นเซอร์ TDS</span>
                     <label class="toggle">
                         <input type="checkbox" id="sns_tds">
                         <span class="toggle-slider"></span>
@@ -1251,7 +1443,7 @@
                 </div>
                 
                 <div class="toggle-container" style="justify-content: space-between; margin-bottom: 10px;">
-                    <span>pH Sensor</span>
+                    <span>เซ็นเซอร์ pH</span>
                     <label class="toggle">
                         <input type="checkbox" id="sns_ph">
                         <span class="toggle-slider"></span>
@@ -1259,7 +1451,7 @@
                 </div>
                 
                 <div class="toggle-container" style="justify-content: space-between; margin-bottom: 10px;">
-                    <span>Water Temp</span>
+                    <span>อุณหภูมิน้ำ</span>
                     <label class="toggle">
                         <input type="checkbox" id="sns_water">
                         <span class="toggle-slider"></span>
@@ -1267,7 +1459,7 @@
                 </div>
 
                 <div class="toggle-container" style="justify-content: space-between; margin-bottom: 10px;">
-                    <span>Air Temp & Humidity</span>
+                    <span>อุณหภูมิอากาศและความชื้น</span>
                     <label class="toggle">
                         <input type="checkbox" id="sns_air">
                         <span class="toggle-slider"></span>
@@ -1275,7 +1467,7 @@
                 </div>
 
                 <div class="toggle-container" style="justify-content: space-between; margin-bottom: 10px;">
-                    <span>Light Sensor</span>
+                    <span>เซ็นเซอร์แสง</span>
                     <label class="toggle">
                         <input type="checkbox" id="sns_light">
                         <span class="toggle-slider"></span>
@@ -1286,11 +1478,11 @@
 
         <!-- Notifications -->
         <div class="card">
-            <h2><i class="fas fa-bell"></i> Notifications <span class="card-mode save-all">Save All</span></h2>
-            <div class="card-hint">Stored with the footer save button.</div>
+            <h2><i class="fas fa-bell"></i> การแจ้งเตือน <span class="card-mode save-all">บันทึกทีเดียว</span></h2>
+            <div class="card-hint">เก็บค่าพร้อมปุ่มบันทึกด้านล่าง</div>
 
             <div class="form-group">
-                <label>Enable Alerts</label>
+                <label>เปิดการแจ้งเตือน</label>
                 <div class="toggle-container">
                     <label class="toggle">
                         <input type="checkbox" id="notify_enabled">
@@ -1302,42 +1494,42 @@
 
             <div class="form-group">
                 <label>Channel Access Token</label>
-                <input type="text" id="line_token" placeholder="Enter Channel Access Token (Long-lived)">
+                <input type="text" id="line_token" placeholder="กรอก Channel Access Token แบบใช้งานต่อเนื่อง">
             </div>
 
             <div class="form-group">
-                <label>Alert Cooldown (minutes)</label>
+                <label>ช่วงพักการแจ้งเตือน (นาที)</label>
                 <input type="number" id="alert_cooldown" min="1" max="60">
             </div>
         </div>
 
         <!-- Display -->
         <div class="card">
-            <h2><i class="fas fa-desktop"></i> Display <span class="card-mode save-all">Save All</span></h2>
-            <div class="card-hint">Stored with the footer save button.</div>
+            <h2><i class="fas fa-desktop"></i> การแสดงผล <span class="card-mode save-all">บันทึกทีเดียว</span></h2>
+            <div class="card-hint">เก็บค่าพร้อมปุ่มบันทึกด้านล่าง</div>
 
             <div class="form-group">
-                <label>Device Name</label>
+                <label>ชื่ออุปกรณ์</label>
                 <input type="text" id="device_name" placeholder="My Aquaponics">
             </div>
 
             <div class="form-group">
-                <label>Graph History (days)</label>
+                <label>ช่วงข้อมูลย้อนหลัง (วัน)</label>
                 <select id="graph_days">
-                    <option value="1">1 Day</option>
-                    <option value="3">3 Days</option>
-                    <option value="7">7 Days</option>
+                    <option value="1">1 วัน</option>
+                    <option value="3">3 วัน</option>
+                    <option value="7">7 วัน</option>
                 </select>
             </div>
         </div>
 
         <!-- Camera -->
         <div class="card">
-            <h2><i class="fas fa-camera"></i> Camera <span class="card-mode apply-now">Apply Now</span></h2>
-            <div class="card-hint">Applies camera settings immediately and waits for the stream to come back.</div>
+            <h2><i class="fas fa-camera"></i> กล้อง <span class="card-mode apply-now">ส่งทันที</span></h2>
+            <div class="card-hint">ส่งค่ากล้องทันทีและรอให้สตรีมกลับมาทำงาน</div>
             
             <div class="form-group">
-                <label>Resolution</label>
+                <label>ความละเอียด</label>
                 <select id="cam_resolution">
                     <option value="640x480">640×480 (SD)</option>
                     <option value="1280x720" selected>1280×720 (HD)</option>
@@ -1346,7 +1538,7 @@
             </div>
 
             <div class="form-group">
-                <label>Framerate (FPS)</label>
+                <label>อัตราเฟรม (FPS)</label>
                 <select id="cam_fps">
                     <option value="5">5 fps</option>
                     <option value="10">10 fps</option>
@@ -1357,7 +1549,7 @@
             </div>
 
             <div class="form-group">
-                <label>JPEG Quality</label>
+                <label>คุณภาพ JPEG</label>
                 <select id="cam_quality">
                     <option value="50">50% (Low - เบา)</option>
                     <option value="60">60%</option>
@@ -1370,12 +1562,12 @@
             </div>
 
             <div class="form-group" style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;">
-                <i class="fas fa-info-circle"></i> Camera จะ restart ใหม่หลังกด Apply
+                <i class="fas fa-info-circle"></i> กล้องจะรีสตาร์ตใหม่หลังกดส่งค่า
             </div>
 
             <div class="form-group" style="text-align:center;">
                 <button class="btn btn-primary" onclick="applyCameraSettings()">
-                    <i class="fas fa-sync-alt"></i> Apply & Restart Camera
+                    <i class="fas fa-sync-alt"></i> ส่งค่าและรีสตาร์ตกล้อง
                 </button>
                 <span id="cam_status" style="margin-left:10px; font-size:0.85rem; color:#888;"></span>
             </div>
@@ -1384,7 +1576,7 @@
     </div> <!-- close first settings-grid -->
 
     <!-- Calibration Section -->
-    <div class="section-title">🔧 Calibration</div>
+    <div class="section-title settings-section-anchor" id="calibration-settings">🔧 การปรับเทียบ</div>
 
     <div class="settings-grid">
         <!-- TDS Calibration -->
@@ -1392,7 +1584,7 @@
             <h2><i class="fas fa-flask"></i> TDS Calibration</h2>
             
             <div class="form-group">
-                <label>Current TDS Voltage (Raw)</label>
+                <label>แรงดัน TDS ปัจจุบัน (Raw)</label>
                 <div class="form-row">
                     <input type="text" id="current_voltage" readonly class="cal-reading">
                     <button class="btn" onclick="refreshVoltage()"><i class="fas fa-sync-alt"></i></button>
@@ -1400,44 +1592,44 @@
             </div>
 
             <div class="form-group">
-                <label>Low Point (Standard Solution)</label>
+                <label>จุดต่ำ (สารมาตรฐาน)</label>
                 <div class="cal-grid">
                     <div>
-                        <span>Temperature</span>
+                        <span>อุณหภูมิ</span>
                         <input type="number" id="low_temp" value="25" step="0.1">
                     </div>
                     <div>
-                        <span>PPM Value</span>
+                        <span>ค่า PPM</span>
                         <input type="number" id="low_ppm" placeholder="500" step="1">
                     </div>
                 </div>
                 <div style="display:flex; gap:10px; align-items:center;">
                     <input type="text" id="low_voltage" placeholder="0.000 V" readonly class="cal-reading">
-                    <button class="btn btn-primary" onclick="readLowVoltage()"><i class="fas fa-download"></i> Read</button>
+                    <button class="btn btn-primary" onclick="readLowVoltage()"><i class="fas fa-download"></i> อ่านค่า</button>
                 </div>
             </div>
 
             <div class="form-group">
-                <label>High Point (Standard Solution)</label>
+                <label>จุดสูง (สารมาตรฐาน)</label>
                 <div class="cal-grid">
                     <div>
-                        <span>Temperature</span>
+                        <span>อุณหภูมิ</span>
                         <input type="number" id="high_temp" value="25" step="0.1">
                     </div>
                     <div>
-                        <span>PPM Value</span>
+                        <span>ค่า PPM</span>
                         <input type="number" id="high_ppm" placeholder="1000" step="1">
                     </div>
                 </div>
                 <div style="display:flex; gap:10px; align-items:center;">
                     <input type="text" id="high_voltage" placeholder="0.000 V" readonly class="cal-reading">
-                    <button class="btn btn-primary" onclick="readHighVoltage()"><i class="fas fa-download"></i> Read</button>
+                    <button class="btn btn-primary" onclick="readHighVoltage()"><i class="fas fa-download"></i> อ่านค่า</button>
                 </div>
             </div>
 
             <div class="form-group" style="text-align:center;margin-top:15px;">
                 <button class="btn btn-success" onclick="saveTdsCalibration()">
-                    <i class="fas fa-check"></i> Save Calibration
+                    <i class="fas fa-check"></i> บันทึก Calibration
                 </button>
                 <span id="cal_status" style="margin-left:15px;color:#888;"></span>
             </div>
@@ -1448,19 +1640,19 @@
             <h2><i class="fas fa-vial"></i> pH Calibration</h2>
             
             <div class="form-group">
-                <label>Current pH Reading</label>
+                <label>ค่า pH ปัจจุบัน</label>
                 <div class="cal-grid">
                     <div>
-                        <span>pH Value</span>
+                        <span>ค่า pH</span>
                         <input type="text" id="ph_current_value" readonly class="cal-reading green">
                     </div>
                     <div>
-                        <span>Voltage (mV)</span>
+                        <span>แรงดัน (mV)</span>
                         <input type="text" id="ph_current_voltage" readonly class="cal-reading">
                     </div>
                 </div>
                 <button class="btn" onclick="refreshPhVoltage()" style="width:100%;">
-                    <i class="fas fa-sync-alt"></i> Refresh pH Reading
+                    <i class="fas fa-sync-alt"></i> รีเฟรชค่า pH
                 </button>
             </div>
 
@@ -1503,18 +1695,18 @@
 
             <div class="form-group" style="text-align:center;">
                 <button class="btn btn-danger" onclick="clearPhCalibration()">
-                    <i class="fas fa-trash"></i> Clear pH Calibration
+                    <i class="fas fa-trash"></i> ลบค่า pH Calibration
                 </button>
             </div>
         </div>
     </div>
     <!-- System Health Section -->
-    <div class="section-title">🩺 System Health</div>
+    <div class="section-title settings-section-anchor" id="health-settings">🩺 สุขภาพระบบ</div>
 
     <div class="settings-grid">
         <!-- Pi Services -->
         <div class="card">
-            <h2><i class="fas fa-server"></i> Pi Services</h2>
+            <h2><i class="fas fa-server"></i> บริการบน Pi</h2>
             <div id="serviceList" style="display:flex; flex-direction:column; gap:10px;">
                 <div class="loading"><i class="fas fa-spinner fa-spin"></i> กำลังตรวจสอบ...</div>
             </div>
@@ -1522,7 +1714,7 @@
 
         <!-- ESP32 Sensors -->
         <div class="card">
-            <h2><i class="fas fa-microchip"></i> ESP32 Sensors</h2>
+            <h2><i class="fas fa-microchip"></i> เซ็นเซอร์บน ESP32</h2>
             <div id="espStatus" style="margin-bottom:14px; padding:10px 14px; border-radius:8px; font-size:0.88rem; font-weight:600;"></div>
             <div id="sensorList" style="display:flex; flex-direction:column; gap:10px;">
                 <div class="loading"><i class="fas fa-spinner fa-spin"></i> กำลังตรวจสอบ...</div>
@@ -1532,16 +1724,16 @@
 
     <div style="text-align:center; margin: 16px 0;">
         <button class="btn" onclick="loadHealth()">
-            <i class="fas fa-sync-alt"></i> Refresh Health
+            <i class="fas fa-sync-alt"></i> รีเฟรชสุขภาพระบบ
         </button>
     </div>
 
     <div class="footer-actions">
         <button class="btn btn-success" onclick="saveSettings()">
-            <i class="fas fa-save"></i> Save General Settings
+            <i class="fas fa-save"></i> บันทึกค่าทั่วไป
         </button>
         <button class="btn" onclick="loadSettings()">
-            <i class="fas fa-undo"></i> Reset
+            <i class="fas fa-undo"></i> รีเซ็ตค่าในหน้า
         </button>
     </div>
 
@@ -1554,14 +1746,14 @@
         const actionFeedbackState = {
             light: {
                 status: 'idle',
-                title: 'Ready to apply',
-                detail: 'Changes in this card will be sent to ESP32 when you press Apply Light Config.',
+                title: 'พร้อมส่งค่า',
+                detail: 'ค่าจากการ์ดนี้จะถูกส่งไปยัง ESP32 เมื่อกดปุ่มส่งค่าควบคุมไฟ',
                 icon: 'fa-info-circle'
             },
             feeder: {
                 status: 'idle',
-                title: 'Ready to apply',
-                detail: 'Schedule and duration changes will be sent to ESP32 when you press Apply Feeder Config.',
+                title: 'พร้อมส่งค่า',
+                detail: 'ตารางเวลาและระยะเวลาทำงานจะถูกส่งไปยัง ESP32 เมื่อกดปุ่มส่งค่าเครื่องให้อาหาร',
                 icon: 'fa-info-circle'
             }
         };
@@ -1572,7 +1764,7 @@
                 settings = await res.json();
                 populateForm();
             } catch (e) {
-                showToast('Failed to load settings', true);
+                showToast('โหลดค่าตั้งค่าไม่สำเร็จ', true);
             }
         }
 
@@ -1608,6 +1800,159 @@
         function formatHoldMs(ms) {
             const totalSeconds = Math.max(0, Math.round((ms || 0) / 1000));
             return `${totalSeconds}s`;
+        }
+
+        const DURATION_UNIT_MS = {
+            sec: 1000,
+            min: 60 * 1000,
+            hour: 60 * 60 * 1000,
+            day: 24 * 60 * 60 * 1000
+        };
+
+        const DURATION_UNIT_LABELS = {
+            sec: 'วินาที',
+            min: 'นาที',
+            hour: 'ชั่วโมง',
+            day: 'วัน'
+        };
+
+        const WATER_DURATION_FIELDS = {
+            water_refill_max_runtime: {
+                valueId: 'water_refill_max_runtime_value',
+                unitId: 'water_refill_max_runtime_unit',
+                summaryId: 'water_refill_max_runtime_summary',
+                fallbackMs: 120000,
+                minMs: 1000,
+                allowedUnits: ['sec', 'min', 'hour']
+            },
+            water_refill_min_interval: {
+                valueId: 'water_refill_min_interval_value',
+                unitId: 'water_refill_min_interval_unit',
+                summaryId: 'water_refill_min_interval_summary',
+                fallbackMs: 300000,
+                minMs: 0,
+                allowedUnits: ['sec', 'min', 'hour']
+            },
+            water_fish_refill_max_runtime: {
+                valueId: 'water_fish_refill_max_runtime_value',
+                unitId: 'water_fish_refill_max_runtime_unit',
+                summaryId: 'water_fish_refill_max_runtime_summary',
+                fallbackMs: 30000,
+                minMs: 1000,
+                allowedUnits: ['sec', 'min', 'hour']
+            },
+            water_fish_refill_interval: {
+                valueId: 'water_fish_refill_interval_value',
+                unitId: 'water_fish_refill_interval_unit',
+                summaryId: 'water_fish_refill_interval_summary',
+                fallbackMs: 604800000,
+                minMs: 0,
+                allowedUnits: ['sec', 'min', 'hour', 'day']
+            }
+        };
+
+        function formatDurationHuman(ms) {
+            let remainingSeconds = Math.max(0, Math.round((ms || 0) / 1000));
+            if (remainingSeconds === 0) {
+                return '0 วินาที';
+            }
+
+            const parts = [];
+            const units = [
+                { seconds: 86400, label: 'วัน' },
+                { seconds: 3600, label: 'ชั่วโมง' },
+                { seconds: 60, label: 'นาที' },
+                { seconds: 1, label: 'วินาที' }
+            ];
+
+            for (const unit of units) {
+                if (remainingSeconds < unit.seconds) {
+                    continue;
+                }
+                const count = Math.floor(remainingSeconds / unit.seconds);
+                remainingSeconds -= count * unit.seconds;
+                parts.push(`${count} ${unit.label}`);
+                if (parts.length === 2) {
+                    break;
+                }
+            }
+
+            return parts.join(' ');
+        }
+
+        function pickDurationUnit(ms, allowedUnits) {
+            const safeMs = Math.max(0, Math.round(Number(ms) || 0));
+            const unitCandidates = [...allowedUnits].reverse();
+
+            for (const unit of unitCandidates) {
+                const divisor = DURATION_UNIT_MS[unit];
+                if (safeMs >= divisor && safeMs % divisor === 0) {
+                    return unit;
+                }
+            }
+
+            for (const unit of unitCandidates) {
+                const divisor = DURATION_UNIT_MS[unit];
+                const scaled = safeMs / divisor;
+                if (scaled >= 1 && scaled < 1000) {
+                    return unit;
+                }
+            }
+
+            return allowedUnits[0];
+        }
+
+        function setWaterDurationField(fieldKey, durationMs) {
+            const field = WATER_DURATION_FIELDS[fieldKey];
+            if (!field) {
+                return;
+            }
+
+            const normalizedMs = normalizeInteger(durationMs, field.fallbackMs, field.minMs);
+            const selectedUnit = pickDurationUnit(normalizedMs, field.allowedUnits);
+            const divisor = DURATION_UNIT_MS[selectedUnit];
+            const value = divisor > 0 ? normalizedMs / divisor : normalizedMs;
+
+            document.getElementById(field.valueId).value = Number.isInteger(value) ? value : value.toFixed(2);
+            document.getElementById(field.unitId).value = selectedUnit;
+            updateWaterDurationSummary(fieldKey);
+        }
+
+        function getWaterDurationMs(fieldKey) {
+            const field = WATER_DURATION_FIELDS[fieldKey];
+            if (!field) {
+                return 0;
+            }
+
+            const value = Number.parseFloat(document.getElementById(field.valueId).value);
+            const unit = document.getElementById(field.unitId).value;
+            const multiplier = DURATION_UNIT_MS[unit] || 1000;
+            const fallbackValue = field.fallbackMs / multiplier;
+            const normalizedValue = Number.isFinite(value) ? value : fallbackValue;
+            const durationMs = Math.round(normalizedValue * multiplier);
+
+            return normalizeInteger(durationMs, field.fallbackMs, field.minMs);
+        }
+
+        function updateWaterDurationSummary(fieldKey) {
+            const field = WATER_DURATION_FIELDS[fieldKey];
+            if (!field) {
+                return;
+            }
+
+            const unit = document.getElementById(field.unitId).value;
+            const durationMs = getWaterDurationMs(fieldKey);
+            const durationText = formatDurationHuman(durationMs);
+            const unitLabel = DURATION_UNIT_LABELS[unit] || unit;
+            document.getElementById(field.summaryId).textContent = `จะส่งค่าเป็น ${durationText} (${unitLabel})`;
+        }
+
+        function bindWaterDurationInputs() {
+            Object.keys(WATER_DURATION_FIELDS).forEach((fieldKey) => {
+                const field = WATER_DURATION_FIELDS[fieldKey];
+                document.getElementById(field.valueId).addEventListener('input', () => updateWaterDurationSummary(fieldKey));
+                document.getElementById(field.unitId).addEventListener('change', () => updateWaterDurationSummary(fieldKey));
+            });
         }
 
         function updateWaterRouteControls() {
@@ -1652,8 +1997,8 @@
             document.getElementById('light_on_time').value = settings.light_control?.on_time ?? '06:00';
             document.getElementById('light_off_day').value = String(settings.light_control?.off_day ?? 0);
             document.getElementById('light_off_time').value = settings.light_control?.off_time ?? '18:00';
-            document.getElementById('light_running_text').textContent = settings.light_control?.running ? 'YES' : 'NO';
-            document.getElementById('light_ntp_text').textContent = settings.light_control?.ntp_synced ? 'YES' : 'NO';
+            document.getElementById('light_running_text').textContent = settings.light_control?.running ? 'ใช่' : 'ไม่';
+            document.getElementById('light_ntp_text').textContent = settings.light_control?.ntp_synced ? 'พร้อม' : 'ไม่พร้อม';
             document.getElementById('light_reason_text').textContent = settings.light_control?.reason ?? '-';
 
             // Fish Feeder
@@ -1662,9 +2007,9 @@
             document.getElementById('feeder_day').value = String(settings.fish_feeder?.feed_day ?? 7);
             document.getElementById('feeder_time').value = settings.fish_feeder?.feed_time ?? '08:00';
             document.getElementById('feeder_duration_ms').value = normalizeInteger(settings.fish_feeder?.duration_ms, 2000, 250, 10000);
-            document.getElementById('feeder_state_text').textContent = settings.fish_feeder?.state ?? 'UNKNOWN';
-            document.getElementById('feeder_running_text').textContent = settings.fish_feeder?.running ? 'YES' : 'NO';
-            document.getElementById('feeder_last_feed_text').textContent = settings.fish_feeder?.last_feed_at ?? 'Never';
+            document.getElementById('feeder_state_text').textContent = settings.fish_feeder?.state ?? 'ไม่ทราบ';
+            document.getElementById('feeder_running_text').textContent = settings.fish_feeder?.running ? 'ใช่' : 'ไม่';
+            document.getElementById('feeder_last_feed_text').textContent = settings.fish_feeder?.last_feed_at ?? 'ยังไม่เคย';
             document.getElementById('feeder_reason_text').textContent = settings.fish_feeder?.reason ?? '-';
 
             // Fan Control
@@ -1674,18 +2019,18 @@
             document.getElementById('fan_temp_off_c').value = settings.fan_control?.temp_off_c ?? 30.0;
             document.getElementById('fan_humidity_on_pct').value = settings.fan_control?.humidity_on_pct ?? 80.0;
             document.getElementById('fan_humidity_off_pct').value = settings.fan_control?.humidity_off_pct ?? 75.0;
-            document.getElementById('fan_state_text').textContent = settings.fan_control?.state ?? 'UNKNOWN';
-            document.getElementById('fan_mode_text').textContent = (settings.fan_control?.auto_mode ?? true) ? 'AUTO' : 'MANUAL';
-            document.getElementById('fan_running_text').textContent = settings.fan_control?.running ? 'YES' : 'NO';
+            document.getElementById('fan_state_text').textContent = settings.fan_control?.state ?? 'ไม่ทราบ';
+            document.getElementById('fan_mode_text').textContent = (settings.fan_control?.auto_mode ?? true) ? 'อัตโนมัติ' : 'กำหนดเอง';
+            document.getElementById('fan_running_text').textContent = settings.fan_control?.running ? 'ใช่' : 'ไม่';
             document.getElementById('fan_reason_text').textContent = settings.fan_control?.reason ?? '-';
 
             // Water System
             document.getElementById('water_circulation_enabled').checked = settings.water_system?.circulation_enabled ?? true;
             document.getElementById('water_refill_enabled').checked = settings.water_system?.refill_enabled ?? false;
-            document.getElementById('water_refill_max_runtime_ms').value = settings.water_system?.refill_max_runtime_ms ?? 120000;
-            document.getElementById('water_refill_min_interval_sec').value = Math.round((settings.water_system?.refill_min_interval_ms ?? 300000) / 1000);
-            document.getElementById('water_fish_refill_max_runtime_sec').value = Math.round((settings.water_system?.fish_refill_max_runtime_ms ?? 30000) / 1000);
-            document.getElementById('water_fish_refill_interval_sec').value = Math.round((settings.water_system?.fish_refill_interval_ms ?? 604800000) / 1000);
+            setWaterDurationField('water_refill_max_runtime', settings.water_system?.refill_max_runtime_ms ?? 120000);
+            setWaterDurationField('water_refill_min_interval', settings.water_system?.refill_min_interval_ms ?? 300000);
+            setWaterDurationField('water_fish_refill_max_runtime', settings.water_system?.fish_refill_max_runtime_ms ?? 30000);
+            setWaterDurationField('water_fish_refill_interval', settings.water_system?.fish_refill_interval_ms ?? 604800000);
             document.getElementById('water_preferred_route').value = settings.water_system?.preferred_route ?? 'AUTO';
             document.getElementById('water_allow_direct_sump_refill').checked = settings.water_system?.allow_direct_sump_refill ?? false;
             document.getElementById('water_state_text').textContent = settings.water_system?.state_label_th ?? formatWaterState(settings.water_system?.state ?? 'UNKNOWN');
@@ -1793,9 +2138,9 @@
 
         function describeFeederAction(overrides = {}) {
             if (overrides.trigger_feed) {
-                return 'Feed Now';
+                return 'ให้อาหารทันที';
             }
-            return 'Feeder config';
+            return 'ตั้งค่าเครื่องให้อาหาร';
         }
 
         function setButtonsDisabled(buttonIds, disabled, titleText) {
@@ -1824,23 +2169,23 @@
             setButtonsDisabled(
                 ['feeder_feed_now_btn'],
                 !feederManualEnabled,
-                'Available only when Fish Feeder Command Source is Local Web'
+                'ใช้ได้เมื่อเลือกแหล่งคำสั่งของเครื่องให้อาหารเป็น Local Web เท่านั้น'
             );
 
             document.getElementById('light_action_status').innerHTML = lightManualEnabled
-                ? '<strong>Manual ON/OFF พร้อมใช้งาน</strong> เพราะตอนนี้ Light Command Source เป็น Local Web'
-                : '<strong>Manual ON/OFF ถูกปิดไว้</strong> เพราะตอนนี้ Light Command Source เป็น NETPIE';
+                ? '<strong>ปุ่มเปิดหรือปิดไฟเองพร้อมใช้งาน</strong> เพราะตอนนี้แหล่งคำสั่งไฟเป็น Local Web'
+                : '<strong>ปุ่มเปิดหรือปิดไฟเองถูกปิดไว้</strong> เพราะตอนนี้แหล่งคำสั่งไฟเป็น NETPIE';
 
             document.getElementById('feeder_action_status').innerHTML = feederManualEnabled
-                ? '<strong>Feed Now พร้อมใช้งาน</strong> เพราะตอนนี้ Fish Feeder Command Source เป็น Local Web'
-                : '<strong>Feed Now ถูกปิดไว้</strong> เพราะตอนนี้ Fish Feeder Command Source เป็น NETPIE';
+                ? '<strong>ปุ่มให้อาหารทันทีพร้อมใช้งาน</strong> เพราะตอนนี้แหล่งคำสั่งของเครื่องให้อาหารเป็น Local Web'
+                : '<strong>ปุ่มให้อาหารทันทีถูกปิดไว้</strong> เพราะตอนนี้แหล่งคำสั่งของเครื่องให้อาหารเป็น NETPIE';
 
             document.getElementById('light_advanced_hint').textContent = lightManualEnabled
-                ? 'Manual controls are available now'
-                : 'Open to view runtime status';
+                ? 'พร้อมสั่งงานไฟเองได้ทันที'
+                : 'เปิดเพื่อดูสถานะขณะทำงาน';
             document.getElementById('feeder_advanced_hint').textContent = feederManualEnabled
-                ? 'Feed Now is available now'
-                : 'Open to view runtime status';
+                ? 'พร้อมสั่งให้อาหารทันที'
+                : 'เปิดเพื่อดูสถานะขณะทำงาน';
 
             document.getElementById('light_advanced_panel').open = lightManualEnabled;
             document.getElementById('feeder_advanced_panel').open = feederManualEnabled;
@@ -1895,12 +2240,12 @@
                     circulation_enabled: document.getElementById('water_circulation_enabled').checked,
                     refill_enabled: document.getElementById('water_refill_enabled').checked,
                     manual_refill: settings.water_system?.manual_refill ?? false,
-                    refill_max_runtime_ms: parseInt(document.getElementById('water_refill_max_runtime_ms').value || 120000),
-                    refill_min_interval_ms: parseInt(document.getElementById('water_refill_min_interval_sec').value || 300) * 1000,
+                    refill_max_runtime_ms: getWaterDurationMs('water_refill_max_runtime'),
+                    refill_min_interval_ms: getWaterDurationMs('water_refill_min_interval'),
                     preferred_route: document.getElementById('water_preferred_route').value,
                     allow_direct_sump_refill: document.getElementById('water_allow_direct_sump_refill').checked,
-                    fish_refill_interval_ms: parseInt(document.getElementById('water_fish_refill_interval_sec').value || 604800) * 1000,
-                    fish_refill_max_runtime_ms: parseInt(document.getElementById('water_fish_refill_max_runtime_sec').value || 30) * 1000,
+                    fish_refill_interval_ms: getWaterDurationMs('water_fish_refill_interval'),
+                    fish_refill_max_runtime_ms: getWaterDurationMs('water_fish_refill_max_runtime'),
                     state: settings.water_system?.state ?? 'UNKNOWN',
                     state_label_th: settings.water_system?.state_label_th ?? 'พร้อมทำงาน',
                     active_route: settings.water_system?.active_route ?? 'NONE',
@@ -2217,12 +2562,12 @@
             const data = {
                 circulation_enabled: document.getElementById('water_circulation_enabled').checked,
                 refill_enabled: document.getElementById('water_refill_enabled').checked,
-                refill_max_runtime_ms: parseInt(document.getElementById('water_refill_max_runtime_ms').value || 120000),
-                refill_min_interval_ms: parseInt(document.getElementById('water_refill_min_interval_sec').value || 300) * 1000,
+                refill_max_runtime_ms: getWaterDurationMs('water_refill_max_runtime'),
+                refill_min_interval_ms: getWaterDurationMs('water_refill_min_interval'),
                 preferred_route: document.getElementById('water_preferred_route').value,
                 allow_direct_sump_refill: document.getElementById('water_allow_direct_sump_refill').checked,
-                fish_refill_interval_ms: parseInt(document.getElementById('water_fish_refill_interval_sec').value || 604800) * 1000,
-                fish_refill_max_runtime_ms: parseInt(document.getElementById('water_fish_refill_max_runtime_sec').value || 30) * 1000,
+                fish_refill_interval_ms: getWaterDurationMs('water_fish_refill_interval'),
+                fish_refill_max_runtime_ms: getWaterDurationMs('water_fish_refill_max_runtime'),
                 ...extra
             };
 
@@ -2275,6 +2620,7 @@
         document.getElementById('light_command_source').addEventListener('change', updateSourceDrivenActions);
         document.getElementById('feeder_command_source').addEventListener('change', updateSourceDrivenActions);
         document.getElementById('water_preferred_route').addEventListener('change', updateWaterRouteControls);
+        bindWaterDurationInputs();
 
         // === TDS Calibration Functions ===
         async function refreshVoltage() {

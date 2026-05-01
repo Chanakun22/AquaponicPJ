@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🖥️ Terminal - Smart Aquaponics</title>
+    <title>🖥️ เทอร์มินัล - ระบบอควาโปนิกส์อัจฉริยะ</title>
     <link rel="manifest" href="/pwa/manifest.json">
     <meta name="theme-color" content="#00f2aa">
     <link href="/static/fonts/fonts.css" rel="stylesheet">
@@ -137,8 +137,8 @@
             <div class="brand">
                 <i class="fas fa-terminal"></i>
                 <div>
-                    <h1>Web Terminal</h1>
-                    <div class="subtitle">ESP32 Remote CLI</div>
+                    <h1>เทอร์มินัลบนเว็บ</h1>
+                    <div class="subtitle">CLI ระยะไกลของ ESP32</div>
                 </div>
             </div>
         </div>
@@ -154,8 +154,8 @@
             </div>
         </div>
         <div class="connect-row">
-            <input type="text" class="connect-input" id="espIp" placeholder="ESP32 IP" value="">
-            <input type="text" class="connect-input small" id="espPort" placeholder="Port" value="23">
+            <input type="text" class="connect-input" id="espIp" placeholder="IP ของ ESP32" value="">
+            <input type="text" class="connect-input small" id="espPort" placeholder="พอร์ต" value="23">
             <button class="btn btn-connect" id="connectBtn" onclick="connectTerminal()">
                 <i class="fas fa-plug"></i> Connect
             </button>
@@ -174,15 +174,15 @@
                 </div>
                 <span>ESP32 Telnet Console</span>
             </div>
-            <button class="clear-btn" onclick="clearTerminal()"><i class="fas fa-eraser"></i> Clear</button>
+            <button class="clear-btn" onclick="clearTerminal()"><i class="fas fa-eraser"></i> ล้างหน้าจอ</button>
         </div>
         <div class="terminal-output" id="termOutput">
-<span style="color: var(--text-muted);">Welcome to Aquaponics Web Terminal
-Enter ESP32 IP and click Connect to begin.
+<span style="color: var(--text-muted);">ยินดีต้อนรับสู่เทอร์มินัลบนเว็บของ Aquaponics
+กรอก IP ของ ESP32 แล้วกดเชื่อมต่อเพื่อเริ่มใช้งาน
 </span></div>
         <div class="terminal-input-row">
             <span class="prompt" id="promptText">$</span>
-            <input type="text" class="terminal-input" id="termInput" placeholder="Type a command..." disabled
+            <input type="text" class="terminal-input" id="termInput" placeholder="พิมพ์คำสั่ง..." disabled
                    onkeydown="handleInputKey(event)" autocomplete="off" spellcheck="false">
         </div>
         <div class="quick-cmds">

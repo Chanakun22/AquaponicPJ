@@ -2,6 +2,65 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-05-01] - Local Dashboard MQTT Resilience
+
+### Changed
+
+- **ui: normalize Pi web copy to Thai-first wording across operator and admin pages (`pi_server/header.js`, `pi_server/index.html`, `pi_server/settings.html`, `pi_server/hardware_test.html`, `pi_server/graphs.html`, `pi_server/full_logs.html`, `pi_server/admin_logs.html`, `pi_server/admin_users.html`, `pi_server/login.html`, `pi_server/live.html`, `pi_server/ota.html`, `pi_server/wifi.html`, `pi_server/terminal.html`, `pi_server/pwa/sw.js`):**
+  - แปลข้อความหลักของเมนู หัวหน้า ปุ่ม คำอธิบายสั้น ๆ และ placeholder ให้ใช้ภาษาไทยเป็นหลักทั้งหน้าใช้งานหลักและหน้าผู้ดูแล เพื่อลดความรู้สึก UI ปนภาษา
+  - เก็บข้อความสถานะที่ render จาก JavaScript และค่าเริ่มต้นอย่าง `YES/NO/UNKNOWN` ให้เป็นคำไทยในจุดที่ผู้ใช้เห็นทันที
+  - bump `CACHE_NAME` ของ service worker เพื่อบังคับให้ browser โหลดข้อความเวอร์ชันล่าสุดแทนหน้าเก่าที่อาจติด cache
+
+- **ui: extend the friendlier dashboard UX pattern to settings and hardware test pages (`pi_server/settings.html`, `pi_server/hardware_test.html`):**
+  - เพิ่ม hero sections ด้านบน, quick-jump links, และข้อความนำทางแบบสั้น ๆ เพื่อช่วยให้ผู้ใช้เริ่มจากส่วนที่ควรทำก่อนแทนการเจอการ์ดยาวทันที
+  - ปรับหน้า settings ให้สื่อสารชัดขึ้นว่าอะไรคือ `Apply Now`, อะไรคือ `Save All`, และเพิ่มทางลัดไปหมวด water, calibration, และ system health
+  - ปรับหน้า hardware test ให้มี flow “เริ่มตรงไหนก่อน”, quick jumps ไป snapshot/output/water/safe stop/log และทำให้การทดสอบแต่ละช่วงอ่านง่ายขึ้น
+
+- **fix: repair malformed CSS in the settings page card accent block (`pi_server/settings.html`):**
+  - เอา CSS ที่หลุดไปอยู่ใน `.card::before` ออกและย้าย logic responsive กลับไปอยู่ใน media query ที่ถูกต้อง เพื่อไม่ให้ styling บางส่วนเสี่ยงพังใน browser
+
+- **ui: make the main Pi dashboard friendlier to scan and operate (`pi_server/base.css`, `pi_server/header.js`, `pi_server/index.html`):**
+  - เพิ่ม hero overview ด้านบนของหน้า dashboard พร้อม quick actions และ summary card สำหรับ water quality, automation, และ system link เพื่อให้ผู้ใช้เห็นภาพรวมทันที
+  - ปรับ sensor cards ให้มีข้อความแนะนำตามช่วงค่า, สถานะ range แบบเข้าใจง่าย, และ layout pH/light ที่อ่านง่ายขึ้นบนมือถือและเดสก์ท็อป
+  - ปรับ shared nav/header ให้ใช้ง่ายขึ้นด้วย horizontal scroll สำหรับ nav ที่ยาวและ focus state ที่ชัดขึ้นสำหรับ keyboard navigation
+
+- **docs: align README with the actual ESP32-S3 N16R8 board and OTA layout (`README.md`):**
+  - ระบุชื่อบอร์ดเป็น `ESP32-S3-DevKitC-1-N16R8` ให้ตรงกับฮาร์ดแวร์จริงในส่วน overview, hardware, prerequisites และ tech stack
+  - เพิ่มหมายเหตุว่าโปรเจกต์ใช้ custom PlatformIO board manifest และบันทึกว่า `default_16MB.csv` ให้ OTA app slot ประมาณ 6.25MB ต่อ slot ซึ่งเพียงพอกับขนาด firmware ปัจจุบัน
+
+- **build: add a custom PlatformIO board manifest for the actual ESP32-S3 N16R8 hardware (`boards/esp32-s3-devkitc-1-n16r8.json`, `platformio.ini`):**
+  - เปลี่ยน environment หลักให้ใช้ custom board ของ `ESP32-S3-DevKitC-1-N16R8` แทน manifest `N8` ที่มากับ PlatformIO
+  - กำหนด `16MB` flash, `default_16MB.csv`, `qio_opi` memory type และ `BOARD_HAS_PSRAM` ให้ตรงกับบอร์ดจริง เพื่อให้ build config และชื่อบอร์ดสะท้อนฮาร์ดแวร์ที่ใช้อยู่จริง
+
+- **build: align PlatformIO board config with the actual ESP32-S3 DevKitC-1 N8 hardware (`platformio.ini`):**
+  - ลบ override ที่บังคับ `qio_opi`, `16MB`, `default_16MB.csv` และ PSRAM flags ออกจาก environment หลัก เพื่อให้กลับไปใช้ board defaults ของ `esp32-s3-devkitc-1`
+  - ยืนยันด้วย production build ว่า PlatformIO resolve เป็น `ESP32-S3-DevKitC-1-N8 (8 MB QD, No PSRAM)` และคอมไพล์ผ่านตามปกติ
+
+- **fix: move refill pump off risky GPIO36 to free GPIO42 (`include/config.h`):**
+  - ย้าย `PUMP_REFILL_PIN` จาก `GPIO36` ไป `GPIO42` เพื่อหลบความเสี่ยงจากขากลุ่มสูงที่อาจผูกกับ flash/PSRAM configuration บน ESP32-S3 และลดปัญหา wiring ไม่ตรงกับบอร์ดจริง
+  - ตรวจซ้ำว่าขาใหม่ไม่ชนกับอุปกรณ์อื่นที่ตั้งไว้ใน firmware ปัจจุบัน และยืนยันด้วย production build ว่าคอมไพล์ผ่านตามปกติ
+
+- **fix: ignore idle level-sensor conflicts when water refill monitoring is disabled (`src/waterSystem.cpp`, `test/test_native/test_water_system_native.cpp`, `test/test_water_system_native/test_main.cpp`):**
+  - กันไม่ให้ water system ล็อก `ALARM` จาก `low/high` conflict หากไม่ได้เปิด auto refill หรือ manual refill อยู่จริง ช่วยลด false alarm จากเซ็นเซอร์ที่ยังไม่ติดตั้ง/สัญญาณลอย
+  - เพิ่ม regression test สำหรับเคสนี้ และแก้ wrapper test ให้เข้ากับ Unity linkage ปัจจุบัน
+
+- **ui: make water-system duration settings human-friendly in the Pi settings page (`pi_server/settings.html`):**
+  - เปลี่ยนฟิลด์ตั้งเวลา water system จากตัวเลขดิบที่ปน `ms/sec` เป็นช่อง `ค่า + หน่วย` ที่เลือกได้ เช่น วินาที/นาที/ชั่วโมง/วัน
+  - ให้หน้า settings เลือกหน่วยที่เหมาะจากค่าปัจจุบันอัตโนมัติ และแสดง summary ว่าจะส่งเวลาเท่าไรจริงก่อนกด Apply
+  - คง API เดิมของ backend/ESP32 ที่ใช้ millisecond ไว้ โดยแปลงกลับตอน save เพื่อไม่กระทบเส้นทาง config เดิม
+
+- **fix: prioritize local dashboard updates over cloud reconnect attempts (`src/main.cpp`, `src/netpie.cpp`):**
+  - สลับลำดับใน `TaskNetworking` ให้ Local MQTT loop และ local sensor publish วิ่งก่อน NETPIE เพื่อลดอาการหน้าเว็บค้างเมื่อ cloud path ช้าหรือ timeout
+  - เพิ่มการหน่วง retry ของ NETPIE เมื่อ Local MQTT ยังเชื่อมต่อได้อยู่ เพื่อไม่ให้การ reconnect ไป cloud มากินเวลาของเส้นทาง Pi dashboard ซ้ำ ๆ
+
+- **fix: keep Pi MQTT consumer alive when Mosquitto is late or restarts (`pi_server/app.py`):**
+  - เปลี่ยน `start_mqtt()` ให้ retry ตลอดเมื่อ broker ยังไม่พร้อมหรือ loop หลุด แทนการปล่อย thread จบถาวรหลัง exception ครั้งแรก
+  - เพิ่ม disconnect logging เพื่อให้ trace ได้ชัดขึ้นว่าเว็บค้างเพราะ Pi ไม่ได้รับ MQTT แล้วหรือเป็นปัญหาจากฝั่ง ESP/network
+
+- **fix: add dashboard HTTP snapshot fallback when WebSocket stalls (`pi_server/app.py`, `pi_server/index.html`):**
+  - เพิ่ม `GET /api/dashboard_snapshot` เพื่อให้หน้า dashboard ดึง snapshot เดียวกับที่ใช้ broadcast ผ่าน WebSocket ได้โดยตรง
+  - ให้หน้า `/` fallback ไป poll snapshot อัตโนมัติเมื่อ `dashboard_update` เงียบเกิน 6 วินาที หรือเมื่อ socket disconnect เพื่อลดอาการจอค้างบน WiFi ที่ไม่เสถียร
+
 ## [2026-04-29] - HW Test Water Workflow Refresh
 
 ### Changed

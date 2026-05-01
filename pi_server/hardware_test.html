@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ทดสอบฮาร์ดแวร์ - Smart Aquaponics</title>
+    <title>ทดสอบฮาร์ดแวร์ - ระบบอควาโปนิกส์อัจฉริยะ</title>
     <link rel="manifest" href="/pwa/manifest.json">
     <meta name="theme-color" content="#00f2aa">
     <link href="/static/fonts/fonts.css" rel="stylesheet">
@@ -26,6 +26,110 @@
             flex-direction: column;
             gap: 18px;
             margin-top: 20px;
+        }
+
+        .page-hero {
+            padding: 24px;
+            border-radius: 20px;
+            border: 1px solid rgba(245,158,11,0.22);
+            background:
+                radial-gradient(circle at top right, rgba(245,158,11,0.18), transparent 36%),
+                radial-gradient(circle at bottom left, rgba(59,130,246,0.12), transparent 34%),
+                linear-gradient(180deg, rgba(24,27,33,0.96), rgba(15,17,21,0.98));
+            box-shadow: 0 18px 36px rgba(3,8,20,0.28);
+        }
+
+        .page-hero-copy {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .page-hero-kicker {
+            font-size: 0.76rem;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: #fbbf24;
+        }
+
+        .page-hero h2 {
+            font-size: clamp(1.5rem, 2.4vw, 2.2rem);
+            letter-spacing: -0.04em;
+            color: var(--text-main);
+        }
+
+        .page-hero p {
+            color: #d8e0ef;
+            line-height: 1.7;
+            max-width: 72ch;
+        }
+
+        .hero-steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .hero-step {
+            padding: 16px 18px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.04);
+        }
+
+        .hero-step-label {
+            font-size: 0.74rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .hero-step-value {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 6px;
+        }
+
+        .hero-step-sub {
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            line-height: 1.5;
+        }
+
+        .jump-links {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .jump-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: 999px;
+            text-decoration: none;
+            color: var(--text-main);
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.08);
+            font-size: 0.86rem;
+            font-weight: 600;
+            transition: transform 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+        }
+
+        .jump-link:hover {
+            transform: translateY(-1px);
+            background: rgba(255,255,255,0.08);
+            border-color: rgba(255,255,255,0.16);
+        }
+
+        .section-anchor {
+            scroll-margin-top: 22px;
         }
 
         .intro {
@@ -445,33 +549,81 @@
             .water-stat.wide {
                 grid-column: auto;
             }
+
+            .page-hero {
+                padding: 18px;
+            }
+
+            .jump-links {
+                justify-content: center;
+            }
         }
     </style>
 </head>
 <body>
     <div class="header">
         <div class="header-top">
-            <div class="brand"><i class="fas fa-vial"></i><h1>ทดสอบฮาร์ดแวร์</h1></div>
+            <div class="brand">
+                <i class="fas fa-vial"></i>
+                <div>
+                    <h1>ทดสอบฮาร์ดแวร์</h1>
+                    <div class="subtitle">เซ็นเซอร์ • เอาต์พุต • การไหลของน้ำ</div>
+                </div>
+            </div>
         </div>
     </div>
 
     <div class="container">
         <div class="page-stack">
+            <section class="page-hero">
+                <div class="page-hero-copy">
+                    <div class="page-hero-kicker">เริ่มตรงนี้</div>
+                    <h2>ทดสอบทีละส่วนแบบควบคุมความเสี่ยงได้ง่ายขึ้น</h2>
+                    <p>หน้านี้จัดลำดับใหม่ให้ผู้ใช้เริ่มจากการอ่านค่าเซ็นเซอร์และเช็กลำดับการทำงานก่อน แล้วค่อยไล่ไปทดสอบเอาต์พุตหรือระบบน้ำ พร้อมมีจุดหยุดอย่างปลอดภัยให้กลับมาที่ภาวะนิ่งได้เร็ว</p>
+                </div>
+
+                <div class="hero-steps">
+                    <div class="hero-step">
+                        <div class="hero-step-label">ขั้นที่ 1</div>
+                        <div class="hero-step-value">อ่านค่าปัจจุบันก่อน</div>
+                        <div class="hero-step-sub">ใช้เพื่อยืนยันว่าเซ็นเซอร์สดและ ESP ยังตอบสนองอยู่ก่อนสั่งรีเลย์หรือปั๊ม</div>
+                    </div>
+                    <div class="hero-step">
+                        <div class="hero-step-label">ขั้นที่ 2</div>
+                        <div class="hero-step-value">ทดสอบเอาต์พุตทีละตัว</div>
+                        <div class="hero-step-sub">เริ่มจาก A/B, ไฟ, พัดลม, เครื่องให้อาหาร แล้วดูผลในบันทึกการทดสอบทุกครั้ง</div>
+                    </div>
+                    <div class="hero-step">
+                        <div class="hero-step-label">ขั้นที่ 3</div>
+                        <div class="hero-step-value">กลับสู่สถานะปลอดภัยก่อนออก</div>
+                        <div class="hero-step-sub">ถ้ามีพฤติกรรมแปลกหรือจบการทดสอบ ให้กดหยุดอย่างปลอดภัยก่อนออกจากหน้านี้</div>
+                    </div>
+                </div>
+
+                <div class="jump-links">
+                    <a class="jump-link" href="#sensor-snapshot"><i class="fas fa-wave-square"></i> ค่าเซ็นเซอร์</a>
+                    <a class="jump-link" href="#output-tests"><i class="fas fa-plug-circle-bolt"></i> ทดสอบเอาต์พุต</a>
+                    <a class="jump-link" href="#water-tests"><i class="fas fa-water"></i> ทดสอบระบบน้ำ</a>
+                    <a class="jump-link" href="#safe-stop"><i class="fas fa-octagon-exclamation"></i> หยุดปลอดภัย</a>
+                    <a class="jump-link" href="#test-log"><i class="fas fa-scroll"></i> บันทึกการทดสอบ</a>
+                </div>
+            </section>
+
             <div class="intro">
                 ใช้หน้านี้สำหรับทดสอบ <strong>ของที่ firmware รองรับจริงตอนนี้</strong>: อ่านเซ็นเซอร์, ทดสอบปั๊มโดส A/B, เปิดปิดไฟผ่านรีเลย์, และทดสอบระบบน้ำตาม flow ปัจจุบันของเส้นทางเติม, การเติมน้ำด้วยมือ, ปั๊มหมุนน้ำ, และ alarm.<br>
-                ระหว่างทดสอบปั๊มโดส ระบบ automation จะ pause ชั่วคราวและ resume เองหลัง test จบ. สำหรับ input น้ำในหน้านี้ให้ตีความตาม wiring ปัจจุบัน: <strong>`SUMP_LEVEL_LOW`, `SUMP_LEVEL_HIGH`, `FISH_TANK_OVERFLOW` เป็น Active LOW</strong> ดังนั้นค่า `LOW` หมายถึง sensor ตัวนั้นกำลัง trigger อยู่.
+                ระหว่างทดสอบปั๊มโดส ระบบอัตโนมัติจะหยุดชั่วคราวและกลับมาทำงานเองหลังการทดสอบจบ. สำหรับ input น้ำในหน้านี้ให้ตีความตาม wiring ปัจจุบัน: <strong>`SUMP_LEVEL_LOW`, `SUMP_LEVEL_HIGH`, `FISH_TANK_OVERFLOW` เป็น Active LOW</strong> ดังนั้นค่า `LOW` หมายถึงเซ็นเซอร์ตัวนั้นกำลัง trigger อยู่.
             </div>
 
             <div class="summary-grid">
                 <div class="summary-card">
                     <div class="summary-label">สถานะ ESP</div>
                     <div class="summary-value" id="sumEspStatus">ไม่ทราบ</div>
-                    <div class="summary-sub" id="sumEspSub">กำลังรอข้อมูลสดจาก dashboard</div>
+                    <div class="summary-sub" id="sumEspSub">กำลังรอข้อมูลสดจากหน้า Dashboard</div>
                 </div>
                 <div class="summary-card">
-                    <div class="summary-label">ออโตเมชัน</div>
+                    <div class="summary-label">ระบบอัตโนมัติ</div>
                     <div class="summary-value" id="sumAutoState">ไม่ทราบ</div>
-                    <div class="summary-sub" id="sumAutoSub">ยังไม่มีสถานะ automation</div>
+                    <div class="summary-sub" id="sumAutoSub">ยังไม่มีสถานะระบบอัตโนมัติ</div>
                 </div>
                 <div class="summary-card">
                     <div class="summary-label">ระบบน้ำ</div>
@@ -494,12 +646,12 @@
             </div>
 
             <div class="split-grid">
-                <div class="card">
+                <div class="card section-anchor" id="sensor-snapshot">
                     <div class="section-head">
                         <div class="section-title"><i class="fas fa-wave-square"></i> สแนปช็อตเซ็นเซอร์</div>
                         <button class="test-btn primary" id="btnReadSensors" onclick="runSensorRead()"><i class="fas fa-rotate"></i> อ่านทุกเซ็นเซอร์</button>
                     </div>
-                    <div class="section-note">สั่ง ESP32 อ่านค่า sensor ณ ตอนนั้นทันที และแสดง snapshot แยกจาก live dashboard ปกติ</div>
+                    <div class="section-note">สั่ง ESP32 อ่านค่าเซ็นเซอร์ ณ ตอนนั้นทันที และแสดงค่าชุดนี้แยกจาก Dashboard สดปกติ</div>
                     <div class="sensor-grid" id="sensorResults">
                         <div class="sensor-item"><div class="sensor-label">อุณหภูมิน้ำ</div><div class="sensor-value" id="srWater">-</div></div>
                         <div class="sensor-item"><div class="sensor-label">อุณหภูมิอากาศ</div><div class="sensor-value" id="srAir">-</div></div>
@@ -518,30 +670,30 @@
                     <div class="section-head">
                         <div class="section-title"><i class="fas fa-circle-info"></i> Workflow ปัจจุบัน</div>
                     </div>
-                    <div class="section-note">หน้าทดสอบนี้ตั้งใจให้ตรงกับความสามารถปัจจุบันของ firmware: ไม่มี water pump test แบบเก่าแล้ว เพราะ flow น้ำตอนนี้วิ่งผ่าน water system state machine และใช้ sensor น้ำเป็นตัวตัดสินใจ</div>
+                    <div class="section-note">หน้าทดสอบนี้ตั้งใจให้ตรงกับความสามารถปัจจุบันของ firmware: ไม่มีการทดสอบ water pump แบบเก่าแล้ว เพราะการไหลของน้ำตอนนี้วิ่งผ่าน state machine ของระบบน้ำ และใช้เซ็นเซอร์น้ำเป็นตัวตัดสินใจ</div>
                     <ol class="workflow-list">
                         <li>กด `รีเฟรชค่าน้ำ` ก่อนทุกครั้ง เพื่อดึง config และ state ล่าสุดจาก Pi/ESP32</li>
                         <li>ดูการ์ด `SUMP_LEVEL_LOW`, `SUMP_LEVEL_HIGH`, `FISH_TANK_OVERFLOW` ด้านล่าง โดย `LOW = trigger`, `HIGH = ปกติ`</li>
-                        <li>ค่อยทดสอบ `ปั๊มหมุนน้ำ`, `เติมน้ำอัตโนมัติ`, `Preferred Route`, และ `เติมน้ำด้วยมือ` ตามลำดับ</li>
+                        <li>ค่อยทดสอบ `ปั๊มหมุนน้ำ`, `เติมน้ำอัตโนมัติ`, `เส้นทางหลัก`, และ `เติมน้ำด้วยมือ` ตามลำดับ</li>
                         <li>จบงานหรือมีพฤติกรรมผิดปกติ ให้กด `หยุด output ที่กำลังทดสอบ` แล้วค่อยเปิด auto refill กลับเองเมื่อพร้อม</li>
                     </ol>
                     <div class="section-note" style="margin-top:14px;">ถ้า `FISH_TANK_OVERFLOW` ขึ้นว่า `ไม่ได้ติดตั้ง` แปลว่าบอร์ดนี้ยังไม่มี overflow sensor ต่ออยู่ ไม่ใช่ว่า sensor ปกติ</div>
                     <div class="water-status-grid">
                         <div class="water-stat"><div class="water-stat-label">ปั๊มโดส</div><div class="water-stat-value">เฉพาะ Pump A / B</div></div>
                         <div class="water-stat"><div class="water-stat-label">ไฟ</div><div class="water-stat-value">รีเลย์ เปิด / ปิด</div></div>
-                        <div class="water-stat"><div class="water-stat-label">พัดลม</div><div class="water-stat-value">Manual เปิด / ปิด / AUTO</div></div>
+                        <div class="water-stat"><div class="water-stat-label">พัดลม</div><div class="water-stat-value">เปิดเอง / ปิดเอง / AUTO</div></div>
                         <div class="water-stat"><div class="water-stat-label">ระบบน้ำ</div><div class="water-stat-value">Config + สั่งงานด้วยมือ</div></div>
                         <div class="water-stat"><div class="water-stat-label">หยุดอย่างปลอดภัย</div><div class="water-stat-value">หยุดปั๊ม + ปิดไฟ + ปิดพัดลม + ปิดเติมน้ำ</div></div>
                     </div>
                 </div>
             </div>
 
-            <div class="test-grid">
+            <div class="test-grid section-anchor" id="output-tests">
                 <div class="test-tile" id="tilePumpA">
                     <div class="tile-head">
                         <div>
                             <div class="tile-title"><i class="fas fa-flask"></i> ทดสอบปั๊ม A</div>
-                            <div class="tile-subtitle" id="pumpASubtitle">ทดสอบปั๊มโดส Nutrient A ตามสเปกปั๊มจริงผ่าน GPIO 10</div>
+                            <div class="tile-subtitle" id="pumpASubtitle">ทดสอบปั๊มโดสสารอาหาร A ตามสเปกปั๊มจริงผ่าน GPIO 10</div>
                         </div>
                         <div class="state-pill" id="pumpAState">พร้อม</div>
                     </div>
@@ -561,7 +713,7 @@
                     <div class="tile-head">
                         <div>
                             <div class="tile-title"><i class="fas fa-flask"></i> ทดสอบปั๊ม B</div>
-                            <div class="tile-subtitle" id="pumpBSubtitle">ทดสอบปั๊มโดส Nutrient B ตามสเปกปั๊มจริงผ่าน GPIO 11</div>
+                            <div class="tile-subtitle" id="pumpBSubtitle">ทดสอบปั๊มโดสสารอาหาร B ตามสเปกปั๊มจริงผ่าน GPIO 11</div>
                         </div>
                         <div class="state-pill" id="pumpBState">พร้อม</div>
                     </div>
@@ -581,7 +733,7 @@
                     <div class="tile-head">
                         <div>
                             <div class="tile-title"><i class="fas fa-lightbulb"></i> ทดสอบรีเลย์ไฟ</div>
-                            <div class="tile-subtitle">ทดสอบเปิดปิดรีเลย์ไฟปลูกผ่าน light controller</div>
+                            <div class="tile-subtitle">ทดสอบเปิดปิดรีเลย์ไฟปลูกผ่านตัวควบคุมไฟ</div>
                         </div>
                         <div class="state-pill" id="lightState">ไม่ทราบ</div>
                     </div>
@@ -598,7 +750,7 @@
                     <div class="tile-head">
                         <div>
                             <div class="tile-title"><i class="fas fa-fan"></i> ทดสอบพัดลมระบายอากาศ</div>
-                            <div class="tile-subtitle">สั่งพัดลมแบบ manual ON/OFF หรือคืนโหมด AUTO เพื่อตรวจ relay และ logic ควบคุม</div>
+                            <div class="tile-subtitle">สั่งพัดลมแบบเปิดเองหรือปิดเอง และกลับสู่ AUTO เพื่อตรวจรีเลย์และลอจิกควบคุม</div>
                         </div>
                         <div class="state-pill" id="fanState">ไม่ทราบ</div>
                     </div>
@@ -629,12 +781,12 @@
                 </div>
             </div>
 
-            <div class="card">
+            <div class="card section-anchor" id="water-tests">
                 <div class="section-head">
                     <div class="section-title"><i class="fas fa-water"></i> ทดสอบระบบน้ำ</div>
                     <button class="test-btn" onclick="refreshWaterConfig()"><i class="fas fa-arrows-rotate"></i> รีเฟรชค่าน้ำ</button>
                 </div>
-                <div class="section-note">ส่วนนี้ใช้ logic เดียวกับหน้า settings: ปรับ config แล้วส่งไป ESP32, ดู state สด, และสั่งเติมน้ำด้วยมือหรือล้าง alarm ได้ตรงจากหน้า test โดย workflow ปัจจุบันคือดู sensor input ก่อน แล้วค่อยไล่ route/state machine ตามลำดับ</div>
+                <div class="section-note">ส่วนนี้ใช้ลอจิกเดียวกับหน้าตั้งค่า: ปรับ config แล้วส่งไป ESP32, ดู state สด, และสั่งเติมน้ำด้วยมือหรือล้าง Alarm ได้ตรงจากหน้านี้ โดยลำดับปัจจุบันคือดู sensor input ก่อน แล้วค่อยไล่ route และ state machine ตามลำดับ</div>
 
                 <div class="water-status-grid">
                     <div class="water-stat"><div class="water-stat-label">สถานะ</div><div class="water-stat-value" id="waterState">ไม่ทราบ</div></div>
@@ -680,7 +832,7 @@
                             <option value="FISH_TANK">ผ่านตู้ปลา</option>
                             <option value="SUMP_DIRECT">เข้าถังผสมตรง</option>
                         </select>
-                        <button class="test-btn primary" onclick="applyWaterRouteConfig()"><i class="fas fa-route"></i> ใช้ route นี้</button>
+                        <button class="test-btn primary" onclick="applyWaterRouteConfig()"><i class="fas fa-route"></i> ใช้เส้นทางนี้</button>
                     </div>
                     <div class="toggle-row" style="margin-top:10px; align-items:center; gap:12px;">
                         <label style="display:flex; align-items:center; gap:10px; color:#d9e4ff; font-size:0.95rem;">
@@ -688,7 +840,7 @@
                             อนุญาต fallback เข้าถังผสมตรง
                         </label>
                     </div>
-                    <div class="hint-box" id="hwWaterRouteHint">ใช้ตอนเลือก `อัตโนมัติ` เท่านั้น ถ้าเปิดไว้ระบบจะยอม fallback ไปทางเข้าถังผสมตรงเมื่อ route ผ่านตู้ปลาไม่พร้อม</div>
+                    <div class="hint-box" id="hwWaterRouteHint">ใช้ตอนเลือก `อัตโนมัติ` เท่านั้น ถ้าเปิดไว้ระบบจะยอมใช้เส้นทางสำรองเข้าถังผสมตรงเมื่อ route ผ่านตู้ปลาไม่พร้อม</div>
                 </div>
 
                 <div class="action-group">
@@ -701,7 +853,7 @@
                 </div>
             </div>
 
-            <div class="card">
+            <div class="card section-anchor" id="safe-stop">
                 <div class="section-head">
                     <div class="section-title"><i class="fas fa-hand"></i> หยุดอย่างปลอดภัย</div>
                 </div>
@@ -711,7 +863,7 @@
                 </div>
             </div>
 
-            <div class="test-log">
+            <div class="test-log section-anchor" id="test-log">
                 <div class="test-log-title"><i class="fas fa-scroll"></i> บันทึกการทดสอบ</div>
                 <div id="logEntries"></div>
             </div>

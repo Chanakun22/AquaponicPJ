@@ -48,7 +48,7 @@
 #endif
 
 #ifndef EXHAUST_FAN_PIN
-#define EXHAUST_FAN_PIN     -1      // พัดลมระบายอากาศ/ดูดอากาศ
+#define EXHAUST_FAN_PIN     2     // พัดลมระบายอากาศ/ดูดอากาศ
 #endif
 
 // Automation Pumps (Dosing & Water)
@@ -61,11 +61,11 @@
 #endif
 
 #ifndef PUMP_REFILL_PIN
-#define PUMP_REFILL_PIN      -1     // ปั๊มเติมน้ำจากถังน้ำสะอาดเข้าตู้ปลา (ใช้ชื่อเดิมเพื่อคง compatibility)
+#define PUMP_REFILL_PIN     42     // ปั๊มเติมน้ำจากถังน้ำสะอาดเข้าตู้ปลา (หลบขา 33-37 ที่อาจชน flash/PSRAM)
 #endif
 
 #ifndef REFILL_ROUTE_VALVE_PIN
-#define REFILL_ROUTE_VALVE_PIN -1   // โซลินอยด์น้ำเข้าถังผสม (ใช้ชื่อเดิมเพื่อคง compatibility)
+#define REFILL_ROUTE_VALVE_PIN 39   // โซลินอยด์น้ำเข้าถังผสม (ใช้ชื่อเดิมเพื่อคง compatibility)
 #endif
 
 #ifndef SUMP_LEVEL_LOW_PIN
@@ -77,7 +77,7 @@
 #endif
 
 #ifndef FISH_TANK_OVERFLOW_PIN
-#define FISH_TANK_OVERFLOW_PIN -1   // เซ็นเซอร์กันล้นตู้ปลา
+#define FISH_TANK_OVERFLOW_PIN 47  // เซ็นเซอร์กันล้นตู้ปลา
 #endif
 
 
