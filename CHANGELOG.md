@@ -2,6 +2,80 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-05-03] - Switch Board To ESP32-S3 N16R8
+
+### Changed
+
+- Add a shared header alert strip in `header.js` that polls existing health, health-details, and water-status APIs, then shows system-wide warnings in the header when the ESP32 is offline, the heartbeat is stale, a Water System alarm is active, or Pi services like Mosquitto and Camera fail.
+- Add direct alert-strip links to `hardware_test.html` and `settings.html` so operators can jump straight from a header warning to the right control page.
+- Make each header alert item itself route to the relevant page, and reduce service-noise by grouping multiple failed Pi services into one summary item with per-service details inside the strip.
+- Keep the shared header status visible even when no active issues exist by showing a `System Normal` state instead of hiding the whole alert pill and strip.
+- Make the shared header status render immediately on page load and fetch alert data in parallel with timeouts, so the alert pill and strip no longer appear to disappear while slow health-detail checks are still running.
+- Bump the PWA service-worker cache version so pages stop serving an older cached `header.js` after the shared header alert updates.
+- Stop blocking shared-header rendering on `/api/me`, so the alert pill and strip are injected immediately and admin navigation upgrades only after the user-role request returns.
+- Keep the alert strip directly under the header top instead of letting nav insertion push it lower, and move the alert pill to the more visible right-side position next to the live header status pills.
+- Mount shared header controls into the dashboard's existing `status-bar` when that layout is present, so the alert pill and shared header controls show up on `index.html` instead of being attached as a separate hidden right-side group.
+- Shrink the `System Normal` header strip into a compact layout and correct all Hardware Test alert links to the real `/hwtest` route.
+- Replace the top header status pill with a bell icon button and hide the normal-state strip until the bell is opened, while still auto-expanding the strip when real alerts exist.
+- Remove the persistent shortcut strip and turn the bell into the only entry point for opening a compact alert list panel, even when real alerts are present.
+- Rebuild the bell panel as a true anchored dropdown inside the header action area, with outside-click and `Escape` dismissal so the alert UI behaves like a production dropdown instead of a block below the header.
+- Promote the bell dropdown to a viewport-level floating overlay that positions itself from the bell button, avoids header clipping, and reflows on resize/scroll for production-grade behavior with larger alert lists.
+- Harden the bell dropdown close behavior by using capture-phase outside pointer handling, a real close button inside the panel, and the `hidden` attribute so the alert panel can always be dismissed reliably.
+- Mount the alert panel directly under `document.body` instead of inside the header action cluster, so dashboard layout and clipping rules cannot drag the floating dropdown into the wrong place.
+- Delay dropdown positioning until the next animation frame and keep it visually hidden until placement is computed, so the bell panel no longer flashes at the viewport corner before snapping into place.
+- Align `hardware_test.html` jargon with the Settings page by standardizing visible technical terms like `Auto Refill`, `Preferred Route`, `Fish Route`, `Direct Sump`, `Manual ON/OFF`, `Feed Now`, `Runtime Status`, and `YES/NO` so operators do not see different terminology across pages.
+- Standardize jargon across the whole Settings page so technical labels, status values, route names, and action text now use consistent English terms while guidance and examples remain Thai.
+- Keep technical jargon in English on the refreshed Settings cards, so labels and runtime/status terms like `Command Source`, `Schedule`, `Runtime`, `Route`, and `Feed Now` stay familiar while the surrounding guidance remains Thai.
+- Extend the Settings refresh pass so `Light Control` and `Fish Feeder` now use the same friendly guide-box and operator-facing label style as the other cards, and make `Water System` time fields unit-aware with per-field selectors like seconds, minutes, hours, and days while still posting canonical millisecond values to the backend.
+- Reword the Settings `Water System`, `Exhaust Fan`, and `Notifications` cards for friendlier reading: replace technical labels like refill interval/fallback/max runtime with user-focused Thai descriptions, add short guide boxes, and align Fan/Notifications prompts with the same simple input flow used by the threshold card.
+- Make the Settings `Sensor Thresholds` card more user-friendly and less cluttered: clearly label each range as `Min`/`Max`, add a short explanation of what those values mean, and show compact example ranges for pH, temperature, humidity, and TDS.
+- Change the PlatformIO board definition from the generic `esp32-s3-devkitc-1` N8 target to `esp32-s3-devkitc1-n16r8`, so production builds target the actual ESP32-S3 N16R8 hardware instead of relying on flash/PSRAM overrides alone.
+- Add a local `boards/esp32-s3-devkitc1-n16r8.json` manifest so the pinned `espressif32@6.4.0` platform can resolve the N16R8 board ID even though that upstream platform version does not ship it yet.
+
+## [2026-05-02] - Fix HW Test Water Status Precedence
+
+### Changed
+
+- Remove `target_ph` from the automation stack end-to-end: Settings/UI, Pi backend payloads, MQTT automation config, ESP32 automator config/state, CLI status output, and default settings now use TDS-only automation while pH remains monitor-only.
+- Fix HW Test water preset saves so `fish_route` and `sump_route` snapshot the chosen route/fallback before refreshing `/api/settings`; this prevents the UI from accidentally posting stale values like `AUTO` and re-enabling unintended fish->sump fallback.
+- Re-check mix-tank `low/high` demand before auto-falling back from fish refill to `SUMP_DIRECT`, so if the fish route stops and the sump sensors are already conflicting or `high` is active, the controller now stops instead of continuing into mix-tank refill.
+- Fix production route-valve polarity constants so `REFILL_ROUTE_TO_FISH_STATE` is the OFF/idle state and `REFILL_ROUTE_TO_SUMP_STATE` energizes the mix-tank path; this also makes `หยุด Flow Test` close the mix-tank actuator instead of leaving it latched on.
+- Split HW Test flow presets by real sensor source: `fish_route` now uses manual fish-route flow so it ignores mix-tank `low/high` and stops on the fish-tank overflow sensor, while `sump_route` still uses auto-refill logic so the mix-tank `low/high` pair can stop it correctly.
+- Fix water route-valve polarity so selecting `FISH_TANK` now drives the relay to the fish path and `SUMP_DIRECT` drives the sump/mix-tank path; firmware now uses the route-state constants instead of hardcoded relay levels.
+- Fix HW Test flow-sequence cancellation so stopping or switching tests now clears the `Flow Test Mode` badge even when the sequence is mid-step on `circulation_only`, `fish_route`, or `sump_route`.
+- Add a prominent `กำลังอยู่ใน Flow Test Mode` badge plus an automatic sequence runner on HW Test so operators can visibly track manual flow-mode state and run `circulation -> fish route -> sump route -> stop` without manual timing.
+- Add one-click flow-test presets on the HW Test water section so operators can run circulation-only, fish-route refill, and sump-route refill checks directly from water-system controls without relying on TDS/pH chemistry state.
+- Restore a slim set of live water-status fields into `aquaponics/sensors` so HW Test can keep updating `sump_low`, `sump_high`, overflow, and circulation state even if the dedicated `aquaponics/status/water_system` path lags during circulation testing.
+- Separate live water-system runtime status from saved Pi settings so toggling HW Test controls like circulation no longer freezes `sump_low`, `sump_high`, and overflow cards behind stale `app_settings["water_system"]` snapshots.
+- Fix Pi water hardware defaults so a deployed `pi_server` without adjacent firmware `include/config.h` no longer forces `has_level_sensors`, `has_overflow_sensor`, and `has_route_valve` to `false`; the backend now preserves live ESP flags unless firmware pin macros are actually readable.
+- Stop latching `WATER_STATE_ALARM` when both sump level inputs read active at once; firmware now leaves the water controller in normal level handling instead of freezing the water status until a manual alarm clear.
+- Fix Pi water-system status API precedence so HW Test uses dedicated `aquaponics/status/water_system` values before stale `last_data` fallbacks; this prevents `FISH_TANK_OVERFLOW` from incorrectly showing as not installed after config and firmware updates.
+- Fix HW Test frontend state merging so `/api/settings` refresh no longer overwrites live water status flags like `has_overflow_sensor`; the page now waits for confirmed ESP water status before labeling a sensor as not installed.
+- Refactor `hardware_test.html` to separate water config from live status, remove periodic config polling, and add on-page diagnostics that show data source, freshness, and raw install flags for water sensors.
+- Make Pi server derive water hardware presence flags from `include/config.h` so configured sensors like `FISH_TANK_OVERFLOW_PIN=47` cannot regress to `ไม่ได้ติดตั้ง` because of stale saved status or legacy payloads.
+- Simplify the HW Test water UI again: move diagnostics into a collapsed panel, promote live LOW/HIGH sensor cards, and remove `ไม่ได้ติดตั้ง` from the main water test display so the page is easier to read during debugging.
+
+## [2026-05-02] - Restore Latest Hardware Pin Defaults
+
+### Changed
+
+- **fix: restore the latest discussed hardware pin defaults in firmware config (`include/config.h`):**
+  - คืนค่า pin ล่าสุดที่คุยไว้ให้ `EXHAUST_FAN_PIN=2`, `PUMP_REFILL_PIN=42`, `REFILL_ROUTE_VALVE_PIN=39`, และ `FISH_TANK_OVERFLOW_PIN=47` เพื่อให้ firmware กลับมาใช้ mapping ฮาร์ดแวร์ชุดปัจจุบัน
+
+- **fix: keep the main dashboard from blanking live TDS/pH values between MQTT packets (`pi_server/app.py`):**
+  - หยุดล้าง `last_data` ของ sensor เป็น `None` ทันทีเมื่อ key ไม่ถูกส่งมาใน payload รอบนั้น เพราะ firmware อาจ omit ค่าไว้ชั่วคราวระหว่างรอ read ถัดไป โดยเฉพาะ `tds` และ `ph`
+  - ให้ล้างค่าเป็น `None` เฉพาะกรณี sensor ถูก disable จริงจาก `sensor_config` เท่านั้น เพื่อให้ dashboard หลักคงค่าอ่านล่าสุดไว้ได้
+  - เพิ่ม `dashboard_update` emit ทันทีหลัง Pi รับ sensor MQTT ใหม่ เพื่อลดอาการค่าหน้า dashboard ดูค้างระหว่างรอรอบ broadcast พื้นหลัง
+
+- **fix: slim the main local MQTT sensor payload so dashboard sensor cards reach Pi reliably again (`src/localMqtt.cpp`):**
+  - ตัด field ระบบน้ำที่ซ้ำออกจาก payload `aquaponics/sensors` แล้วให้รายละเอียดระบบน้ำไปทาง topic แยก `aquaponics/status/water_system` ตาม design เดิม
+  - ขยาย buffer/doc ของ MQTT payload หลัก และเพิ่ม guard ตรวจ JSON overflow ก่อน publish เพื่อกัน packet หลักหลุดจนหน้า dashboard เหลือค่า `0` หรือ `--` โดยเฉพาะ `tds` และ `ph`
+  - ขยาย payload ของ water status topic พร้อม guard แยกของมันเอง เพื่อไม่ให้การ์ดระบบน้ำเสียตามเมื่อข้อความสถานะยาวขึ้น
+
+- **docs: add a reusable skill for dashboard live-update regressions (`.agent/skills/dashboard-live-update-regressions/SKILL.md`, `AGENTS.md`):**
+  - สรุปอาการซ้ำที่เจอบ่อย เช่น dashboard ค้าง, `tds/ph` เป็น `0/--`, HW test ไม่อัปเดต, และ browser ติด PWA cache เก่า
+  - เก็บ root cause หลัก, ลำดับการไล่เช็ก, ข้อห้ามเรื่องการบวมของ `aquaponics/sensors`, และขั้น deploy ที่ต้องอัปเดตทั้ง firmware/Pi พร้อมกัน
+
 ## [2026-04-29] - HW Test Water Workflow Refresh
 
 ### Changed

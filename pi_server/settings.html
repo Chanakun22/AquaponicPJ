@@ -228,6 +228,62 @@
             line-height: 1.5;
         }
 
+        .settings-guide {
+            margin: 0 0 16px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.035);
+            color: var(--text-muted);
+            font-size: 0.77rem;
+            line-height: 1.6;
+        }
+
+        .settings-guide strong {
+            color: var(--text-main);
+        }
+
+        .range-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .range-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .range-field-label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .range-field input {
+            width: 100%;
+        }
+
+        .time-input-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 130px;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .time-input-row input,
+        .time-input-row select {
+            width: 100%;
+        }
+
+        .threshold-card .form-group,
+        .friendly-card .form-group {
+            margin-bottom: 18px;
+        }
+
         .action-status {
             display: block;
             margin-top: 10px;
@@ -700,6 +756,8 @@
             .card h2 { font-size: 0.95rem; }
             .form-row { flex-direction: column; gap: 8px; }
             .form-row input { width: 100%; }
+            .range-grid { grid-template-columns: 1fr; }
+            .time-input-row { grid-template-columns: 1fr; }
             .btn { padding: 9px 14px; font-size: 0.85rem; }
             input[type="number"], input[type="text"], input[type="time"], select { font-size: 0.88rem; padding: 9px 12px; }
             .footer-actions { padding: 16px; }
@@ -732,14 +790,14 @@
     <div class="section-hint">Cards marked <strong>Apply Now</strong> send changes immediately. Cards marked <strong>Save All</strong> are stored together with the footer button.</div>
 
     <div class="settings-grid">
-        <!-- Automation Targets -->
+        <!-- TDS Auto-Dosing -->
         <div class="card">
-            <h2><i class="fas fa-robot"></i> Automation Targets <span class="card-mode apply-now">Apply Now</span></h2>
-            <div class="card-hint">Applies target values to the ESP32 immediately.</div>
+            <h2><i class="fas fa-robot"></i> TDS Auto-Dosing <span class="card-mode apply-now">Apply Now</span></h2>
+            <div class="card-hint">ตั้งค่า TDS Auto-Dosing สำหรับปั๊ม Nutrient A/B เท่านั้น ส่วน pH จะใช้วัดในตู้ปลาเพื่อ monitor อย่างเดียว.</div>
             
             <div class="form-group">
                 <div class="toggle-container" style="justify-content: space-between; margin-bottom: 20px;">
-                    <span style="font-weight:600; color:var(--text-main)">Enable Auto-Dosing</span>
+                    <span style="font-weight:600; color:var(--text-main)">Enable TDS Auto-Dosing</span>
                     <label class="toggle">
                         <input type="checkbox" id="auto_enabled">
                         <span class="toggle-slider"></span>
@@ -752,20 +810,16 @@
                 <input type="number" id="auto_tgt_tds" step="10" placeholder="e.g. 800">
                 <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 5px;">Nutrient A/B will dose when TDS falls below this value.</span>
             </div>
-
-            <div class="form-group">
-                <label>Target pH</label>
-                <input type="number" id="auto_tgt_ph" step="0.1" placeholder="e.g. 6.5">
-            </div>
             
             <button class="btn btn-primary" onclick="saveAutomationConfig()" style="width: 100%; margin-top: 10px;">
-                <i class="fas fa-save"></i> Apply Auto Config
+                <i class="fas fa-save"></i> Apply TDS Auto-Dosing
             </button>
         </div>
 
-        <div class="card">
+        <div class="card friendly-card">
             <h2><i class="fas fa-lightbulb"></i> Light Control <span class="card-mode apply-now">Apply Now</span></h2>
-            <div class="card-hint">เลือกว่าจะให้คำสั่งไฟมาจาก NETPIE หรือจากเว็บนี้ แล้วตั้ง schedule/manual ตาม source ที่เลือก</div>
+            <div class="card-hint">เลือกว่าระบบไฟจะรับคำสั่งจาก NETPIE หรือจากหน้าเว็บนี้ แล้วค่อยตั้งเวลาเปิดปิดหรือสั่งเองตามโหมดที่ต้องการ</div>
+            <div class="settings-guide"><strong>อ่านแบบสั้นๆ:</strong> ถ้าอยากให้หน้าเว็บนี้เป็นคนคุมจริง ให้เลือก `Local Web` จากนั้นตั้ง Schedule เปิด-ปิดไฟ หรือใช้ปุ่ม Manual ON/OFF ในแผงรายละเอียดด้านล่าง.</div>
 
             <div class="form-group">
                 <label>Command Source</label>
@@ -828,20 +882,20 @@
                 <i class="fas fa-info-circle"></i>
                 <div>
                     <strong>Ready to apply</strong>
-                    Changes in this card will be sent to ESP32 when you press Apply Light Config.
+                    Light settings in this card will be sent to ESP32 when you press Apply Light Config
                 </div>
             </div>
 
             <details class="advanced-panel" id="light_advanced_panel">
                 <summary>
-                    <span>Advanced Controls &amp; Status</span>
-                    <span class="advanced-hint" id="light_advanced_hint">Manual controls and runtime status</span>
+                    <span>Runtime Status &amp; Manual Controls</span>
+                    <span class="advanced-hint" id="light_advanced_hint">View runtime status and manual controls</span>
                 </summary>
                 <div class="advanced-body">
                     <div class="status-block">
                         Running: <strong id="light_running_text">NO</strong><br>
                         NTP Synced: <strong id="light_ntp_text">NO</strong><br>
-                        Reason: <span id="light_reason_text">-</span>
+                        Last Reason: <span id="light_reason_text">-</span>
                     </div>
 
                     <div class="action-row" style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
@@ -852,14 +906,15 @@
                             <i class="fas fa-moon"></i> Manual OFF
                         </button>
                     </div>
-                    <span class="action-status" id="light_action_status">Manual ON/OFF จะพร้อมใช้เมื่อเลือก Light Command Source เป็น Local Web</span>
+                    <span class="action-status" id="light_action_status">Manual ON/OFF is available when Command Source is Local Web</span>
                 </div>
             </details>
         </div>
 
-        <div class="card">
+        <div class="card friendly-card">
             <h2><i class="fas fa-fish"></i> Fish Feeder <span class="card-mode apply-now">Apply Now</span></h2>
-            <div class="card-hint">ตั้ง schedule ให้อาหารปลา หรือเลือกให้ NETPIE เป็นคนคุม ถ้าจะกด Feed Now จากเว็บต้องใช้ source เป็น Local Web</div>
+            <div class="card-hint">เลือกว่าจะให้เว็บนี้หรือ NETPIE เป็นคนสั่งให้อาหาร จากนั้นตั้งเวลาประจำและระยะเวลาทำงานต่อครั้งให้ตรงกับอุปกรณ์จริง</div>
+            <div class="settings-guide"><strong>อ่านแบบสั้นๆ:</strong> ถ้าอยากกด `Feed Now` จากหน้าเว็บ ให้เลือก `Local Web` ก่อน ส่วน `Feed Schedule` ใช้สำหรับรอบประจำในแต่ละวัน.</div>
 
             <div class="form-group">
                 <label>Command Source</label>
@@ -867,6 +922,7 @@
                     <option value="local_web">Local Web</option>
                     <option value="netpie">NETPIE</option>
                 </select>
+                <span class="field-tip">เลือก <strong>Local Web</strong> ถ้าต้องการให้หน้าเว็บนี้กดให้อาหารได้ทันที หรือเลือก <strong>NETPIE</strong> ถ้าจะให้ cloud เป็นคนคุม</span>
             </div>
 
             <div class="form-group">
@@ -877,6 +933,7 @@
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
+                <span class="field-tip">ปิดไว้ถ้าต้องการให้อาหารเฉพาะตอนกดเองหรือสั่งจาก NETPIE เท่านั้น</span>
             </div>
 
             <div class="form-group">
@@ -897,9 +954,9 @@
             </div>
 
             <div class="form-group">
-                <label>Feed Duration (ms)</label>
+                <label>Feed Duration</label>
                 <input type="number" id="feeder_duration_ms" step="100" min="250" max="10000" placeholder="e.g. 2000">
-                <span class="field-tip">เวลาที่จะเปิด output ของ feeder ต่อครั้ง ใช้ให้ตรงกับอุปกรณ์จริงเพื่อลดการให้อาหารเกิน</span>
+                <span class="field-tip">ตั้งให้พอดีกับอุปกรณ์จริงเพื่อลดการให้อาหารเกิน ตัวอย่างที่ใช้บ่อย: `2000 ms`</span>
             </div>
 
             <button class="btn btn-primary" id="feeder_apply_btn" onclick="saveFishFeederConfig()" style="width: 100%; margin-top: 10px;">
@@ -909,21 +966,21 @@
                 <i class="fas fa-info-circle"></i>
                 <div>
                     <strong>Ready to apply</strong>
-                    Schedule and duration changes will be sent to ESP32 when you press Apply Feeder Config.
+                    Feed Schedule and Feed Duration will be sent to ESP32 when you press Apply Feeder Config
                 </div>
             </div>
 
             <details class="advanced-panel" id="feeder_advanced_panel">
                 <summary>
-                    <span>Advanced Controls &amp; Status</span>
-                    <span class="advanced-hint" id="feeder_advanced_hint">Manual actions and runtime status</span>
+                    <span>Runtime Status &amp; Manual Controls</span>
+                    <span class="advanced-hint" id="feeder_advanced_hint">View runtime status and manual controls</span>
                 </summary>
                 <div class="advanced-body">
                     <div class="status-block">
                         State: <strong id="feeder_state_text">UNKNOWN</strong><br>
                         Running: <strong id="feeder_running_text">NO</strong><br>
                         Last Feed: <strong id="feeder_last_feed_text">Never</strong><br>
-                        Reason: <span id="feeder_reason_text">-</span>
+                        Last Reason: <span id="feeder_reason_text">-</span>
                     </div>
 
                     <div class="action-row" style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
@@ -931,14 +988,15 @@
                             <i class="fas fa-bowl-food"></i> Feed Now
                         </button>
                     </div>
-                    <span class="action-status" id="feeder_action_status">Feed Now จะพร้อมใช้เมื่อเลือก Fish Feeder Command Source เป็น Local Web</span>
+                    <span class="action-status" id="feeder_action_status">Feed Now is available when Command Source is Local Web</span>
                 </div>
             </details>
         </div>
 
-        <div class="card">
+        <div class="card friendly-card">
             <h2><i class="fas fa-water"></i> Water System <span class="card-mode apply-now">Apply Now</span></h2>
-            <div class="card-hint">รวมค่าหลักของระบบน้ำทั้งหมดไว้ในการ์ดเดียว ทั้ง circulation, refill policy, fish-safe refill limit, route fallback, สถานะจริงจาก ESP32 และปุ่มสั่งงานทันที</div>
+            <div class="card-hint">ตั้งค่าการหมุนน้ำและการเติมน้ำของระบบ โดยการ์ดนี้จะรวม Auto Refill, Route, Runtime limit และคำสั่งหลักของ Water System ไว้ในที่เดียว</div>
+            <div class="settings-guide"><strong>อ่านแบบสั้นๆ:</strong> ถ้า mix tank ต่ำระบบจะเริ่ม Auto Refill, แต่ละรอบจะถูกจำกัดด้วย runtime limit และถ้าจำเป็นค่อยยอมเปลี่ยน Route ตาม policy ที่ตั้งไว้.</div>
 
             <div class="form-group">
                 <div class="toggle-container" style="justify-content: space-between; margin-bottom: 12px;">
@@ -957,59 +1015,86 @@
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
-                <span class="field-tip">เปิดให้ระบบตรวจลูกลอย/เซ็นเซอร์ระดับน้ำของถังผสม แล้วสั่งเติมน้ำอัตโนมัติเมื่อระดับต่ำกว่าที่กำหนด</span>
+                <span class="field-tip">เปิดให้ระบบตรวจลูกลอย/เซ็นเซอร์ระดับน้ำของถังผสม แล้วสั่ง Auto Refill เมื่อระดับต่ำกว่าที่กำหนด</span>
             </div>
 
             <div class="water-section-title">Refill Policy</div>
             <div class="water-panel-grid">
                 <div class="form-group">
-                    <label>Max Refill Time (ms)</label>
-                    <input type="number" id="water_refill_max_runtime_ms" step="1000" min="1000" placeholder="e.g. 120000">
-                    <span class="field-tip">เวลาสูงสุดของรอบเติมรวม ถ้าเกินค่านี้แล้วยังไม่ถึงระดับที่ควรได้ ระบบจะเข้า alarm</span>
+                    <label>Max Refill Runtime</label>
+                    <div class="time-input-row">
+                        <input type="number" id="water_refill_max_runtime_ms" step="0.1" min="0.1" placeholder="เช่น 2">
+                        <select id="water_refill_max_runtime_unit">
+                            <option value="sec">วินาที</option>
+                            <option value="min">นาที</option>
+                            <option value="hour">ชั่วโมง</option>
+                        </select>
+                    </div>
+                    <span class="field-tip">เหมาะกับค่าประเภทสั้นถึงกลาง เช่น `2 นาที` ถ้า refill runtime นานเกินค่านี้ ระบบจะมองว่าผิดปกติและเข้า alarm</span>
                 </div>
 
                 <div class="form-group">
-                    <label>Mix Refill Min Interval (sec)</label>
-                    <input type="number" id="water_refill_min_interval_sec" step="1" min="0" placeholder="e.g. 300">
-                    <span class="field-tip">ช่วงพักขั้นต่ำหลังเติมถังผสมจบรอบ เพื่อกันการเติมถี่เกินไป</span>
+                    <label>Mix Refill Interval</label>
+                    <div class="time-input-row">
+                        <input type="number" id="water_refill_min_interval_sec" step="0.1" min="0" placeholder="เช่น 5">
+                        <select id="water_refill_min_interval_unit">
+                            <option value="sec">วินาที</option>
+                            <option value="min">นาที</option>
+                            <option value="hour">ชั่วโมง</option>
+                        </select>
+                    </div>
+                    <span class="field-tip">เหมาะกับค่ารอระหว่าง refill cycle เช่น `5 นาที` เพื่อกันการเติมถี่เกินไปหลังเพิ่งจบรอบ</span>
                 </div>
 
                 <div class="form-group">
-                    <label>Fish Refill Max Time (sec)</label>
-                    <input type="number" id="water_fish_refill_max_runtime_sec" step="1" min="1" placeholder="e.g. 10">
-                    <span class="field-tip">จำกัดเวลาปั๊มเติมผ่านตู้ปลาในแต่ละรอบ เพื่อไม่ให้น้ำ overflow ไหลลงถังผสมมากเกินไป</span>
+                    <label>Fish Route Max Runtime</label>
+                    <div class="time-input-row">
+                        <input type="number" id="water_fish_refill_max_runtime_sec" step="0.1" min="0.1" placeholder="เช่น 10">
+                        <select id="water_fish_refill_max_runtime_unit">
+                            <option value="sec">วินาที</option>
+                            <option value="min">นาที</option>
+                        </select>
+                    </div>
+                    <span class="field-tip">เหมาะกับค่าที่สั้นมาก เช่น `10 วินาที` เพื่อกัน overflow หรือการไหลเกินจำเป็นบน fish route</span>
                 </div>
 
                 <div class="form-group">
-                    <label>Fish Refill Cooldown (sec)</label>
-                    <input type="number" id="water_fish_refill_interval_sec" step="1" min="0" placeholder="e.g. 600">
-                    <span class="field-tip">ช่วงพักก่อนอนุญาตให้ใช้ route ผ่านตู้ปลาได้อีกครั้ง หลังหยุดเพราะครบเวลา หรือ overflow sensor ทำงาน</span>
+                    <label>Fish Route Cooldown</label>
+                    <div class="time-input-row">
+                        <input type="number" id="water_fish_refill_interval_sec" step="0.1" min="0" placeholder="เช่น 1">
+                        <select id="water_fish_refill_interval_unit">
+                            <option value="min">นาที</option>
+                            <option value="hour">ชั่วโมง</option>
+                            <option value="day">วัน</option>
+                        </select>
+                    </div>
+                    <span class="field-tip">เหมาะกับค่า cooldown ที่อาจยาวหลายชั่วโมงหรือหลายวัน เช่น `1 วัน` ก่อนจะยอมใช้ fish route อีกครั้ง</span>
                 </div>
             </div>
 
             <div class="water-section-title">Route Strategy</div>
             <div class="form-group">
-                <label>เส้นทางเติมน้ำ</label>
+                <label>Preferred Route</label>
                 <select id="water_preferred_route">
-                    <option value="AUTO">อัตโนมัติ</option>
-                    <option value="FISH_TANK">ผ่านตู้ปลา</option>
-                    <option value="SUMP_DIRECT">เข้าถังผสมตรง</option>
+                    <option value="AUTO">Auto</option>
+                    <option value="FISH_TANK">Fish Route</option>
+                    <option value="SUMP_DIRECT">Direct Sump</option>
                 </select>
-                <span class="field-tip">`อัตโนมัติ` จะเลือกเติมผ่านตู้ปลาก่อน แล้วหยุดตามเวลา/overflow sensor ก่อนค่อยพิจารณา fallback, `ผ่านตู้ปลา` คือบังคับใช้เฉพาะ route นี้, `เข้าถังผสมตรง` คือเปิดโซลินอยด์เติมเข้าถังผสมทันที</span>
+                <span class="field-tip">เลือก `Auto` ถ้าอยากให้ระบบตัดสินใจเอง, เลือก `Fish Route` ถ้าต้องการบังคับ route นี้เท่านั้น, และเลือก `Direct Sump` ถ้าต้องการเติมเข้าถังผสมโดยตรง</span>
             </div>
 
             <div class="form-group">
                 <div class="toggle-container" style="justify-content: space-between; margin-bottom: 12px;">
-                    <span style="font-weight:600; color:var(--text-main)">อนุญาต fallback เข้าถังผสมตรง</span>
+                    <span style="font-weight:600; color:var(--text-main)">Allow Direct Sump Fallback</span>
                     <label class="toggle">
                         <input type="checkbox" id="water_allow_direct_sump_refill">
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
-                <span class="field-tip" id="water_route_hint">ใช้ตอนเลือก `อัตโนมัติ` เท่านั้น ถ้าเปิดไว้ระบบจะยอม fallback ไปทางเข้าถังผสมตรงเมื่อรอบเติมผ่านตู้ปลาหยุดแล้ว แต่ถังผสมยังไม่ถึงระดับที่ต้องการ</span>
+                <span class="field-tip" id="water_route_hint">ใช้ตอนเลือก `Auto` เท่านั้น ถ้าเปิดไว้ระบบจะยอม fallback ไปทาง Direct Sump เมื่อ fish route หยุดแล้วแต่ mix tank ยังไม่พอ</span>
             </div>
 
-            <div class="water-section-title">Live Status</div>
+            <div class="water-section-title">Live Status from ESP32</div>
             <div class="water-status-grid">
                 <div class="water-status-card">
                     <span>State</span>
@@ -1017,11 +1102,11 @@
                 </div>
                 <div class="water-status-card">
                     <span>Configured Route</span>
-                    <strong id="water_preferred_route_text">อัตโนมัติ</strong>
+                    <strong id="water_preferred_route_text">AUTO</strong>
                 </div>
                 <div class="water-status-card">
                     <span>Active Route</span>
-                    <strong id="water_active_route_text">ไม่มี</strong>
+                    <strong id="water_active_route_text">NONE</strong>
                 </div>
                 <div class="water-status-card">
                     <span>Fish Refill Ready</span>
@@ -1040,7 +1125,7 @@
             <details class="advanced-panel" open>
                 <summary>
                     <span>Runtime Details &amp; Manual Actions</span>
-                    <span class="advanced-hint">Status from ESP32 and direct commands</span>
+                    <span class="advanced-hint">View runtime status and direct commands</span>
                 </summary>
                 <div class="advanced-body">
                     <div class="water-status-grid">
@@ -1087,7 +1172,7 @@
                     </div>
 
                     <div class="status-block" style="margin-top:14px; margin-bottom:16px;">
-                        เหตุผลล่าสุด: <strong id="water_reason_text">-</strong>
+                        Last Reason: <strong id="water_reason_text">-</strong>
                     </div>
 
                     <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
@@ -1104,14 +1189,15 @@
                             <i class="fas fa-shield-alt"></i> Clear Alarm
                         </button>
                     </div>
-                    <span class="field-tip">Apply จะส่งค่าทั้งหมดของการ์ดนี้ไป ESP32 ทันที ส่วน Manual Refill และ Clear Alarm ใช้สั่งงาน runtime โดยตรง</span>
+                    <span class="field-tip">Apply จะส่งค่าทั้งหมดของการ์ดนี้ไป ESP32 ทันที ส่วน Manual Refill และ Clear Alarm เป็น direct commands สำหรับสั่ง Water System หน้างาน</span>
                 </div>
             </details>
         </div>
 
-        <div class="card">
+        <div class="card friendly-card">
             <h2><i class="fas fa-fan"></i> Exhaust Fan <span class="card-mode apply-now">Apply Now</span></h2>
-            <div class="card-hint">คุมพัดลมระบายอากาศจากอุณหภูมิและความชื้นของ DHT หรือสั่ง manual ได้ทันทีจากหน้าเว็บ</div>
+            <div class="card-hint">ตั้งค่าพัดลมระบายอากาศให้เปิดและปิดตามอุณหภูมิหรือความชื้น และสั่งเองได้ทันทีเมื่อต้องการทดสอบหรือ override</div>
+            <div class="settings-guide"><strong>อ่านแบบสั้นๆ:</strong> ค่า `ON` คือจุดเริ่มเปิดพัดลม และค่า `OFF` คือจุดที่ยอมปิดอีกครั้ง เพื่อกันอาการเปิด-ปิดถี่เกินไป.</div>
 
             <div class="form-group">
                 <div class="toggle-container" style="justify-content: space-between; margin-bottom: 12px;">
@@ -1135,30 +1221,40 @@
 
             <div class="form-group">
                 <label>Air Temp ON / OFF (°C)</label>
-                <div class="form-row">
-                    <input type="number" id="fan_temp_on_c" step="0.1" placeholder="e.g. 32">
-                    <span>to</span>
-                    <input type="number" id="fan_temp_off_c" step="0.1" placeholder="e.g. 30">
+                <div class="range-grid">
+                    <div class="range-field">
+                        <span class="range-field-label">ON</span>
+                        <input type="number" id="fan_temp_on_c" step="0.1" placeholder="เช่น 32">
+                    </div>
+                    <div class="range-field">
+                        <span class="range-field-label">OFF</span>
+                        <input type="number" id="fan_temp_off_c" step="0.1" placeholder="เช่น 30">
+                    </div>
                 </div>
-                <span class="field-tip">พัดลมจะเริ่มทำงานเมื่ออุณหภูมิถึงค่า ON และจะยอมปิดเมื่อเย็นลงต่ำกว่าค่า OFF เพื่อทำ hysteresis</span>
+                <span class="field-tip">ตัวอย่างที่ใช้อยู่บ่อย: เปิดที่ `32°C` และปิดเมื่อเย็นลงถึง `30°C`</span>
             </div>
 
             <div class="form-group">
                 <label>Humidity ON / OFF (%)</label>
-                <div class="form-row">
-                    <input type="number" id="fan_humidity_on_pct" step="1" placeholder="e.g. 80">
-                    <span>to</span>
-                    <input type="number" id="fan_humidity_off_pct" step="1" placeholder="e.g. 75">
+                <div class="range-grid">
+                    <div class="range-field">
+                        <span class="range-field-label">ON</span>
+                        <input type="number" id="fan_humidity_on_pct" step="1" placeholder="เช่น 80">
+                    </div>
+                    <div class="range-field">
+                        <span class="range-field-label">OFF</span>
+                        <input type="number" id="fan_humidity_off_pct" step="1" placeholder="เช่น 75">
+                    </div>
                 </div>
-                <span class="field-tip">ถ้าความชื้นสูงเกินกว่าค่า ON ระบบจะเปิดพัดลม และจะค่อยปิดเมื่อความชื้นลดต่ำกว่าค่า OFF</span>
+                <span class="field-tip">ตัวอย่างที่ใช้อยู่บ่อย: เปิดที่ `80%` และปิดเมื่อความชื้นลดลงถึง `75%`</span>
             </div>
 
             <div class="form-group" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 18px;">
                 State: <strong id="fan_state_text">UNKNOWN</strong><br>
                 Mode: <strong id="fan_mode_text">AUTO</strong><br>
                 Running: <strong id="fan_running_text">NO</strong><br>
-                Reason: <span id="fan_reason_text">-</span>
-                <span class="field-tip">สถานะนี้มาจาก ESP32 โดยตรง ใช้ดูว่าพัดลมกำลังหมุนอยู่ไหม, อยู่ในโหมด auto/manual, และเปิดเพราะอะไร</span>
+                Last Reason: <span id="fan_reason_text">-</span>
+                <span class="field-tip">สถานะนี้มาจาก ESP32 โดยตรง ใช้ดูว่า fan กำลังหมุนอยู่ไหม, อยู่ใน Auto/Manual mode, และเปิดเพราะอะไร</span>
             </div>
 
             <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
@@ -1175,57 +1271,88 @@
                     <i class="fas fa-rotate"></i> Return Auto
                 </button>
             </div>
-            <span class="field-tip">Manual On/Off จะบังคับโหมดเป็น manual ทันที ส่วน Return Auto จะให้ระบบกลับไปคุมตาม threshold อีกครั้ง</span>
+            <span class="field-tip">Manual On/Off ใช้ตอนทดสอบหรืออยากบังคับ fan ชั่วคราว ส่วน Return Auto จะกลับไปคุมตามค่า ON/OFF ที่ตั้งไว้</span>
         </div>
 
         <!-- Thresholds -->
-        <div class="card">
+        <div class="card threshold-card">
             <h2><i class="fas fa-thermometer-half"></i> Sensor Thresholds <span class="card-mode apply-now">Apply Now</span></h2>
-            <div class="card-hint">Saves only threshold values without touching other general settings cards.</div>
+            <div class="card-hint">ตั้งช่วงค่าที่ระบบถือว่า "ปกติ" สำหรับการแจ้งเตือนและการแสดงผล โดยการ์ดนี้จะบันทึกเฉพาะ threshold เท่านั้น.</div>
+            <div class="settings-guide"><strong>วิธีกรอกแบบสั้นๆ:</strong> `Min` คือค่าต่ำสุดที่ยังยอมรับได้ และ `Max` คือค่าสูงสุดที่ยังยอมรับได้ ถ้าค่าออกนอกช่วงนี้ ระบบจะถือว่าเริ่มผิดปกติ.</div>
             
             <div class="form-group">
-                <label>pH Range</label>
-                <div class="form-row">
-                    <input type="number" id="ph_min" step="0.1" min="0" max="14">
-                    <span>to</span>
-                    <input type="number" id="ph_max" step="0.1" min="0" max="14">
+                <label>pH Normal Range</label>
+                <div class="range-grid">
+                    <div class="range-field">
+                        <span class="range-field-label">Min</span>
+                        <input type="number" id="ph_min" step="0.1" min="0" max="14" placeholder="เช่น 6.0">
+                    </div>
+                    <div class="range-field">
+                        <span class="range-field-label">Max</span>
+                        <input type="number" id="ph_max" step="0.1" min="0" max="14" placeholder="เช่น 7.5">
+                    </div>
                 </div>
+                <span class="field-tip">ตัวอย่างที่ใช้อยู่บ่อย: `6.0 - 7.5`</span>
             </div>
 
             <div class="form-group">
-                <label>Water Temperature (°C)</label>
-                <div class="form-row">
-                    <input type="number" id="water_temp_min" step="1">
-                    <span>to</span>
-                    <input type="number" id="water_temp_max" step="1">
+                <label>Water Temp (°C)</label>
+                <div class="range-grid">
+                    <div class="range-field">
+                        <span class="range-field-label">Min</span>
+                        <input type="number" id="water_temp_min" step="1" placeholder="เช่น 22">
+                    </div>
+                    <div class="range-field">
+                        <span class="range-field-label">Max</span>
+                        <input type="number" id="water_temp_max" step="1" placeholder="เช่น 30">
+                    </div>
                 </div>
+                <span class="field-tip">ตัวอย่างค่าทั่วไป: `22 - 30°C`</span>
             </div>
 
             <div class="form-group">
-                <label>Air Temperature (°C)</label>
-                <div class="form-row">
-                    <input type="number" id="air_temp_min" step="1">
-                    <span>to</span>
-                    <input type="number" id="air_temp_max" step="1">
+                <label>Air Temp (°C)</label>
+                <div class="range-grid">
+                    <div class="range-field">
+                        <span class="range-field-label">Min</span>
+                        <input type="number" id="air_temp_min" step="1" placeholder="เช่น 25">
+                    </div>
+                    <div class="range-field">
+                        <span class="range-field-label">Max</span>
+                        <input type="number" id="air_temp_max" step="1" placeholder="เช่น 35">
+                    </div>
                 </div>
+                <span class="field-tip">ตัวอย่างค่าทั่วไป: `25 - 35°C`</span>
             </div>
 
             <div class="form-group">
                 <label>Humidity (%)</label>
-                <div class="form-row">
-                    <input type="number" id="humidity_min" step="1">
-                    <span>to</span>
-                    <input type="number" id="humidity_max" step="1">
+                <div class="range-grid">
+                    <div class="range-field">
+                        <span class="range-field-label">Min</span>
+                        <input type="number" id="humidity_min" step="1" placeholder="เช่น 50">
+                    </div>
+                    <div class="range-field">
+                        <span class="range-field-label">Max</span>
+                        <input type="number" id="humidity_max" step="1" placeholder="เช่น 80">
+                    </div>
                 </div>
+                <span class="field-tip">ตัวอย่างค่าทั่วไป: `50 - 80%`</span>
             </div>
 
             <div class="form-group">
                 <label>TDS (ppm)</label>
-                <div class="form-row">
-                    <input type="number" id="tds_min" step="10">
-                    <span>to</span>
-                    <input type="number" id="tds_max" step="10">
+                <div class="range-grid">
+                    <div class="range-field">
+                        <span class="range-field-label">Min</span>
+                        <input type="number" id="tds_min" step="10" placeholder="เช่น 300">
+                    </div>
+                    <div class="range-field">
+                        <span class="range-field-label">Max</span>
+                        <input type="number" id="tds_max" step="10" placeholder="เช่น 600">
+                    </div>
                 </div>
+                <span class="field-tip">ตัวอย่างค่าทั่วไป: `300 - 600 ppm`</span>
             </div>
 
             <button class="btn btn-primary" onclick="saveThresholdsConfig()" style="width: 100%; margin-top: 10px;">
@@ -1285,9 +1412,10 @@
         </div>
 
         <!-- Notifications -->
-        <div class="card">
+        <div class="card friendly-card">
             <h2><i class="fas fa-bell"></i> Notifications <span class="card-mode save-all">Save All</span></h2>
-            <div class="card-hint">Stored with the footer save button.</div>
+            <div class="card-hint">ตั้งค่าการแจ้งเตือนให้เข้าใจง่ายขึ้นว่าจะเปิดแจ้งเตือนหรือไม่ ส่งผ่าน token ไหน และเว้นช่วงแจ้งเตือนห่างกันแค่ไหน</div>
+            <div class="settings-guide"><strong>อ่านแบบสั้นๆ:</strong> เปิด Alerts ถ้าต้องการรับข้อความแจ้งเตือน, ใส่ token ของ LINE/ช่องทางที่ใช้จริง, และกำหนด Alert Cooldown เพื่อกันข้อความเด้งซ้ำถี่เกินไป.</div>
 
             <div class="form-group">
                 <label>Enable Alerts</label>
@@ -1298,16 +1426,19 @@
                     </label>
                     <span id="notify_status">OFF</span>
                 </div>
+                <span class="field-tip">ปิดไว้ถ้ายังไม่พร้อมให้ระบบส่งแจ้งเตือนออกไปจริง</span>
             </div>
 
             <div class="form-group">
-                <label>Channel Access Token</label>
-                <input type="text" id="line_token" placeholder="Enter Channel Access Token (Long-lived)">
+                <label>LINE Channel Access Token</label>
+                <input type="text" id="line_token" placeholder="วาง long-lived token ที่ใช้งานจริง">
+                <span class="field-tip">ใช้ token ของช่องทางแจ้งเตือนที่ต้องการให้ระบบส่งข้อความหา</span>
             </div>
 
             <div class="form-group">
                 <label>Alert Cooldown (minutes)</label>
-                <input type="number" id="alert_cooldown" min="1" max="60">
+                <input type="number" id="alert_cooldown" min="1" max="60" placeholder="เช่น 15">
+                <span class="field-tip">ตัวอย่างที่ใช้อยู่บ่อย: `15 นาที` เพื่อกันข้อความเด้งถี่จากเหตุการณ์เดิม</span>
             </div>
         </div>
 
@@ -1551,17 +1682,45 @@
 
     <script>
         let settings = {};
+        const WATER_TIME_UNITS = {
+            sec: { label: 'วินาที', multiplier: 1000 },
+            min: { label: 'นาที', multiplier: 60 * 1000 },
+            hour: { label: 'ชั่วโมง', multiplier: 60 * 60 * 1000 },
+            day: { label: 'วัน', multiplier: 24 * 60 * 60 * 1000 }
+        };
+        const WATER_TIME_FIELDS = {
+            water_refill_max_runtime_ms: {
+                unitId: 'water_refill_max_runtime_unit',
+                defaultMs: 120000,
+                allowedUnits: ['sec', 'min', 'hour']
+            },
+            water_refill_min_interval_sec: {
+                unitId: 'water_refill_min_interval_unit',
+                defaultMs: 300000,
+                allowedUnits: ['sec', 'min', 'hour']
+            },
+            water_fish_refill_max_runtime_sec: {
+                unitId: 'water_fish_refill_max_runtime_unit',
+                defaultMs: 30000,
+                allowedUnits: ['sec', 'min']
+            },
+            water_fish_refill_interval_sec: {
+                unitId: 'water_fish_refill_interval_unit',
+                defaultMs: 604800000,
+                allowedUnits: ['min', 'hour', 'day']
+            }
+        };
         const actionFeedbackState = {
             light: {
                 status: 'idle',
                 title: 'Ready to apply',
-                detail: 'Changes in this card will be sent to ESP32 when you press Apply Light Config.',
+                detail: 'Light settings in this card will be sent to ESP32 when you press Apply Light Config',
                 icon: 'fa-info-circle'
             },
             feeder: {
                 status: 'idle',
                 title: 'Ready to apply',
-                detail: 'Schedule and duration changes will be sent to ESP32 when you press Apply Feeder Config.',
+                detail: 'Feed Schedule and Feed Duration will be sent to ESP32 when you press Apply Feeder Config',
                 icon: 'fa-info-circle'
             }
         };
@@ -1577,32 +1736,32 @@
         }
 
         function formatWaterBool(value) {
-            return value ? 'ใช่' : 'ไม่';
+            return value ? 'YES' : 'NO';
         }
 
         function formatWaterRoute(route) {
             const labels = {
-                AUTO: 'อัตโนมัติ',
-                FISH_TANK: 'ผ่านตู้ปลา',
-                SUMP_DIRECT: 'เข้าถังผสมตรง',
-                NONE: 'ไม่มี',
-                UNKNOWN: 'ไม่ทราบ'
+                AUTO: 'Auto',
+                FISH_TANK: 'Fish Route',
+                SUMP_DIRECT: 'Direct Sump',
+                NONE: 'None',
+                UNKNOWN: 'Unknown'
             };
-            return labels[route] || route || 'ไม่ทราบ';
+            return labels[route] || route || 'Unknown';
         }
 
         function formatWaterState(state) {
             const labels = {
-                IDLE: 'พร้อมทำงาน',
-                MIX_TANK_REFILL: 'เติมถังน้ำผสม',
-                WAIT_REFILL_INTERVAL: 'รอช่วงกันเติมถี่',
-                MIX_TANK_SETTLING: 'รอให้น้ำในถังผสมนิ่ง',
-                FISH_TANK_REFILL: 'เติมผ่านตู้ปลา',
-                BLOCKED: 'ถูกบล็อก',
-                ALARM: 'แจ้งเตือน',
-                UNKNOWN: 'ไม่ทราบ'
+                IDLE: 'Idle',
+                MIX_TANK_REFILL: 'Mix Tank Refill',
+                WAIT_REFILL_INTERVAL: 'Wait Refill Interval',
+                MIX_TANK_SETTLING: 'Mix Tank Settling',
+                FISH_TANK_REFILL: 'Fish Tank Refill',
+                BLOCKED: 'Blocked',
+                ALARM: 'Alarm',
+                UNKNOWN: 'Unknown'
             };
-            return labels[state] || state || 'ไม่ทราบ';
+            return labels[state] || state || 'Unknown';
         }
 
         function formatHoldMs(ms) {
@@ -1621,8 +1780,8 @@
             const isAuto = routeSelect.value === 'AUTO';
             fallbackToggle.disabled = !isAuto;
             hint.textContent = isAuto
-                ? 'ใช้ตอนเลือก `อัตโนมัติ` เท่านั้น ถ้าเปิดไว้ระบบจะยอม fallback ไปทางเข้าถังผสมตรงเมื่อรอบเติมผ่านตู้ปลาหยุดแล้ว แต่ถังผสมยังไม่พอ'
-                : 'ตอนนี้เลือก route แบบบังคับแล้ว ค่า fallback จะไม่ถูกใช้จนกว่าจะกลับมาเลือกโหมดอัตโนมัติ';
+                ? 'ใช้ตอนเลือก `Auto` เท่านั้น ถ้าเปิดไว้ระบบจะยอม fallback ไปทาง Direct Sump เมื่อ Fish Route หยุดแล้วแต่ mix tank ยังไม่พอ'
+                : 'ตอนนี้เลือก route แบบบังคับแล้ว ค่า fallback จะไม่ถูกใช้จนกว่าจะกลับมาเลือกโหมด Auto';
         }
 
         function normalizeInteger(value, fallback, min = null, max = null) {
@@ -1639,11 +1798,49 @@
             return normalized;
         }
 
+        function chooseWaterTimeUnit(totalMs, allowedUnits) {
+            for (let index = allowedUnits.length - 1; index >= 0; index -= 1) {
+                const unitKey = allowedUnits[index];
+                const unit = WATER_TIME_UNITS[unitKey];
+                if (!unit) {
+                    continue;
+                }
+                const converted = totalMs / unit.multiplier;
+                if (converted >= 1) {
+                    return unitKey;
+                }
+            }
+            return allowedUnits[0];
+        }
+
+        function setWaterTimeFieldValue(inputId, totalMs) {
+            const field = WATER_TIME_FIELDS[inputId];
+            const input = document.getElementById(inputId);
+            const unitSelect = document.getElementById(field.unitId);
+            const safeMs = Number.isFinite(totalMs) ? totalMs : field.defaultMs;
+            const unitKey = chooseWaterTimeUnit(safeMs, field.allowedUnits);
+            const multiplier = WATER_TIME_UNITS[unitKey].multiplier;
+            const converted = safeMs / multiplier;
+            unitSelect.value = unitKey;
+            input.value = Number.isInteger(converted) ? converted : Number(converted.toFixed(2));
+        }
+
+        function readWaterTimeFieldMs(inputId) {
+            const field = WATER_TIME_FIELDS[inputId];
+            const input = document.getElementById(inputId);
+            const unitSelect = document.getElementById(field.unitId);
+            const unitKey = unitSelect.value;
+            const multiplier = WATER_TIME_UNITS[unitKey]?.multiplier ?? 1000;
+            const rawValue = Number.parseFloat(input.value);
+            const fallbackConverted = field.defaultMs / multiplier;
+            const safeValue = Number.isFinite(rawValue) ? rawValue : fallbackConverted;
+            return Math.max(0, Math.round(safeValue * multiplier));
+        }
+
         function populateForm() {
             // Automation
             document.getElementById('auto_enabled').checked = settings.automation?.enabled ?? false;
             document.getElementById('auto_tgt_tds').value = settings.automation?.target_tds ?? 800;
-            document.getElementById('auto_tgt_ph').value = settings.automation?.target_ph ?? 6.5;
 
             // Light Control
             document.getElementById('light_command_source').value = settings.light_control?.command_source ?? 'netpie';
@@ -1682,13 +1879,13 @@
             // Water System
             document.getElementById('water_circulation_enabled').checked = settings.water_system?.circulation_enabled ?? true;
             document.getElementById('water_refill_enabled').checked = settings.water_system?.refill_enabled ?? false;
-            document.getElementById('water_refill_max_runtime_ms').value = settings.water_system?.refill_max_runtime_ms ?? 120000;
-            document.getElementById('water_refill_min_interval_sec').value = Math.round((settings.water_system?.refill_min_interval_ms ?? 300000) / 1000);
-            document.getElementById('water_fish_refill_max_runtime_sec').value = Math.round((settings.water_system?.fish_refill_max_runtime_ms ?? 30000) / 1000);
-            document.getElementById('water_fish_refill_interval_sec').value = Math.round((settings.water_system?.fish_refill_interval_ms ?? 604800000) / 1000);
+            setWaterTimeFieldValue('water_refill_max_runtime_ms', settings.water_system?.refill_max_runtime_ms ?? 120000);
+            setWaterTimeFieldValue('water_refill_min_interval_sec', settings.water_system?.refill_min_interval_ms ?? 300000);
+            setWaterTimeFieldValue('water_fish_refill_max_runtime_sec', settings.water_system?.fish_refill_max_runtime_ms ?? 30000);
+            setWaterTimeFieldValue('water_fish_refill_interval_sec', settings.water_system?.fish_refill_interval_ms ?? 604800000);
             document.getElementById('water_preferred_route').value = settings.water_system?.preferred_route ?? 'AUTO';
             document.getElementById('water_allow_direct_sump_refill').checked = settings.water_system?.allow_direct_sump_refill ?? false;
-            document.getElementById('water_state_text').textContent = settings.water_system?.state_label_th ?? formatWaterState(settings.water_system?.state ?? 'UNKNOWN');
+            document.getElementById('water_state_text').textContent = formatWaterState(settings.water_system?.state ?? 'UNKNOWN');
             document.getElementById('water_preferred_route_text').textContent = formatWaterRoute(settings.water_system?.preferred_route ?? 'AUTO');
             document.getElementById('water_active_route_text').textContent = formatWaterRoute(settings.water_system?.active_route ?? 'NONE');
             document.getElementById('water_circulation_output_text').textContent = formatWaterBool(settings.water_system?.circulation_pump_output ?? false);
@@ -1828,12 +2025,12 @@
             );
 
             document.getElementById('light_action_status').innerHTML = lightManualEnabled
-                ? '<strong>Manual ON/OFF พร้อมใช้งาน</strong> เพราะตอนนี้ Light Command Source เป็น Local Web'
-                : '<strong>Manual ON/OFF ถูกปิดไว้</strong> เพราะตอนนี้ Light Command Source เป็น NETPIE';
+                ? '<strong>Manual ON/OFF is available</strong> because Light Command Source is Local Web'
+                : '<strong>Manual ON/OFF is disabled</strong> because Light Command Source is NETPIE';
 
             document.getElementById('feeder_action_status').innerHTML = feederManualEnabled
-                ? '<strong>Feed Now พร้อมใช้งาน</strong> เพราะตอนนี้ Fish Feeder Command Source เป็น Local Web'
-                : '<strong>Feed Now ถูกปิดไว้</strong> เพราะตอนนี้ Fish Feeder Command Source เป็น NETPIE';
+                ? '<strong>Feed Now is available</strong> because Fish Feeder Command Source is Local Web'
+                : '<strong>Feed Now is disabled</strong> because Fish Feeder Command Source is NETPIE';
 
             document.getElementById('light_advanced_hint').textContent = lightManualEnabled
                 ? 'Manual controls are available now'
@@ -1850,8 +2047,7 @@
             return {
                 automation: {
                     enabled: document.getElementById('auto_enabled').checked,
-                    target_tds: parseFloat(document.getElementById('auto_tgt_tds').value || 800),
-                    target_ph: parseFloat(document.getElementById('auto_tgt_ph').value || 6.5)
+                    target_tds: parseFloat(document.getElementById('auto_tgt_tds').value || 800)
                 },
                 light_control: {
                     command_source: document.getElementById('light_command_source').value,
@@ -1895,12 +2091,12 @@
                     circulation_enabled: document.getElementById('water_circulation_enabled').checked,
                     refill_enabled: document.getElementById('water_refill_enabled').checked,
                     manual_refill: settings.water_system?.manual_refill ?? false,
-                    refill_max_runtime_ms: parseInt(document.getElementById('water_refill_max_runtime_ms').value || 120000),
-                    refill_min_interval_ms: parseInt(document.getElementById('water_refill_min_interval_sec').value || 300) * 1000,
+                    refill_max_runtime_ms: readWaterTimeFieldMs('water_refill_max_runtime_ms'),
+                    refill_min_interval_ms: readWaterTimeFieldMs('water_refill_min_interval_sec'),
                     preferred_route: document.getElementById('water_preferred_route').value,
                     allow_direct_sump_refill: document.getElementById('water_allow_direct_sump_refill').checked,
-                    fish_refill_interval_ms: parseInt(document.getElementById('water_fish_refill_interval_sec').value || 604800) * 1000,
-                    fish_refill_max_runtime_ms: parseInt(document.getElementById('water_fish_refill_max_runtime_sec').value || 30) * 1000,
+                    fish_refill_interval_ms: readWaterTimeFieldMs('water_fish_refill_interval_sec'),
+                    fish_refill_max_runtime_ms: readWaterTimeFieldMs('water_fish_refill_max_runtime_sec'),
                     state: settings.water_system?.state ?? 'UNKNOWN',
                     state_label_th: settings.water_system?.state_label_th ?? 'พร้อมทำงาน',
                     active_route: settings.water_system?.active_route ?? 'NONE',
@@ -1987,8 +2183,7 @@
         async function saveAutomationConfig() {
             const data = {
                 enabled: document.getElementById('auto_enabled').checked,
-                target_tds: parseFloat(document.getElementById('auto_tgt_tds').value || 800),
-                target_ph: parseFloat(document.getElementById('auto_tgt_ph').value || 6.5)
+                target_tds: parseFloat(document.getElementById('auto_tgt_tds').value || 800)
             };
             try {
                 const res = await fetch('/api/automation/config', {
@@ -2217,12 +2412,12 @@
             const data = {
                 circulation_enabled: document.getElementById('water_circulation_enabled').checked,
                 refill_enabled: document.getElementById('water_refill_enabled').checked,
-                refill_max_runtime_ms: parseInt(document.getElementById('water_refill_max_runtime_ms').value || 120000),
-                refill_min_interval_ms: parseInt(document.getElementById('water_refill_min_interval_sec').value || 300) * 1000,
+                refill_max_runtime_ms: readWaterTimeFieldMs('water_refill_max_runtime_ms'),
+                refill_min_interval_ms: readWaterTimeFieldMs('water_refill_min_interval_sec'),
                 preferred_route: document.getElementById('water_preferred_route').value,
                 allow_direct_sump_refill: document.getElementById('water_allow_direct_sump_refill').checked,
-                fish_refill_interval_ms: parseInt(document.getElementById('water_fish_refill_interval_sec').value || 604800) * 1000,
-                fish_refill_max_runtime_ms: parseInt(document.getElementById('water_fish_refill_max_runtime_sec').value || 30) * 1000,
+                fish_refill_interval_ms: readWaterTimeFieldMs('water_fish_refill_interval_sec'),
+                fish_refill_max_runtime_ms: readWaterTimeFieldMs('water_fish_refill_max_runtime_sec'),
                 ...extra
             };
 

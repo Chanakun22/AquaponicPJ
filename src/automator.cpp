@@ -111,7 +111,6 @@ void automatorSetup(void) {
     _prefs.begin("automator", true);
     _config.enabled = _prefs.getBool("enabled", false); // Default disabled
     _config.targetTds = _prefs.getFloat("targetTds", AUTOMATOR_DEFAULT_TDS);
-    _config.targetPh = _prefs.getFloat("targetPh", AUTOMATOR_DEFAULT_PH);
     _prefs.end();
     
     if (_config.enabled) {
@@ -121,16 +120,14 @@ void automatorSetup(void) {
     }
 }
 
-void automatorSetConfig(bool enabled, float targetTds, float targetPh) {
+void automatorSetConfig(bool enabled, float targetTds) {
     _prefs.begin("automator", false);
     _prefs.putBool("enabled", enabled);
     _prefs.putFloat("targetTds", targetTds);
-    _prefs.putFloat("targetPh", targetPh);
     _prefs.end();
     
     _config.enabled = enabled;
     _config.targetTds = targetTds;
-    _config.targetPh = targetPh;
     
     if (!enabled) {
         _changeState(AUTO_STATE_DISABLED, "Turned off via UI");

@@ -125,7 +125,6 @@
   },
   "automation": {
     "enabled": false,
-    "target_tds": 800,
-    "target_ph": 6.5
+    "target_tds": 800
   }
 }

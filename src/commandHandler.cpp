@@ -524,7 +524,6 @@ static void _runSystemTest(CommandOutput_t out) {
         commandPrintf(out, "  State        : %s\r\n", automatorGetStateString(state));
         commandPrintf(out, "  Reason       : %s\r\n", automatorGetActionReason());
         commandPrintf(out, "  Target TDS   : %.0f ppm\r\n", cfg.targetTds);
-        commandPrintf(out, "  Target pH    : %.1f\r\n", cfg.targetPh);
         commandPrintf(out, "  Time Left    : %d s\r\n", automatorGetTimeRemainingSec());
         pass++; // Automator initialized = pass
     }
@@ -800,7 +799,6 @@ void commandProcess(char* cmd, CommandOutput_t output) {
         commandPrintf(output, "  State      : %s\r\n", automatorGetStateString(automatorGetCurrentState()));
         commandPrintf(output, "  Reason     : %s\r\n", automatorGetActionReason());
         commandPrintf(output, "  Target TDS : %.1f ppm\r\n", cfg.targetTds);
-        commandPrintf(output, "  Target pH  : %.1f\r\n", cfg.targetPh);
         commandPrintf(output, "  Time Left  : %d s\r\n", automatorGetTimeRemainingSec());
         commandPrintf(output, "===============================\r\n");
     }

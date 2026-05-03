@@ -61,6 +61,23 @@ static bool _refillWasActive = false;
 static WaterRefillRoute _lastActiveRefillRoute = WATER_REFILL_ROUTE_NONE;
 
 static const unsigned long WATER_MIX_SETTLING_MS = 120000UL;
+static void _resetRuntimeState(void) {
+    _alarmLatched = false;
+    _refillStartMs = 0;
+    _lastMixRefillStopMs = 0;
+    _lastFishRefillStopMs = 0;
+    _lastDilutionEventMs = 0;
+    _lastDilutionRoute = WATER_REFILL_ROUTE_NONE;
+    _refillWasActive = false;
+    _lastActiveRefillRoute = WATER_REFILL_ROUTE_NONE;
+
+    memset(&_status, 0, sizeof(_status));
+    _status.state = WATER_STATE_IDLE;
+    _status.activeRoute = WATER_REFILL_ROUTE_NONE;
+    _status.mixTankControlZone = true;
+    _status.fishRefillReady = true;
+    snprintf(_status.reason, sizeof(_status.reason), "%s", "Water system not initialized");
+}
 
 static bool _hasFishTankRefillPump(void) {
 #if PUMP_REFILL_PIN >= 0
@@ -142,7 +159,9 @@ static void _writePumpOutput(int pin, bool enabled) {
 static void _writeRouteValve(WaterRefillRoute route) {
 #if REFILL_ROUTE_VALVE_PIN >= 0
     digitalWrite(REFILL_ROUTE_VALVE_PIN,
-                 route == WATER_REFILL_ROUTE_SUMP_DIRECT ? PUMP_ON : PUMP_OFF);
+                 route == WATER_REFILL_ROUTE_SUMP_DIRECT
+                     ? REFILL_ROUTE_TO_SUMP_STATE
+                     : REFILL_ROUTE_TO_FISH_STATE);
 #else
     (void)route;
 #endif
@@ -258,6 +277,8 @@ static void _sanitizeConfig(void) {
 
 static void _saveConfig(void) {
     _sanitizeConfig();
+    _resetRuntimeState();
+
     _prefs.begin("waterSystem", false);
     _prefs.putBool("circEn", _config.circulationEnabled);
     _prefs.putBool("refillEn", _config.refillEnabled);
@@ -458,11 +479,6 @@ void waterSystemLoop(void) {
     _status.fishRefillReady = _isFishRefillReady(now, _status.overflowAlarm);
     _status.fishRefillWaitRemainingMs = fishIntervalRemainingMs;
 
-    if (_status.hasLevelSensors && _status.levelLow && _status.levelHigh) {
-        _alarmLatched = true;
-        _setState(WATER_STATE_ALARM, "เซ็นเซอร์ระดับน้ำถังผสมขัดแย้งกัน");
-    }
-
     bool circulationDesired = _config.circulationEnabled;
     bool refillDesired = false;
     bool blocked = false;
@@ -542,9 +558,14 @@ void waterSystemLoop(void) {
             if (fishShouldStop) {
                 _lastFishRefillStopMs = now;
 
+                bool mixTankStillNeedsRefill = _status.hasLevelSensors
+                    && _status.levelLow
+                    && !_status.levelHigh;
+
                 if (!_config.manualRefill
                         && _config.preferredRoute == WATER_REFILL_ROUTE_AUTO
                         && _config.allowDirectSumpRefill
+                        && mixTankStillNeedsRefill
                         && _routeAvailable(WATER_REFILL_ROUTE_SUMP_DIRECT)) {
                     desiredRoute = WATER_REFILL_ROUTE_SUMP_DIRECT;
                     _refillStartMs = now;

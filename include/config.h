@@ -48,7 +48,7 @@
 #endif
 
 #ifndef EXHAUST_FAN_PIN
-#define EXHAUST_FAN_PIN     -1      // พัดลมระบายอากาศ/ดูดอากาศ
+#define EXHAUST_FAN_PIN     2     // พัดลมระบายอากาศ/ดูดอากาศ
 #endif
 
 // Automation Pumps (Dosing & Water)
@@ -61,11 +61,11 @@
 #endif
 
 #ifndef PUMP_REFILL_PIN
-#define PUMP_REFILL_PIN      -1     // ปั๊มเติมน้ำจากถังน้ำสะอาดเข้าตู้ปลา (ใช้ชื่อเดิมเพื่อคง compatibility)
+#define PUMP_REFILL_PIN     42     // ปั๊มเติมน้ำจากถังน้ำสะอาดเข้าตู้ปลา (หลบขา 33-37 ที่อาจชน flash/PSRAM)
 #endif
 
 #ifndef REFILL_ROUTE_VALVE_PIN
-#define REFILL_ROUTE_VALVE_PIN -1   // โซลินอยด์น้ำเข้าถังผสม (ใช้ชื่อเดิมเพื่อคง compatibility)
+#define REFILL_ROUTE_VALVE_PIN 39   // โซลินอยด์น้ำเข้าถังผสม (ใช้ชื่อเดิมเพื่อคง compatibility)
 #endif
 
 #ifndef SUMP_LEVEL_LOW_PIN
@@ -77,7 +77,7 @@
 #endif
 
 #ifndef FISH_TANK_OVERFLOW_PIN
-#define FISH_TANK_OVERFLOW_PIN -1   // เซ็นเซอร์กันล้นตู้ปลา
+#define FISH_TANK_OVERFLOW_PIN 47  // เซ็นเซอร์กันล้นตู้ปลา
 #endif
 
 
@@ -333,7 +333,6 @@
 #define HW_TEST_PUMP_DURATION_MS    ((unsigned long)((HW_TEST_PUMP_TEST_VOLUME_ML * 60000.0f / DOSING_PUMP_FLOW_RATE_ML_PER_MIN) + 0.5f))
 #define AUTOMATOR_COOLDOWN_MS       600000  // พักระบบ 10 นาที (600,000 ms) หลังจากการจ่ายปุ๋ย
 #define AUTOMATOR_DEFAULT_TDS       800.0f  // ค่า TDS พื้นฐาน
-#define AUTOMATOR_DEFAULT_PH        6.5f    // ค่า pH พื้นฐาน
 
 // ============================================================================
 // WATER SYSTEM CONFIGURATION

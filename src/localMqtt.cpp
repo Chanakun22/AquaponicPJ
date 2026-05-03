@@ -50,9 +50,9 @@ static uint8_t _statusPublishCursor = 0;
 static const uint8_t MAX_FAIL_BEFORE_RERESOLUTION = 3; // Re-resolve mDNS หลังล้มเหลว 3 ครั้ง
 static unsigned long _reconnectInterval = 5000;          // Backoff interval (เริ่ม 5s, เพิ่มถึง 60s)
 static const unsigned long MAX_RECONNECT_INTERVAL = 60000; // สูงสุด 60 วินาที
-static const uint16_t LOCAL_MQTT_PACKET_BUFFER_SIZE = 2048;
+static const uint16_t LOCAL_MQTT_PACKET_BUFFER_SIZE = 4096;
 static const uint8_t LOCAL_MQTT_MAX_LOGS_PER_LOOP = 1;
-static StaticJsonDocument<1792> _sensorPublishDoc;
+static StaticJsonDocument<3072> _sensorPublishDoc;
 static char _sensorPublishPayload[LOCAL_MQTT_PACKET_BUFFER_SIZE];
 static volatile uint8_t _pendingStatusPublishes = 0;
 static volatile uint8_t _pendingNetworkRequests = 0;
@@ -110,7 +110,6 @@ typedef struct {
         struct {
             bool enabled;
             float targetTds;
-            float targetPh;
         } automation;
         struct {
             CommandSource source;
@@ -511,14 +510,12 @@ static void _processDeferredAction(const LocalDeferredAction* action) {
         case LOCAL_DEFERRED_AUTOMATION_CONFIG:
             automatorSetConfig(
                 action->data.automation.enabled,
-                action->data.automation.targetTds,
-                action->data.automation.targetPh
+                action->data.automation.targetTds
             );
             LOG_INFO(
-                "Automation Config updated: En=%d, TDS=%.1f, pH=%.1f",
+                "Automation Config updated: En=%d, TDS=%.1f",
                 action->data.automation.enabled,
-                action->data.automation.targetTds,
-                action->data.automation.targetPh
+                action->data.automation.targetTds
             );
             break;
 
@@ -708,7 +705,6 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
         action.type = LOCAL_DEFERRED_AUTOMATION_CONFIG;
         action.data.automation.enabled = doc["enabled"] | false;
         action.data.automation.targetTds = doc["target_tds"] | AUTOMATOR_DEFAULT_TDS;
-        action.data.automation.targetPh = doc["target_ph"] | AUTOMATOR_DEFAULT_PH;
         _enqueueDeferredAction(&action);
     }
 
@@ -1145,7 +1141,6 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
     automatorGetConfig(&authCfg);
     _sensorPublishDoc["auto_enabled"] = authCfg.enabled;
     _sensorPublishDoc["auto_tgt_tds"] = authCfg.targetTds;
-    _sensorPublishDoc["auto_tgt_ph"] = authCfg.targetPh;
     _sensorPublishDoc["auto_state"] = automatorGetStateString(automatorGetCurrentState());
     _sensorPublishDoc["auto_next_state"] = automatorGetNextStateString();
     _sensorPublishDoc["auto_reason"] = automatorGetActionReason();
@@ -1181,36 +1176,28 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
     _sensorPublishDoc["feeder_state"] = fishFeederGetStateString(feederStatus.state);
     _sensorPublishDoc["feeder_source"] = commandSourceToString(feederCfg.commandSource);
 
-    WaterSystemConfig waterCfg;
     WaterSystemStatus waterStatus;
-    waterSystemGetConfig(&waterCfg);
     waterSystemGetStatus(&waterStatus);
     _sensorPublishDoc["water_status_seen"] = true;
     _sensorPublishDoc["water_state"] = waterSystemGetStateString(waterStatus.state);
-    _sensorPublishDoc["water_state_label_th"] = waterSystemGetStateLabelTh(waterStatus.state);
-    _sensorPublishDoc["water_reason"] = waterStatus.reason;
-    _sensorPublishDoc["preferred_route"] = waterSystemGetRouteString(waterCfg.preferredRoute);
     _sensorPublishDoc["active_route"] = waterSystemGetRouteString(waterStatus.activeRoute);
-    _sensorPublishDoc["allow_direct_sump_refill"] = waterCfg.allowDirectSumpRefill;
-    _sensorPublishDoc["manual_refill"] = waterCfg.manualRefill;
-    _sensorPublishDoc["water_alarm"] = waterStatus.alarmActive;
-    _sensorPublishDoc["route_blocked"] = waterStatus.routeBlocked;
-    _sensorPublishDoc["route_valve_output"] = waterStatus.routeValveOutput;
-    _sensorPublishDoc["has_route_valve"] = waterStatus.hasRouteValve;
+    _sensorPublishDoc["circulation_output"] = waterStatus.circulationOutput;
+    _sensorPublishDoc["refill_output"] = waterStatus.refillOutput;
     _sensorPublishDoc["circulation_pump_output"] = waterStatus.circulationPumpOutput;
     _sensorPublishDoc["fish_tank_refill_output"] = waterStatus.fishTankRefillOutput;
     _sensorPublishDoc["mix_tank_refill_output"] = waterStatus.mixTankRefillOutput;
-    _sensorPublishDoc["water_dilution_active"] = waterStatus.waterDilutionActive;
-    _sensorPublishDoc["mix_tank_settling_active"] = waterStatus.mixTankSettlingActive;
-    _sensorPublishDoc["mix_tank_control_zone"] = waterStatus.mixTankControlZone;
-    _sensorPublishDoc["dilution_hold_remaining_ms"] = waterStatus.dilutionHoldRemainingMs;
-    _sensorPublishDoc["fish_refill_ready"] = waterStatus.fishRefillReady;
-    _sensorPublishDoc["fish_refill_wait_remaining_ms"] = waterStatus.fishRefillWaitRemainingMs;
+    _sensorPublishDoc["route_blocked"] = waterStatus.routeBlocked;
+    _sensorPublishDoc["water_alarm"] = waterStatus.alarmActive;
     _sensorPublishDoc["sump_low"] = waterStatus.levelLow;
     _sensorPublishDoc["sump_high"] = waterStatus.levelHigh;
-    _sensorPublishDoc["has_level_sensors"] = waterStatus.hasLevelSensors;
     _sensorPublishDoc["fish_overflow"] = waterStatus.overflowAlarm;
+    _sensorPublishDoc["has_level_sensors"] = waterStatus.hasLevelSensors;
     _sensorPublishDoc["has_overflow_sensor"] = waterStatus.hasOverflowSensor;
+
+    if (_sensorPublishDoc.overflowed()) {
+        LOG_ERROR("Local MQTT sensor JSON overflowed before serialize; skipping publish");
+        return;
+    }
 
     size_t payloadLen = serializeJson(_sensorPublishDoc, _sensorPublishPayload, sizeof(_sensorPublishPayload));
 
@@ -1282,7 +1269,7 @@ static void _publishWaterSystemStatus(void) {
     waterSystemGetConfig(&cfg);
     waterSystemGetStatus(&status);
 
-    StaticJsonDocument<640> doc;
+    StaticJsonDocument<1536> doc;
     doc["circulation_enabled"] = cfg.circulationEnabled;
     doc["refill_enabled"] = cfg.refillEnabled;
     doc["manual_refill"] = cfg.manualRefill;
@@ -1319,7 +1306,13 @@ static void _publishWaterSystemStatus(void) {
     doc["has_route_valve"] = status.hasRouteValve;
     doc["route_blocked"] = status.routeBlocked;
 
-    char buffer[640];
+    const size_t payloadLen = measureJson(doc);
+    if (doc.overflowed() || payloadLen >= 1536) {
+        LOG_ERROR("Local MQTT water status JSON overflowed; skipping publish");
+        return;
+    }
+
+    char buffer[1536];
     serializeJson(doc, buffer, sizeof(buffer));
     _localMqtt.publish(LOCAL_MQTT_TOPIC_STATUS_WATER_SYSTEM, buffer);
 }

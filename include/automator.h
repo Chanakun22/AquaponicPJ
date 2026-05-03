@@ -25,7 +25,6 @@ enum AutomatorState {
 struct AutomatorConfig {
     bool enabled;
     float targetTds;
-    float targetPh;
 };
 
 // Public Functions
@@ -33,7 +32,7 @@ void automatorSetup(void);
 void automatorLoop(void);
 
 // NVS Settings Management
-void automatorSetConfig(bool enabled, float targetTds, float targetPh);
+void automatorSetConfig(bool enabled, float targetTds);
 void automatorGetConfig(AutomatorConfig* config);
 
 // Get current state for MQTT

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>🌿 Smart Aquaponics AI</title>
+    <title>🌿 ระบบอควาโปนิกส์อัจฉริยะ</title>
     
     <!-- PWA -->
     <link rel="manifest" href="/pwa/manifest.json">
@@ -156,6 +156,190 @@
       .status-indicator.online { background: var(--primary); color: var(--primary); }
       .status-indicator.offline { background: var(--danger); color: var(--danger); }
 
+      .dashboard-hero {
+        position: relative;
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.95fr);
+        gap: 20px;
+        padding: 28px;
+        background:
+          radial-gradient(circle at top right, rgba(0, 242, 170, 0.13), transparent 38%),
+          radial-gradient(circle at bottom left, rgba(0, 200, 255, 0.12), transparent 42%),
+          linear-gradient(180deg, rgba(24, 27, 33, 0.96), rgba(15, 17, 21, 0.98));
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: var(--radius);
+        overflow: hidden;
+        box-shadow: 0 18px 40px rgba(0,0,0,0.28);
+      }
+
+      .dashboard-hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(120deg, rgba(255,255,255,0.05), transparent 45%, rgba(255,255,255,0.02));
+        pointer-events: none;
+      }
+
+      .hero-copy,
+      .hero-glance-grid {
+        position: relative;
+        z-index: 1;
+      }
+
+      .hero-copy {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 20px;
+      }
+
+      .hero-eyebrow {
+        font-size: 0.76rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--secondary);
+      }
+
+      .hero-title {
+        font-size: clamp(1.8rem, 3vw, 2.8rem);
+        line-height: 1.02;
+        letter-spacing: -0.05em;
+        margin-bottom: 10px;
+      }
+
+      .hero-description {
+        max-width: 58ch;
+        color: #cbd5e1;
+        line-height: 1.7;
+        font-size: 1rem;
+      }
+
+      .hero-attention {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        width: fit-content;
+        padding: 12px 16px;
+        border-radius: 16px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        color: var(--text-main);
+        line-height: 1.5;
+      }
+
+      .hero-attention i {
+        color: var(--warning);
+      }
+
+      .hero-attention[data-tone="good"] {
+        border-color: rgba(16, 185, 129, 0.24);
+        background: rgba(16, 185, 129, 0.08);
+      }
+
+      .hero-attention[data-tone="good"] i {
+        color: var(--success);
+      }
+
+      .hero-attention[data-tone="warn"] {
+        border-color: rgba(251, 191, 36, 0.24);
+        background: rgba(251, 191, 36, 0.08);
+      }
+
+      .hero-attention[data-tone="danger"] {
+        border-color: rgba(255, 42, 109, 0.24);
+        background: rgba(255, 42, 109, 0.08);
+      }
+
+      .hero-attention[data-tone="danger"] i {
+        color: #ff8cab;
+      }
+
+      .hero-actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .hero-action {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        border-radius: 999px;
+        text-decoration: none;
+        color: var(--text-main);
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.08);
+        font-weight: 600;
+        transition: transform 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+      }
+
+      .hero-action:hover {
+        transform: translateY(-2px);
+        border-color: rgba(255,255,255,0.18);
+        background: rgba(255,255,255,0.08);
+      }
+
+      .hero-action.primary {
+        color: #03131b;
+        background: linear-gradient(135deg, var(--primary), #6ee7f9);
+        border-color: transparent;
+      }
+
+      .hero-glance-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        align-content: stretch;
+      }
+
+      .hero-glance-card {
+        min-height: 168px;
+        padding: 18px;
+        border-radius: 20px;
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.08);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .hero-glance-card[data-tone="good"] {
+        border-color: rgba(16, 185, 129, 0.26);
+        background: rgba(16, 185, 129, 0.08);
+      }
+
+      .hero-glance-card[data-tone="warn"] {
+        border-color: rgba(251, 191, 36, 0.24);
+        background: rgba(251, 191, 36, 0.08);
+      }
+
+      .hero-glance-card[data-tone="danger"] {
+        border-color: rgba(255, 42, 109, 0.24);
+        background: rgba(255, 42, 109, 0.08);
+      }
+
+      .hero-glance-label {
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: var(--text-muted);
+      }
+
+      .hero-glance-value {
+        font-size: 1.45rem;
+        font-weight: 700;
+        line-height: 1.15;
+      }
+
+      .hero-glance-sub {
+        color: #d6e2f1;
+        font-size: 0.9rem;
+        line-height: 1.55;
+      }
+
       /* Nav bar styles handled by header.js */
 
       /* === Connect Bar === */
@@ -274,6 +458,96 @@
         border-radius: 20px;
         display: inline-block;
         background: rgba(255,255,255,0.05);
+      }
+
+      .range-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 2px;
+      }
+
+      .range-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.08);
+        color: #cbd5e1;
+        font-size: 0.8rem;
+        font-weight: 600;
+      }
+
+      .range-chip[data-tone="good"],
+      .sensor-hint[data-tone="good"],
+      .measure-note[data-tone="good"],
+      .water-zone-value[data-tone="good"],
+      .mini-val[data-tone="good"] {
+        color: #8ff0c5;
+      }
+
+      .range-chip[data-tone="warn"],
+      .sensor-hint[data-tone="warn"],
+      .measure-note[data-tone="warn"],
+      .water-zone-value[data-tone="warn"],
+      .mini-val[data-tone="warn"] {
+        color: #f9d66b;
+      }
+
+      .range-chip[data-tone="danger"],
+      .sensor-hint[data-tone="danger"],
+      .measure-note[data-tone="danger"],
+      .water-zone-value[data-tone="danger"],
+      .mini-val[data-tone="danger"] {
+        color: #ff9ab7;
+      }
+
+      .sensor-hint {
+        margin-top: 16px;
+        min-height: 2.6em;
+        color: var(--text-muted);
+        line-height: 1.55;
+        font-size: 0.9rem;
+      }
+
+      .phlight-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .measure-tile {
+        padding: 16px;
+        border-radius: 18px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.07);
+      }
+
+      .measure-label {
+        font-size: 0.78rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        margin-bottom: 10px;
+      }
+
+      .measure-value {
+        font-size: 2.35rem;
+        font-weight: 700;
+        line-height: 1;
+      }
+
+      .measure-value.compact {
+        font-size: 1.5rem;
+      }
+
+      .measure-note {
+        margin-top: 10px;
+        color: var(--text-muted);
+        line-height: 1.5;
+        min-height: 2.2em;
       }
 
       /* Specific Card Colors */
@@ -421,6 +695,40 @@
         margin-bottom: 12px;
         display: flex;
         justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      .log-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .log-link {
+        color: #cbd5e1;
+        text-decoration: none;
+        font-size: 0.8rem;
+        cursor: pointer;
+        border: 1px solid rgba(255,255,255,0.08);
+        padding: 7px 10px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.04);
+        transition: background 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
+      }
+
+      .log-link:hover {
+        transform: translateY(-1px);
+        background: rgba(255,255,255,0.08);
+        border-color: rgba(255,255,255,0.16);
+      }
+
+      .log-link.clear-link {
+        border: none;
+        background: transparent;
+        color: var(--secondary);
+        padding-right: 0;
       }
 
       .log-content {
@@ -465,6 +773,11 @@
         .brand { justify-content: center; }
         .status-bar { justify-content: center; gap: 8px; }
         .status-pill { padding: 6px 10px; font-size: 0.78rem; }
+        .dashboard-hero { grid-template-columns: 1fr; padding: 20px; }
+        .hero-glance-grid { grid-template-columns: 1fr; }
+        .hero-title { font-size: 1.8rem; }
+        .hero-attention { width: 100%; }
+        .hero-action { flex: 1 1 180px; justify-content: center; }
         .connect-bar { flex-direction: column; }
         .val-main { font-size: 2.5rem; }
         .val-unit { font-size: 1rem; }
@@ -476,6 +789,7 @@
         .brand i { font-size: 1.5rem; }
         .info-grid { grid-template-columns: repeat(2, 1fr); }
         .log-panel { padding: 14px; }
+        .phlight-grid { grid-template-columns: 1fr; }
       }
 
       /* Disabled Sensor Badge */
@@ -485,7 +799,7 @@
       }
       
       .card.sensor-disabled::after {
-        content: "DISABLED";
+        content: "ปิดใช้งาน";
         position: absolute;
         top: 10px;
         right: 10px;
@@ -691,15 +1005,15 @@
           <div class="brand">
             <i class="fa-solid fa-leaf"></i>
             <div>
-              <h1 id="deviceName">Aquaponics System Project</h1>
-              <div class="subtitle">System V2.3 • Production</div>
+              <h1 id="deviceName">ระบบอควาโปนิกส์</h1>
+              <div class="subtitle">ระบบ V2.3 • ใช้งานจริง</div>
             </div>
           </div>
 
           <div class="status-bar">
             <div class="status-pill">
               <div class="status-indicator" id="statusDot"></div>
-              <span id="statusText">Connecting...</span>
+              <span id="statusText">กำลังเชื่อมต่อ...</span>
             </div>
             <div class="status-pill">
               <i class="fa-solid fa-clock"></i>
@@ -710,6 +1024,45 @@
         <!-- Nav bar injected by header.js -->
       </header>
 
+      <section class="dashboard-hero">
+        <div class="hero-copy">
+          <div>
+            <div class="hero-eyebrow">ภาพรวมฟาร์ม</div>
+            <h2 class="hero-title">เห็นสถานะสำคัญก่อน แล้วค่อยลงลึกทีละส่วน</h2>
+            <p class="hero-description">หน้าแรกถูกจัดใหม่ให้ดูง่ายขึ้น: ค่าสำคัญ, ระบบอัตโนมัติ, และสุขภาพระบบถูกรวมไว้ด้านบนเพื่อให้ตัดสินใจได้เร็วขึ้นทั้งบนมือถือและเดสก์ท็อป</p>
+          </div>
+
+          <div class="hero-attention" id="heroAttentionWrap">
+            <i class="fa-solid fa-seedling"></i>
+            <span id="heroAttention">กำลังรอข้อมูลเซ็นเซอร์ล่าสุด...</span>
+          </div>
+
+          <div class="hero-actions">
+            <a class="hero-action primary" href="/graphs"><i class="fa-solid fa-chart-line"></i> ดูแนวโน้ม</a>
+            <a class="hero-action" href="/live"><i class="fa-solid fa-video"></i> กล้องสด</a>
+            <a class="hero-action" href="/full_logs"><i class="fa-solid fa-file-lines"></i> บันทึกทั้งหมด</a>
+          </div>
+        </div>
+
+        <div class="hero-glance-grid">
+          <div class="hero-glance-card" id="heroWaterCard" data-tone="neutral">
+            <div class="hero-glance-label">คุณภาพน้ำ</div>
+            <div class="hero-glance-value" id="heroWaterStatus">กำลังรอ...</div>
+            <div class="hero-glance-sub" id="heroWaterSub">สรุป pH, TDS และอุณหภูมิน้ำจะแสดงที่นี่</div>
+          </div>
+          <div class="hero-glance-card" id="heroAutomationCard" data-tone="neutral">
+            <div class="hero-glance-label">ระบบอัตโนมัติ</div>
+            <div class="hero-glance-value" id="heroAutomationStatus">กำลังรอ...</div>
+            <div class="hero-glance-sub" id="heroAutomationSub">สถานะการทำงานและขั้นถัดไปจะแสดงที่นี่</div>
+          </div>
+          <div class="hero-glance-card" id="heroSystemCard" data-tone="neutral">
+            <div class="hero-glance-label">สถานะระบบ</div>
+            <div class="hero-glance-value" id="heroSystemStatus">กำลังตรวจสอบ...</div>
+            <div class="hero-glance-sub" id="heroSystemSub">สรุปการซิงก์สด, MQTT และสุขภาพของตัวควบคุม</div>
+          </div>
+        </div>
+      </section>
+
 
 
       <!-- Automation Workflow Tracker -->
@@ -717,64 +1070,64 @@
         <div class="workflow-header" onclick="toggleWorkflow()">
           <div class="workflow-title">
             <i class="fa-solid fa-wand-magic-sparkles" id="wfIcon"></i>
-            Automation Engine
-            <span class="workflow-status-badge ws-disabled" id="autoStatusBadge">DISABLED</span>
+            ระบบอัตโนมัติ
+            <span class="workflow-status-badge ws-disabled" id="autoStatusBadge">ปิดอยู่</span>
           </div>
           <i class="fa-solid fa-chevron-up" id="wfToggleIcon" style="color: var(--text-muted); transition: transform 0.3s;"></i>
         </div>
 
         <div class="workflow-summary">
           <div class="workflow-stat">
-            <div class="workflow-stat-label">Current</div>
-            <div class="workflow-stat-value" id="wfCurrentState">Disabled</div>
-            <div class="workflow-stat-sub" id="wfCurrentSub">Automation is turned off</div>
+            <div class="workflow-stat-label">ตอนนี้</div>
+            <div class="workflow-stat-value" id="wfCurrentState">ปิดอยู่</div>
+            <div class="workflow-stat-sub" id="wfCurrentSub">ระบบอัตโนมัติยังปิดอยู่</div>
           </div>
           <div class="workflow-stat">
-            <div class="workflow-stat-label">Next</div>
-            <div class="workflow-stat-value" id="wfNextState">Enable Automation</div>
-            <div class="workflow-stat-sub" id="wfNextSub">Turn on automation from Settings to start monitoring</div>
+            <div class="workflow-stat-label">ถัดไป</div>
+            <div class="workflow-stat-value" id="wfNextState">เปิดระบบอัตโนมัติ</div>
+            <div class="workflow-stat-sub" id="wfNextSub">เปิดจากหน้าตั้งค่าเพื่อเริ่มเฝ้าดูค่า</div>
           </div>
           <div class="workflow-stat">
-            <div class="workflow-stat-label">ETA</div>
+            <div class="workflow-stat-label">เวลารอ</div>
             <div class="workflow-stat-value" id="wfEta">--</div>
-            <div class="workflow-stat-sub" id="wfEtaSub">Time remaining before the next transition</div>
+            <div class="workflow-stat-sub" id="wfEtaSub">เวลาคงเหลือก่อนเปลี่ยนขั้นถัดไป</div>
           </div>
         </div>
         
         <div class="workflow-steps" id="workflowSteps">
           <div class="step-node" id="step-id-idle">
             <div class="step-icon"><i class="fa-regular fa-eye"></i></div>
-            <div class="step-label">IDLE</div>
+            <div class="step-label">พักรอ</div>
           </div>
 
           <!-- Step 1: Evaluating -->
           <div class="step-node" id="step-id-eval">
             <div class="step-icon"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
-            <div class="step-label">EVALUATING</div>
+            <div class="step-label">ประเมินค่า</div>
           </div>
           
           <!-- Step 2: Dosing A -->
           <div class="step-node" id="step-id-dose-a">
             <div class="step-icon"><i class="fa-solid fa-flask-vial"></i></div>
-            <div class="step-label">NUTRIENT A</div>
+            <div class="step-label">สารอาหาร A</div>
           </div>
           
           <!-- Step 3: Dosing B -->
           <div class="step-node" id="step-id-dose-b">
             <div class="step-icon"><i class="fa-solid fa-vial"></i></div>
-            <div class="step-label">NUTRIENT B</div>
+            <div class="step-label">สารอาหาร B</div>
           </div>
           
           <!-- Step 4: Water Dosing (if needed) -->
           <div class="step-node" id="step-id-water">
             <div class="step-icon"><i class="fa-solid fa-faucet-drip"></i></div>
-            <div class="step-label">WATER FILL</div>
+            <div class="step-label">เติมน้ำ</div>
           </div>
           
           <!-- Step 5: Cooldown -->
           <div class="step-node" id="step-id-cooldown">
             <div class="step-icon"><i class="fa-solid fa-hourglass-half"></i></div>
-            <div class="step-label">COOLDOWN<br><span id="wfCooldownTime" style="font-size: 0.7rem; font-weight: normal; color: var(--text-muted);">--</span></div>
+            <div class="step-label">พักรอรอบถัดไป<br><span id="wfCooldownTime" style="font-size: 0.7rem; font-weight: normal; color: var(--text-muted);">--</span></div>
           </div>
         </div>
         
@@ -782,81 +1135,112 @@
       </div>
 
       <!-- Main Sensors -->
+      <div class="section-heading">
+        <div class="section-heading-copy">
+          <div class="section-heading-kicker">เซ็นเซอร์สด</div>
+          <h2>ค่าที่ต้องดูบ่อยถูกจัดให้อ่านง่ายขึ้น</h2>
+          <p>แต่ละการ์ดจะแสดงค่าหลักพร้อมคำอธิบายสั้น ๆ ว่าอยู่ในช่วงเหมาะสมไหม เพื่อให้ไม่ต้องแปลตัวเลขเองทุกครั้ง</p>
+        </div>
+      </div>
+
       <div class="dashboard-grid">
         
         <!-- Water Temp -->
         <div class="card water" id="card-water">
           <div class="card-header">
-            <div class="card-title"><i class="fa-solid fa-water"></i> Water Temp</div>
+            <div class="card-title"><i class="fa-solid fa-water"></i> อุณหภูมิน้ำ</div>
             <i class="fa-solid fa-ellipsis" style="color: var(--text-muted)"></i>
           </div>
           <div class="val-box">
             <div class="val-main" id="waterTemp">--</div>
             <div class="val-unit">°C</div>
           </div>
-          <div class="val-sub" style="color: var(--secondary)">Optimal: 18-32°C</div>
+          <div class="range-row">
+            <div class="range-chip">ช่วงแนะนำ 18-32°C</div>
+            <div class="range-chip" id="waterRangeState" data-tone="neutral">กำลังตรวจสอบ...</div>
+          </div>
+          <div class="sensor-hint" id="waterHint" data-tone="neutral">คำแนะนำเรื่องอุณหภูมิน้ำจะแสดงที่นี่</div>
         </div>
 
         <!-- Air Temp -->
         <div class="card air" id="card-air">
           <div class="card-header">
-            <div class="card-title"><i class="fa-solid fa-temperature-half"></i> Air Temp</div>
+            <div class="card-title"><i class="fa-solid fa-temperature-half"></i> อุณหภูมิอากาศ</div>
             <i class="fa-solid fa-ellipsis" style="color: var(--text-muted)"></i>
           </div>
           <div class="val-box">
             <div class="val-main" id="airTemp">--</div>
             <div class="val-unit">°C</div>
           </div>
-          <div class="val-sub" style="color: var(--warning)">Humidity: <span id="humidity">--</span><span class="unit">%</span></div>
+          <div class="range-row">
+            <div class="range-chip">ช่วงแนะนำ 15-40°C</div>
+            <div class="range-chip" id="airRangeState" data-tone="neutral">กำลังตรวจสอบ...</div>
+            <div class="range-chip">ความชื้น <span id="humidity">--</span>%</div>
+          </div>
+          <div class="sensor-hint" id="airHint" data-tone="neutral">คำแนะนำเรื่องอุณหภูมิอากาศและความชื้นจะแสดงที่นี่</div>
         </div>
 
         <!-- TDS -->
         <div class="card tds" id="card-tds">
           <div class="card-header">
-            <div class="card-title"><i class="fa-solid fa-vial"></i> TDS Level</div>
+            <div class="card-title"><i class="fa-solid fa-vial"></i> ค่า TDS</div>
             <i class="fa-solid fa-ellipsis" style="color: var(--text-muted)"></i>
           </div>
           <div class="val-box">
             <div class="val-main" id="tds">--</div>
             <div class="val-unit">ppm</div>
           </div>
-          <div class="val-sub" id="tdsQuality">Analysing...</div>
+          <div class="range-row">
+            <div class="range-chip">ช่วงแนะนำ 200-1500 ppm</div>
+            <div class="range-chip" id="tdsRangeState" data-tone="neutral">กำลังตรวจสอบ...</div>
+          </div>
+          <div class="sensor-hint" id="tdsQuality" data-tone="neutral">กำลังวิเคราะห์...</div>
         </div>
 
         <!-- pH & Light (Combined for balance) -->
         <div class="card ph" id="card-phlight">
             <div class="card-header">
-              <div class="card-title"><i class="fa-solid fa-flask"></i> pH & Light</div>
+              <div class="card-title"><i class="fa-solid fa-flask"></i> pH และแสง</div>
               <i class="fa-solid fa-ellipsis" style="color: var(--text-muted)"></i>
             </div>
-            <div style="display: flex; justify-content: space-between; align-items: flex-end;">
-                <div>
-                   <div style="font-size: 0.8rem; color: #d946ef; margin-bottom: 4px;">ACIDITY (pH)</div>
-                   <div class="val-main" id="ph" style="font-size: 2.5rem;">--</div>
-                </div>
-                <div style="text-align: right;">
-                    <div style="font-size: 0.8rem; color: var(--warning); margin-bottom: 4px;">LIGHT SENSOR</div>
-                    <div style="font-size: 1.5rem; font-weight: 700;" id="light">--</div>
-                    <div id="lightState" style="font-size: 0.8rem; color: var(--text-muted);">--</div>
-                </div>
+          <div class="phlight-grid">
+            <div class="measure-tile">
+               <div class="measure-label">ค่า pH</div>
+               <div class="measure-value" id="ph">--</div>
+               <div class="measure-note" id="phState" data-tone="neutral">ช่วงแนะนำ 6.0-8.5</div>
             </div>
+            <div class="measure-tile">
+              <div class="measure-label">เซ็นเซอร์แสง</div>
+              <div class="measure-value compact" id="light">--</div>
+              <div class="measure-note" id="lightState" data-tone="neutral">กำลังรอข้อมูล</div>
+            </div>
+          </div>
+          <div class="sensor-hint" id="phHint" data-tone="neutral">คำแนะนำเรื่อง pH และแสงจะแสดงที่นี่</div>
         </div>
 
       </div>
 
       <!-- Health Monitors -->
+      <div class="section-heading">
+        <div class="section-heading-copy">
+          <div class="section-heading-kicker">สุขภาพระบบ</div>
+          <h2>ดูเสถียรภาพของ ESP32, Raspberry Pi และระบบน้ำในมุมเดียว</h2>
+          <p>บล็อกนี้ช่วยแยกปัญหาจากเซ็นเซอร์, เครือข่าย, หรือโซนควบคุมได้เร็วขึ้น เวลาหน้าเว็บเริ่มไม่อัปเดตหรือระบบน้ำมี Alarm</p>
+        </div>
+      </div>
+
       <div class="system-section">
         
         <!-- ESP32 -->
         <div class="device-card">
           <div class="device-header">
             <i class="fa-solid fa-microchip esp-icon"></i>
-            ESP32-S3 Controller
+            ตัวควบคุม ESP32-S3
           </div>
           
           <!-- RAM -->
           <div class="stat-row">
-            <div class="stat-label">RAM Usage</div>
+            <div class="stat-label">การใช้ RAM</div>
             <div class="stat-val-group">
                 <span id="espRamUsed" class="stat-num">--</span> / <span id="espRamTotal" style="color: var(--text-muted); font-size: 0.8rem;">--</span>
             </div>
@@ -868,7 +1252,7 @@
 
           <!-- Temp -->
           <div class="stat-row">
-            <div class="stat-label">CPU Temp</div>
+            <div class="stat-label">อุณหภูมิ CPU</div>
             <div class="stat-val-group">
                 <span id="espCpuTemp" class="stat-num">--</span>
                 <span id="espCpuState" style="font-size: 0.8rem; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">--</span>
@@ -886,7 +1270,7 @@
 
           <!-- RAM -->
           <div class="stat-row">
-            <div class="stat-label">RAM Usage</div>
+            <div class="stat-label">การใช้ RAM</div>
             <div class="stat-val-group">
                 <span id="piRamUsed" class="stat-num">--</span> / <span id="piRamTotal" style="color: var(--text-muted); font-size: 0.8rem;">--</span>
             </div>
@@ -898,7 +1282,7 @@
 
           <!-- Load -->
           <div class="stat-row">
-            <div class="stat-label">CPU Load</div>
+            <div class="stat-label">ภาระ CPU</div>
             <div class="stat-val-group">
                 <span id="piCpuLoad" class="stat-num">--</span>
                 <span id="piLoadState" style="font-size: 0.8rem; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">--</span>
@@ -916,49 +1300,49 @@
         <div class="device-card water-zone-card">
           <div class="device-header">
             <i class="fa-solid fa-faucet-drip" style="color: var(--secondary);"></i>
-            Mix Tank Control Zone
+            โซนควบคุมถังผสม
           </div>
 
           <div class="water-zone-grid">
             <div class="water-zone-item">
-              <div class="water-zone-label">State</div>
-              <div class="water-zone-value" id="waterZoneState">Unknown</div>
+              <div class="water-zone-label">สถานะ</div>
+              <div class="water-zone-value" id="waterZoneState">ไม่ทราบ</div>
             </div>
             <div class="water-zone-item">
-              <div class="water-zone-label">Mix Inlet</div>
-              <div class="water-zone-value" id="waterZoneInlet">Unknown</div>
+              <div class="water-zone-label">ทางน้ำเข้า</div>
+              <div class="water-zone-value" id="waterZoneInlet">ไม่ทราบ</div>
             </div>
             <div class="water-zone-item">
-              <div class="water-zone-label">Circulation Pump</div>
-              <div class="water-zone-value" id="waterZoneCirculation">Unknown</div>
+              <div class="water-zone-label">ปั๊มหมุนน้ำ</div>
+              <div class="water-zone-value" id="waterZoneCirculation">ไม่ทราบ</div>
             </div>
             <div class="water-zone-item">
               <div class="water-zone-label">Alarm</div>
-              <div class="water-zone-value" id="waterZoneAlarm">Unknown</div>
+              <div class="water-zone-value" id="waterZoneAlarm">ไม่ทราบ</div>
             </div>
             <div class="water-zone-item">
-              <div class="water-zone-label">Mix Tank Refill</div>
-              <div class="water-zone-value" id="waterZoneMixRefill">Unknown</div>
+              <div class="water-zone-label">เติมถังผสม</div>
+              <div class="water-zone-value" id="waterZoneMixRefill">ไม่ทราบ</div>
             </div>
             <div class="water-zone-item">
-              <div class="water-zone-label">Dilution</div>
-              <div class="water-zone-value" id="waterZoneDilution">Unknown</div>
+              <div class="water-zone-label">การเจือจาง</div>
+              <div class="water-zone-value" id="waterZoneDilution">ไม่ทราบ</div>
             </div>
             <div class="water-zone-item">
-              <div class="water-zone-label">Settling</div>
-              <div class="water-zone-value" id="waterZoneSettling">Unknown</div>
+              <div class="water-zone-label">การพักนิ่ง</div>
+              <div class="water-zone-value" id="waterZoneSettling">ไม่ทราบ</div>
             </div>
             <div class="water-zone-item">
-              <div class="water-zone-label">Control Zone</div>
-              <div class="water-zone-value" id="waterZoneControl">Unknown</div>
+              <div class="water-zone-label">โซนควบคุม</div>
+              <div class="water-zone-value" id="waterZoneControl">ไม่ทราบ</div>
             </div>
             <div class="water-zone-item">
-              <div class="water-zone-label">Hold Remaining</div>
+              <div class="water-zone-label">เวลาคงเหลือ</div>
               <div class="water-zone-value" id="waterZoneHold">--</div>
             </div>
             <div class="water-zone-item wide">
-              <div class="water-zone-label">Reason</div>
-              <div class="water-zone-value reason" id="waterZoneReason">Waiting for water system status</div>
+              <div class="water-zone-label">เหตุผล</div>
+              <div class="water-zone-value reason" id="waterZoneReason">กำลังรอสถานะระบบน้ำ</div>
             </div>
           </div>
         </div>
@@ -968,11 +1352,11 @@
       <!-- Logs & Info -->
       <div class="log-panel">
         <div class="log-header">
-            <span><i class="fa-solid fa-terminal"></i> SYSTEM LOGS</span>
-            <div>
-                 <a href="/graphs_view" style="color: var(--accent); text-decoration: none; font-size: 0.8rem; margin-right: 15px; cursor: pointer; border: 1px solid var(--accent); padding: 2px 8px; border-radius: 4px;"><i class="fas fa-chart-line"></i> GRAPHS</a>
-                <a href="/logs_view" style="color: var(--primary); text-decoration: none; font-size: 0.8rem; margin-right: 15px; cursor: pointer; border: 1px solid var(--primary); padding: 2px 8px; border-radius: 4px;">FULL LOGS</a>
-                <span onclick="document.getElementById('logContainer').innerHTML=''" style="cursor: pointer; color: var(--secondary)">CLEAR</span>
+            <span><i class="fa-solid fa-terminal"></i> บันทึกระบบ</span>
+          <div class="log-actions">
+             <a href="/graphs_view" class="log-link"><i class="fas fa-chart-line"></i> กราฟ</a>
+            <a href="/logs_view" class="log-link"><i class="fa-solid fa-file-lines"></i> บันทึกทั้งหมด</a>
+            <span onclick="document.getElementById('logContainer').innerHTML=''" class="log-link clear-link">ล้าง</span>
             </div>
         </div>
         <div class="log-content" id="logContainer">
@@ -982,7 +1366,7 @@
         <!-- Mini Stats Grid under logs -->
         <div class="info-grid">
             <div class="mini-stat">
-                <div class="mini-label">UPTIME</div>
+            <div class="mini-label">เวลาทำงาน</div>
                 <div class="mini-val" id="uptime">--</div>
             </div>
             <div class="mini-stat">
@@ -994,7 +1378,7 @@
                 <div class="mini-val" id="mqttStatus">--</div>
             </div>
              <div class="mini-stat">
-                <div class="mini-label">RECONNECTS</div>
+               <div class="mini-label">เชื่อมต่อใหม่</div>
                 <div class="mini-val"><span id="wifiReconnects">0</span> / <span id="mqttReconnects">0</span></div>
             </div>
             <div class="mini-stat">
@@ -1013,8 +1397,8 @@
             <div id="freeHeap" style="display:none"></div> 
             
             <div class="mini-stat" style="grid-column: span 2; margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;">
-                <div class="mini-label">ESP32 STATUS</div>
-                <div class="mini-val" id="espStatus" style="letter-spacing: 1px;">CHECKING...</div>
+              <div class="mini-label">สถานะ ESP32</div>
+              <div class="mini-val" id="espStatus" style="letter-spacing: 1px;">กำลังตรวจสอบ...</div>
             </div>
         </div>
       </div>
@@ -1064,50 +1448,50 @@
 
       function prettifyWorkflowState(state) {
         const labels = {
-          DISABLED: "Disabled",
-          IDLE: "Idle / Monitoring",
-          EVALUATING: "Evaluating",
-          DOSING_A: "Dosing Nutrient A",
-          DOSING_B: "Dosing Nutrient B",
-          WATER_FILL: "Water Fill",
-          COOLDOWN: "Cooldown",
-          ENABLE_AUTOMATION: "Enable Automation",
-          WAIT_CLEAR_CONDITION: "Wait for Clear Condition",
-          WAIT_CIRCULATION: "Wait for Circulation",
-          WAIT_CONTROL_ZONE: "Wait for Mix Tank Control Zone",
-          WAIT_REFILL_COMPLETE: "Wait for Refill Complete",
-          WAIT_MIX_REFILL_COMPLETE: "Wait for Mix Tank Refill Complete",
-          WAIT_FISH_REFILL_MIXING: "Wait for Fish Tank Refill Mixing",
-          WAIT_MIX_SETTLING: "Wait for Mix Tank Settling",
-          WAIT_HW_TEST_END: "Wait for HW Test End",
-          UNKNOWN: "Unknown"
+          DISABLED: "ปิดอยู่",
+          IDLE: "พักรอ / เฝ้าดูค่า",
+          EVALUATING: "กำลังประเมินค่า",
+          DOSING_A: "กำลังจ่ายสารอาหาร A",
+          DOSING_B: "กำลังจ่ายสารอาหาร B",
+          WATER_FILL: "กำลังเติมน้ำ",
+          COOLDOWN: "พักรอรอบถัดไป",
+          ENABLE_AUTOMATION: "เปิดระบบอัตโนมัติ",
+          WAIT_CLEAR_CONDITION: "รอให้เงื่อนไขกลับมาปกติ",
+          WAIT_CIRCULATION: "รอการหมุนเวียนน้ำ",
+          WAIT_CONTROL_ZONE: "รอโซนควบคุมถังผสม",
+          WAIT_REFILL_COMPLETE: "รอให้การเติมน้ำจบ",
+          WAIT_MIX_REFILL_COMPLETE: "รอให้การเติมถังผสมจบ",
+          WAIT_FISH_REFILL_MIXING: "รอการผสมน้ำหลังเติมผ่านตู้ปลา",
+          WAIT_MIX_SETTLING: "รอให้น้ำในถังผสมนิ่ง",
+          WAIT_HW_TEST_END: "รอให้การทดสอบฮาร์ดแวร์จบ",
+          UNKNOWN: "ไม่ทราบ"
         };
-        return labels[state] || state || "Unknown";
+        return labels[state] || state || "ไม่ทราบ";
       }
 
       function formatWaterRoute(route) {
         const labels = {
-          AUTO: "Auto",
-          FISH_TANK: "Via Fish Tank",
-          SUMP_DIRECT: "Direct to Mix Tank",
-          NONE: "None",
-          UNKNOWN: "Unknown"
+          AUTO: "อัตโนมัติ",
+          FISH_TANK: "ผ่านตู้ปลา",
+          SUMP_DIRECT: "เข้าถังผสมตรง",
+          NONE: "ไม่มี",
+          UNKNOWN: "ไม่ทราบ"
         };
-        return labels[route] || route || "Unknown";
+        return labels[route] || route || "ไม่ทราบ";
       }
 
       function formatWaterState(state) {
         const labels = {
-          IDLE: "Ready",
-          MIX_TANK_REFILL: "Refilling Mix Tank",
-          WAIT_REFILL_INTERVAL: "Waiting Refill Interval",
-          MIX_TANK_SETTLING: "Settling Mix Tank",
-          FISH_TANK_REFILL: "Special Fish Refill",
-          BLOCKED: "Blocked",
+          IDLE: "พร้อมทำงาน",
+          MIX_TANK_REFILL: "กำลังเติมถังผสม",
+          WAIT_REFILL_INTERVAL: "รอช่วงพักการเติม",
+          MIX_TANK_SETTLING: "รอให้น้ำในถังผสมนิ่ง",
+          FISH_TANK_REFILL: "กำลังเติมผ่านตู้ปลา",
+          BLOCKED: "ถูกบล็อก",
           ALARM: "Alarm",
-          UNKNOWN: "Unknown"
+          UNKNOWN: "ไม่ทราบ"
         };
-        return labels[state] || state || "Unknown";
+        return labels[state] || state || "ไม่ทราบ";
       }
 
       function formatWaterBool(value, truthyLabel, falsyLabel) {
@@ -1116,10 +1500,10 @@
 
       function formatHoldMs(ms) {
         const totalSeconds = Math.max(0, Math.round((ms || 0) / 1000));
-        if (totalSeconds < 60) return `${totalSeconds}s`;
+        if (totalSeconds < 60) return `${totalSeconds} วินาที`;
         const minutes = Math.floor(totalSeconds / 60);
         const seconds = totalSeconds % 60;
-        return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+        return seconds > 0 ? `${minutes} นาที ${seconds} วินาที` : `${minutes} นาที`;
       }
 
       function addLog(type, message) {
@@ -1136,17 +1520,162 @@
 
       function getTdsQuality(tds) {
         if (tds === null || tds === undefined || tds < 0) return "--";
-        if (tds <= 50)   return "Excellent (RO/Distilled)";
-        if (tds <= 150)  return "Good (Drinking)";
-        if (tds <= 300)  return "Standard (Tap)";
-        if (tds <= 500)  return "Ideal for Plants";
-        if (tds <= 1000) return "High mineral content";
-        if (tds <= 2000) return "Brackish Water";
-        return "Contaminated!";
+        if (tds <= 50)   return "ดีมาก (RO/Distilled)";
+        if (tds <= 150)  return "ดี (น้ำดื่ม)";
+        if (tds <= 300)  return "มาตรฐาน (น้ำประปา)";
+        if (tds <= 500)  return "เหมาะกับพืช";
+        if (tds <= 1000) return "แร่ธาตุค่อนข้างสูง";
+        if (tds <= 2000) return "น้ำกร่อย";
+        return "ปนเปื้อนสูง";
+      }
+
+      function setToneText(id, text, tone = "neutral") {
+        const element = document.getElementById(id);
+        if (!element) return;
+        element.textContent = text;
+        element.dataset.tone = tone;
+      }
+
+      function setHeroCard(cardId, valueId, subId, tone, value, sub) {
+        const card = document.getElementById(cardId);
+        if (card) card.dataset.tone = tone;
+
+        const valueEl = document.getElementById(valueId);
+        if (valueEl) valueEl.textContent = value;
+
+        const subEl = document.getElementById(subId);
+        if (subEl) subEl.textContent = sub;
+      }
+
+      function evaluateThreshold(key, value) {
+        const config = THRESHOLDS[key];
+        if (!config || value === null || value === undefined || Number.isNaN(value)) {
+          return {
+            tone: "neutral",
+            short: "กำลังรอข้อมูล",
+            detail: "ยังไม่ได้รับค่าล่าสุดจากอุปกรณ์"
+          };
+        }
+
+        const range = config.max - config.min;
+        const buffer = range * 0.12;
+
+        if (value < config.min) {
+          return {
+            tone: value < config.min - buffer ? "danger" : "warn",
+            short: "ต่ำกว่าช่วง",
+            detail: `${config.name} ต่ำกว่าช่วงแนะนำ ควรเช็กสภาพแวดล้อมหรือ calibration`
+          };
+        }
+
+        if (value > config.max) {
+          return {
+            tone: value > config.max + buffer ? "danger" : "warn",
+            short: "สูงกว่าช่วง",
+            detail: `${config.name} สูงกว่าช่วงแนะนำ ควรดูการไหลเวียน การระบายความร้อน หรือการเติมน้ำ`
+          };
+        }
+
+        return {
+          tone: "good",
+          short: "อยู่ในช่วงแนะนำ",
+          detail: `${config.name} อยู่ในช่วงแนะนำสำหรับการเฝ้าดูประจำวัน`
+        };
+      }
+
+      function updateHeroAttention(message, tone = "neutral") {
+        const wrap = document.getElementById("heroAttentionWrap");
+        const text = document.getElementById("heroAttention");
+        if (!wrap || !text) return;
+        wrap.dataset.tone = tone;
+        text.textContent = message;
+      }
+
+      function updateHeroWaterSummary(data, waterEval, phEval, tdsEval) {
+        const states = [waterEval, phEval, tdsEval];
+        const dangerCount = states.filter((item) => item.tone === "danger").length;
+        const warnCount = states.filter((item) => item.tone === "warn").length;
+        const goodCount = states.filter((item) => item.tone === "good").length;
+
+        if (dangerCount > 0) {
+          setHeroCard(
+            "heroWaterCard",
+            "heroWaterStatus",
+            "heroWaterSub",
+            "danger",
+            "ต้องดูทันที",
+            `${dangerCount} ค่าหลักออกนอกช่วงปลอดภัย`
+          );
+          return;
+        }
+
+        if (warnCount > 0) {
+          setHeroCard(
+            "heroWaterCard",
+            "heroWaterStatus",
+            "heroWaterSub",
+            "warn",
+            "ควรเฝ้าดูใกล้ชิด",
+            `${goodCount}/3 ค่าหลักยังนิ่ง · ${getTdsQuality(data.tds)}`
+          );
+          return;
+        }
+
+        if (goodCount === 3) {
+          setHeroCard(
+            "heroWaterCard",
+            "heroWaterStatus",
+            "heroWaterSub",
+            "good",
+            "นิ่งดี",
+            `pH, TDS และอุณหภูมิน้ำอยู่ในช่วงแนะนำ · ${getTdsQuality(data.tds)}`
+          );
+          return;
+        }
+
+        setHeroCard(
+          "heroWaterCard",
+          "heroWaterStatus",
+          "heroWaterSub",
+          "neutral",
+          "กำลังรอ...",
+          "ต้องมีค่าจากเซ็นเซอร์ชุดล่าสุดก่อนจึงจะประเมินคุณภาพน้ำได้"
+        );
       }
 
       // === WebSocket (SocketIO) ===
       const socket = io({ transports: ['websocket', 'polling'] });
+      let lastDashboardEventAt = Date.now();
+      let dashboardSnapshotInFlight = false;
+
+      function applyDashboardData(data) {
+        if (data.sensors) updateSensors(data.sensors);
+        if (data.health)  updateHealth(data.health);
+        if (data.info)    updateInfo(data.info);
+        if (data.logs)    updateLogs(data.logs);
+
+        lastDashboardEventAt = Date.now();
+        setOnline(true);
+        wasOnline = true;
+      }
+
+      async function refreshDashboardSnapshot(force = false) {
+        if (dashboardSnapshotInFlight) return;
+        if (!force && Date.now() - lastDashboardEventAt < 6000) return;
+
+        dashboardSnapshotInFlight = true;
+        try {
+          const response = await fetch('/api/dashboard_snapshot', { cache: 'no-store' });
+          if (response.ok) {
+            const data = await response.json();
+            applyDashboardData(data);
+          }
+        } catch (error) {
+          console.warn('Dashboard snapshot refresh failed', error);
+        } finally {
+          dashboardSnapshotInFlight = false;
+        }
+      }
 
       socket.on('connect', function() {
         console.log('🔌 WebSocket connected');
@@ -1159,17 +1688,14 @@
         console.log('🔌 WebSocket disconnected');
         if (wasOnline) addLog('error', 'WebSocket disconnected');
         setOnline(false);
+        refreshDashboardSnapshot(true);
       });
 
       socket.on('dashboard_update', function(data) {
-        if (data.sensors) updateSensors(data.sensors);
-        if (data.health)  updateHealth(data.health);
-        if (data.info)    updateInfo(data.info);
-        if (data.logs)    updateLogs(data.logs);
-
-        setOnline(true);
-        wasOnline = true;
+        applyDashboardData(data);
       });
+
+      setInterval(() => refreshDashboardSnapshot(false), 5000);
 
       // Fetch settings (device name, sensor disabled state)
       // Only needed occasionally — not real-time data
@@ -1218,9 +1744,34 @@
         document.getElementById("tds").innerText = data.tds != null ? data.tds.toFixed(0) : "--";
         document.getElementById("ph").innerText = data.ph != null ? data.ph.toFixed(2) : "--";
         document.getElementById("light").innerText = data.light != null ? data.light.toFixed(0) + " lux" : "--";
-        
-        document.getElementById("tdsQuality").textContent = getTdsQuality(data.tds);
-        document.getElementById("lightState").textContent = data.light_state ? "DAY MODE" : "NIGHT MODE";
+
+        const waterEval = evaluateThreshold("water_temp", data.water_temp);
+        const airEval = evaluateThreshold("air_temp", data.air_temp);
+        const tdsEval = evaluateThreshold("tds", data.tds);
+        const phEval = evaluateThreshold("ph", data.ph);
+
+        setToneText("waterRangeState", waterEval.short, waterEval.tone);
+        setToneText("waterHint", waterEval.detail, waterEval.tone);
+        setToneText("airRangeState", airEval.short, airEval.tone);
+        setToneText("airHint", `${airEval.detail} · ความชื้น ${data.humidity != null ? data.humidity.toFixed(1) + "%" : "--"}`, airEval.tone);
+        setToneText("tdsRangeState", tdsEval.short, tdsEval.tone);
+        setToneText("tdsQuality", `${getTdsQuality(data.tds)} · ${tdsEval.detail}`, tdsEval.tone);
+        setToneText("phState", phEval.short, phEval.tone);
+        setToneText("lightState", data.light == null ? "กำลังรอข้อมูล" : (data.light_state ? "โหมดกลางวัน" : "โหมดกลางคืน"), data.light == null ? "neutral" : "good");
+        setToneText("phHint", `${phEval.detail} · โหมดแสง: ${data.light_state ? "กลางวัน" : "กลางคืน"}`, phEval.tone);
+
+        const attentionMessages = [];
+        if (data.water_alarm) attentionMessages.push("ระบบน้ำมี Alarm อยู่ ตรวจดูโซนควบคุมและล้าง Alarm ได้เมื่อสาเหตุถูกแก้แล้ว");
+        [waterEval, airEval, tdsEval, phEval].forEach((item) => {
+          if (item.tone === "danger" || item.tone === "warn") attentionMessages.push(item.detail);
+        });
+
+        updateHeroWaterSummary(data, waterEval, phEval, tdsEval);
+        updateHeroAttention(
+          attentionMessages[0] || "ค่าหลักส่วนใหญ่ดูนิ่งแล้ว ตอนนี้สามารถใช้กราฟหรือ logs เพื่อตรวจเช็กเชิงลึกต่อได้",
+          data.water_alarm ? "danger" : attentionMessages.length ? "warn" : "good"
+        );
+
         document.getElementById("lastUpdate").textContent = new Date().toLocaleTimeString("en-US", {hour12: false});
         
         updateWaterControlZone(data);
@@ -1229,15 +1780,15 @@
 
       function updateWaterControlZone(data) {
         document.getElementById("waterZoneState").textContent = data.water_state_label_th || formatWaterState(data.water_state);
-        document.getElementById("waterZoneInlet").textContent = formatWaterBool(data.mix_tank_refill_output, "Active", "Idle");
-        document.getElementById("waterZoneCirculation").textContent = formatWaterBool(data.circulation_pump_output, "Running", "Stopped");
-        document.getElementById("waterZoneAlarm").textContent = formatWaterBool(data.water_alarm, "Alarm", "Normal");
-        document.getElementById("waterZoneMixRefill").textContent = formatWaterBool(data.mix_tank_refill_output, "Active", "Idle");
-        document.getElementById("waterZoneDilution").textContent = formatWaterBool(data.water_dilution_active, "Active", "Clear");
-        document.getElementById("waterZoneSettling").textContent = formatWaterBool(data.mix_tank_settling_active, "Settling", "Stable");
-        document.getElementById("waterZoneControl").textContent = formatWaterBool(data.mix_tank_control_zone, "Stable", "Unstable");
+        document.getElementById("waterZoneInlet").textContent = formatWaterBool(data.mix_tank_refill_output, "ทำงาน", "พัก");
+        document.getElementById("waterZoneCirculation").textContent = formatWaterBool(data.circulation_pump_output, "กำลังทำงาน", "หยุดอยู่");
+        setToneText("waterZoneAlarm", formatWaterBool(data.water_alarm, "Alarm", "ปกติ"), data.water_alarm ? "danger" : "good");
+        document.getElementById("waterZoneMixRefill").textContent = formatWaterBool(data.mix_tank_refill_output, "ทำงาน", "พัก");
+        document.getElementById("waterZoneDilution").textContent = formatWaterBool(data.water_dilution_active, "กำลังทำงาน", "ไม่มี");
+        document.getElementById("waterZoneSettling").textContent = formatWaterBool(data.mix_tank_settling_active, "กำลังพักนิ่ง", "นิ่งแล้ว");
+        setToneText("waterZoneControl", formatWaterBool(data.mix_tank_control_zone, "นิ่งแล้ว", "ยังไม่นิ่ง"), data.mix_tank_control_zone ? "good" : "warn");
         document.getElementById("waterZoneHold").textContent = formatHoldMs(data.dilution_hold_remaining_ms);
-        document.getElementById("waterZoneReason").textContent = data.water_reason || "Waiting for water system status";
+        document.getElementById("waterZoneReason").textContent = data.water_reason || "กำลังรอสถานะระบบน้ำ";
       }
 
       function toggleWorkflow() {
@@ -1261,7 +1812,7 @@
         const nextState = data.auto_next_state || "UNKNOWN";
         const reason = data.auto_reason || "";
         const timeLeft = data.auto_time_left || 0;
-        const isBlocked = enabled && state === "IDLE" && reason.startsWith("Blocked");
+        const isBlocked = enabled && state === "IDLE" && (reason.startsWith("Blocked") || reason.startsWith("ถูกบล็อก"));
         
         const badge = document.getElementById("autoStatusBadge");
         const currentStateEl = document.getElementById("wfCurrentState");
@@ -1287,6 +1838,10 @@
           if (node) node.className = "step-node";
         });
 
+        const setAutomationHero = (tone, value, sub) => {
+          setHeroCard("heroAutomationCard", "heroAutomationStatus", "heroAutomationSub", tone, value, sub);
+        };
+
         function markSteps(completedIds, activeId) {
           completedIds.forEach(id => {
             const node = document.getElementById(id);
@@ -1308,17 +1863,18 @@
         }
         
         if (!enabled) {
+          setAutomationHero("neutral", "ปิดอยู่", "เปิดจากหน้าตั้งค่าเมื่อต้องการให้ระบบจ่ายสารอาหารและเติมน้ำอัตโนมัติ");
           badge.className = "workflow-status-badge ws-disabled";
-          badge.textContent = "DISABLED";
-          reasonEl.textContent = "Automation is currently turned off in Settings.";
+          badge.textContent = "ปิดอยู่";
+          reasonEl.textContent = "ระบบอัตโนมัติถูกปิดไว้ในหน้าตั้งค่า";
           reasonEl.style.color = "var(--text-muted)";
           setSummary(
-            "Disabled",
-            "Automation will not evaluate or dose anything",
+            "ปิดอยู่",
+            "ระบบจะยังไม่ประเมินค่าหรือจ่ายสารอาหารใด ๆ",
             prettifyWorkflowState(nextState),
-            "Turn on automation from Settings to start monitoring TDS",
+            "เปิดจากหน้าตั้งค่าเพื่อเริ่มเฝ้าดูค่า TDS",
             "--",
-            "No active transition while disabled"
+            "ยังไม่มีการเปลี่ยนขั้นระหว่างที่ระบบถูกปิด"
           );
           document.getElementById("wfCooldownTime").textContent = "--";
           // Collapse by default if disabled
@@ -1338,96 +1894,104 @@
         reasonEl.style.color = reason ? "var(--warning)" : "transparent";
 
         if (isBlocked) {
+          setAutomationHero("warn", "ถูกบล็อก", reason || "ระบบอัตโนมัติกำลังรอให้เงื่อนไขที่บล็อกอยู่หายไป");
           badge.className = "workflow-status-badge ws-blocked";
-          badge.textContent = "BLOCKED";
+          badge.textContent = "ถูกบล็อก";
           markSteps([], stepMap.IDLE);
           setSummary(
-            "Idle (Blocked)",
-            "Automation is paused by a safety interlock",
+            "พักรอ (ถูกบล็อก)",
+            "ระบบอัตโนมัติถูกพักไว้ด้วยเงื่อนไขความปลอดภัย",
             prettifyWorkflowState(nextState),
-            "The system will resume automatically after the blocking condition clears",
+            "ระบบจะกลับมาทำงานเองเมื่อเงื่อนไขที่บล็อกหายไป",
             "--",
-            "No countdown while blocked"
+            "ไม่มีการนับถอยหลังระหว่างที่ระบบถูกบล็อก"
           );
           return;
         }
 
         if (state === "IDLE") {
+          setAutomationHero("good", "กำลังเฝ้าดู", `ถัดไป: ${prettifyWorkflowState(nextState)}${timeLeft > 0 ? ` ในอีก ${formatEta(timeLeft)}` : ""}`);
           badge.className = "workflow-status-badge ws-idle";
-          badge.textContent = "MONITORING";
+          badge.textContent = "เฝ้าดูอยู่";
           markSteps([], stepMap.IDLE);
           setSummary(
-            "Idle / Monitoring",
-            "Watching sensor values and waiting for the next evaluation cycle",
+            "พักรอ / เฝ้าดูค่า",
+            "กำลังดูค่าเซ็นเซอร์และรอรอบประเมินครั้งถัดไป",
             prettifyWorkflowState(nextState),
-            "The controller will check whether nutrient dosing is needed",
+            "ตัวควบคุมจะตรวจว่าจำเป็นต้องจ่ายสารอาหารหรือไม่",
             formatEta(timeLeft),
-            "Time until the next automatic sensor evaluation"
+            "เวลาจนถึงรอบประเมินเซ็นเซอร์อัตโนมัติครั้งถัดไป"
           );
           return;
         }
 
         badge.className = "workflow-status-badge ws-active";
-        badge.textContent = "ACTIVE";
+        badge.textContent = "กำลังทำงาน";
+
+        setAutomationHero(
+          state === "WATER_FILL" ? "warn" : "good",
+          prettifyWorkflowState(state),
+          reason || `ถัดไป: ${prettifyWorkflowState(nextState)}${timeLeft > 0 ? ` ในอีก ${formatEta(timeLeft)}` : ""}`
+        );
 
         switch (state) {
           case "EVALUATING":
             markSteps([stepMap.IDLE], stepMap.EVALUATING);
             setSummary(
-              "Evaluating",
-              "Checking the latest readings against the configured automation target",
+              "กำลังประเมินค่า",
+              "กำลังเทียบค่าล่าสุดกับเป้าหมายของระบบอัตโนมัติ",
               prettifyWorkflowState(nextState),
-              "If TDS is low the next step is Nutrient A, otherwise the system returns to monitoring",
+              "ถ้า TDS ต่ำ ขั้นถัดไปคือสารอาหาร A ไม่เช่นนั้นระบบจะกลับไปเฝ้าดูค่า",
               "--",
-              "Evaluation happens immediately in this state"
+              "ขั้นนี้ประเมินทันทีโดยไม่ต้องรอนับถอยหลัง"
             );
             break;
 
           case "DOSING_A":
             markSteps([stepMap.IDLE, stepMap.EVALUATING], stepMap.DOSING_A);
             setSummary(
-              "Dosing Nutrient A",
-              "Pump A is running to raise TDS toward the target",
+              "กำลังจ่ายสารอาหาร A",
+              "Pump A กำลังทำงานเพื่อดันค่า TDS เข้าใกล้เป้าหมาย",
               prettifyWorkflowState(nextState),
-              "After Nutrient A finishes, the system continues with Nutrient B",
+              "หลังสารอาหาร A จบ ระบบจะทำต่อด้วยสารอาหาร B",
               formatEta(timeLeft),
-              "Time remaining before switching to Nutrient B"
+              "เวลาคงเหลือก่อนเปลี่ยนไปจ่ายสารอาหาร B"
             );
             break;
 
           case "DOSING_B":
             markSteps([stepMap.IDLE, stepMap.EVALUATING, stepMap.DOSING_A], stepMap.DOSING_B);
             setSummary(
-              "Dosing Nutrient B",
-              "Pump B is running to complete the nutrient dosing cycle",
+              "กำลังจ่ายสารอาหาร B",
+              "Pump B กำลังทำงานเพื่อจบรอบการจ่ายสารอาหาร",
               prettifyWorkflowState(nextState),
-              "After this dose finishes the system waits for nutrients to mix",
+              "หลังจบรอบนี้ระบบจะรอให้สารอาหารกระจายตัว",
               formatEta(timeLeft),
-              "Time remaining before entering cooldown"
+              "เวลาคงเหลือก่อนเข้าสู่ช่วงพักรอ"
             );
             break;
 
           case "WATER_FILL":
             markSteps([stepMap.IDLE, stepMap.EVALUATING], stepMap.WATER_FILL);
             setSummary(
-              "Water Fill",
-              "Automation is currently in the water fill phase",
+              "กำลังเติมน้ำ",
+              "ระบบอัตโนมัติกำลังอยู่ในช่วงเติมน้ำ",
               prettifyWorkflowState(nextState),
-              "After water fill completes the system should either stabilize or return to monitoring",
+              "หลังการเติมน้ำจบ ระบบควรกลับมานิ่งหรือกลับไปเฝ้าดูค่าต่อ",
               formatEta(timeLeft),
-              "Time remaining for this phase if available"
+              "เวลาคงเหลือของขั้นนี้ถ้ามีข้อมูล"
             );
             break;
 
           case "COOLDOWN":
             markSteps([stepMap.IDLE, stepMap.EVALUATING, stepMap.DOSING_A, stepMap.DOSING_B], stepMap.COOLDOWN);
             setSummary(
-              "Cooldown",
-              "Waiting for nutrients to disperse before the next evaluation",
+              "พักรอรอบถัดไป",
+              "กำลังรอให้สารอาหารกระจายตัวก่อนประเมินรอบถัดไป",
               prettifyWorkflowState(nextState),
-              "When cooldown finishes the controller resumes normal monitoring",
+              "เมื่อช่วงพักรอจบ ตัวควบคุมจะกลับไปเฝ้าดูค่าตามปกติ",
               formatEta(timeLeft),
-              "Time remaining before monitoring resumes"
+              "เวลาคงเหลือก่อนกลับไปเฝ้าดูค่าต่อ"
             );
             document.getElementById("wfCooldownTime").textContent = formatEta(timeLeft);
             break;
@@ -1436,11 +2000,11 @@
             markSteps([], null);
             setSummary(
               state,
-              "Received an unknown automation state from the controller",
-              "Unknown",
-              "Check firmware and dashboard mapping for this state",
+              "ได้รับสถานะระบบอัตโนมัติที่ไม่รู้จักจากตัวควบคุม",
+              "ไม่ทราบ",
+              "ตรวจ firmware และการ map สถานะใน dashboard สำหรับสถานะนี้",
               formatEta(timeLeft),
-              "No transition estimate available"
+              "ยังไม่มีเวลาคาดการณ์การเปลี่ยนขั้น"
             );
             break;
         }
@@ -1467,18 +2031,10 @@
         document.getElementById("rssi").innerText = data.wifi_rssi + " dBm";
 
         // MQTT Status
-        const mqttEl = document.getElementById("mqttStatus");
-        mqttEl.innerHTML = data.mqtt_connected
-          ? '<span style="color:var(--primary)">ONLINE</span>'
-          : '<span style="color:var(--danger)">OFFLINE</span>';
+        setToneText("mqttStatus", data.mqtt_connected ? "ออนไลน์" : "ออฟไลน์", data.mqtt_connected ? "good" : "danger");
 
         // ESP32 Heartbeat Status
-        const espStatEl = document.getElementById("espStatus");
-        if(data.esp_status === "ONLINE") {
-            espStatEl.innerHTML = '<span style="color:var(--primary); font-weight:bold;"><i class="fas fa-check-circle"></i> ONLINE</span>';
-        } else {
-            espStatEl.innerHTML = '<span style="color:var(--danger); font-weight:bold;"><i class="fas fa-exclamation-triangle"></i> OFFLINE</span>';
-        }
+        setToneText("espStatus", data.esp_status === "ONLINE" ? "ออนไลน์" : "ออฟไลน์", data.esp_status === "ONLINE" ? "good" : "danger");
 
         // === ESP32 ===
         const espFreeHeap = data.free_heap || 0;
@@ -1496,7 +2052,7 @@
         espRamBar.className = "prog-fill " + (espRamPercent > 90 ? "red" : espRamPercent > 70 ? "yellow" : "");
 
         document.getElementById("espCpuTemp").textContent = espCpuTemp.toFixed(1) + "°C";
-        document.getElementById("espCpuState").textContent = espCpuTemp > 60 ? "Hot" : "Normal";
+        document.getElementById("espCpuState").textContent = espCpuTemp > 60 ? "ร้อน" : "ปกติ";
         
         const espCpuBar = document.getElementById("espCpuBar");
         const espTempPercent = (espCpuTemp / 85) * 100;
@@ -1520,7 +2076,7 @@
 
         document.getElementById("piCpuTemp").textContent = piTemp.toFixed(1) + "°C";
         document.getElementById("piCpuLoad").textContent = piCpuPercent.toFixed(1) + "%";
-        document.getElementById("piLoadState").textContent = piCpuPercent > 80 ? "Heavy" : piCpuPercent > 30 ? "Moderate" : "Idle";
+        document.getElementById("piLoadState").textContent = piCpuPercent > 80 ? "สูง" : piCpuPercent > 30 ? "ปานกลาง" : "ว่าง";
         
         const piLoadBar = document.getElementById("piLoadBar");
         piLoadBar.style.width = piCpuPercent + "%";
@@ -1530,15 +2086,19 @@
         document.getElementById("wifiReconnects").textContent = data.wifi_reconnects || 0;
         document.getElementById("mqttReconnects").textContent = data.mqtt_reconnects || 0;
         document.getElementById("watchdogResets").textContent = data.watchdog_resets || 0;
-        document.getElementById("resetReason").textContent = data.reset_reason || "Unknown";
+        document.getElementById("resetReason").textContent = data.reset_reason || "ไม่ทราบ";
         
         const mqttConnected = data.mqtt_connected;
         if (lastMqttStatus !== null && lastMqttStatus !== mqttConnected) {
-          if (mqttConnected) addLog("info", "MQTT Reconnected");
-          else addLog("warn", "MQTT Disconnected");
+          if (mqttConnected) addLog("info", "MQTT กลับมาเชื่อมต่อแล้ว");
+          else addLog("warn", "MQTT หลุดการเชื่อมต่อ");
         }
         lastMqttStatus = mqttConnected;
-        document.getElementById("mqttStatus").textContent = mqttConnected ? "Online" : "Offline";
+
+        const syncTone = data.esp_status === "ONLINE" && mqttConnected ? "good" : (data.esp_status === "ONLINE" || mqttConnected ? "warn" : "danger");
+        const syncValue = syncTone === "good" ? "ปกติดี" : syncTone === "warn" ? "เริ่มมีอาการ" : "หลุดการเชื่อมต่อ";
+        const syncSub = `ESP ${data.esp_status || "ไม่ทราบ"} · MQTT ${mqttConnected ? "ออนไลน์" : "ออฟไลน์"} · RSSI ${data.wifi_rssi ?? "--"} dBm`;
+        setHeroCard("heroSystemCard", "heroSystemStatus", "heroSystemSub", syncTone, syncValue, syncSub);
       }
 
       function updateInfo(data) {
@@ -1551,11 +2111,11 @@
         if (online) {
           dot.classList.add("online");
           dot.classList.remove("offline");
-          text.textContent = "System Online";
+          text.textContent = "ซิงก์สด";
         } else {
           dot.classList.remove("online");
           dot.classList.add("offline");
-          text.textContent = "Disconnected";
+          text.textContent = "กำลังเชื่อมต่อใหม่";
         }
       }
     </script>
