@@ -65,7 +65,10 @@
             display: flex; gap: 12px; padding: 10px 12px;
             background: rgba(0,0,0,0.25); border-top: 1px solid var(--glass-border, rgba(255,255,255,0.08));
             flex-wrap: wrap;
+            overflow-x: auto;
+            scrollbar-width: none;
         }
+        .nav-bar::-webkit-scrollbar { display: none; }
         .nav-group {
             display: flex;
             align-items: center;
@@ -129,6 +132,12 @@
             color: var(--group-accent, var(--primary, #00f2aa));
             border-color: color-mix(in srgb, var(--group-accent, var(--primary, #00f2aa)) 28%, transparent);
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--group-accent, var(--primary, #00f2aa)) 12%, transparent);
+        }
+        .nav-link:focus-visible,
+        .btn-logout:focus-visible,
+        .hamburger-btn:focus-visible {
+            outline: 2px solid var(--secondary, #38bdf8);
+            outline-offset: 2px;
         }
         .nav-link i { font-size: 0.85rem; }
 
@@ -488,22 +497,22 @@
     const NAV_SECTIONS = [
         {
             key: 'monitor',
-            label: 'Monitor',
+            label: 'ติดตาม',
             icon: 'fa-solid fa-chart-simple',
             links: [
-                { href: '/',          icon: 'fa-solid fa-leaf',       label: 'Dashboard' },
-                { href: '/live',      icon: 'fa-solid fa-video',      label: 'Live' },
-                { href: '/graphs',    icon: 'fa-solid fa-chart-line', label: 'Graphs' },
-                { href: '/full_logs', icon: 'fa-solid fa-file-alt',   label: 'Logs' }
+                { href: '/',          icon: 'fa-solid fa-leaf',       label: 'ภาพรวมระบบ' },
+                { href: '/live',      icon: 'fa-solid fa-video',      label: 'กล้องสด' },
+                { href: '/graphs',    icon: 'fa-solid fa-chart-line', label: 'ข้อมูลย้อนหลัง' },
+                { href: '/full_logs', icon: 'fa-solid fa-file-alt',   label: 'บันทึกระบบ' }
             ]
         },
         {
             key: 'operate',
-            label: 'Operate',
+            label: 'สั่งงาน',
             icon: 'fa-solid fa-sliders',
             links: [
-                { href: '/hwtest',   icon: 'fa-solid fa-vial',     label: 'HW Test', admin: true },
-                { href: '/settings', icon: 'fa-solid fa-cog',      label: 'Settings', admin: true },
+                { href: '/hwtest',   icon: 'fa-solid fa-vial',     label: 'ทดสอบฮาร์ดแวร์', admin: true },
+                { href: '/settings', icon: 'fa-solid fa-cog',      label: 'ตั้งค่า', admin: true },
                 { href: '/ota',      icon: 'fa-solid fa-upload',   label: 'OTA', admin: true },
                 { href: '/wifi',     icon: 'fa-solid fa-wifi',     label: 'WiFi', admin: true },
                 { href: '/terminal', icon: 'fa-solid fa-terminal', label: 'Terminal', admin: true }
@@ -511,11 +520,11 @@
         },
         {
             key: 'admin',
-            label: 'Admin',
+            label: 'ผู้ดูแล',
             icon: 'fa-solid fa-shield-halved',
             links: [
-                { href: '/admin/logs',  icon: 'fa-solid fa-clipboard-list', label: 'Activity', admin: true },
-                { href: '/admin/users', icon: 'fa-solid fa-users-cog',      label: 'Users', admin: true }
+                { href: '/admin/logs',  icon: 'fa-solid fa-clipboard-list', label: 'กิจกรรม' },
+                { href: '/admin/users', icon: 'fa-solid fa-users-cog',      label: 'ผู้ใช้', admin: true }
             ]
         }
     ];
@@ -568,7 +577,7 @@
         btn.className = 'hamburger-btn';
         btn.id = 'hamburgerBtn';
         btn.innerHTML = '<i class="fas fa-bars"></i>';
-        btn.setAttribute('aria-label', 'Toggle navigation');
+        btn.setAttribute('aria-label', 'เปิดหรือปิดเมนูนำทาง');
         btn.onclick = function() {
             const nav = document.getElementById('mainNavBar');
             if (nav) {
@@ -854,7 +863,7 @@
             // Logout button
             const logoutBtn = document.createElement('button');
             logoutBtn.className = 'btn-logout';
-            logoutBtn.innerHTML = '<i class="fas fa-sign-out-alt"></i> Logout';
+            logoutBtn.innerHTML = '<i class="fas fa-sign-out-alt"></i> ออกจากระบบ';
             logoutBtn.onclick = async function() {
                 try {
                     await fetch('/api/logout', { method: 'POST' });
@@ -969,7 +978,7 @@
             if (pg) {
                 pg.textContent = d.ping_ms !== null ? d.ping_ms + ' ms' : '\u2014';
                 if (d.ping_target) {
-                    const title = 'Ping to: ' + d.ping_target;
+                    const title = 'Ping ไปยัง: ' + d.ping_target;
                     pg.parentElement.title = title;
                     pg.title = title;
                 }

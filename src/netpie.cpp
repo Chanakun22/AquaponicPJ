@@ -30,6 +30,7 @@ static bool _shadowRequested = false;
 static bool _lastFeedNowShadow = false;
 static const size_t NETPIE_SHADOW_JSON_CAPACITY = 2048;
 static const size_t NETPIE_MQTT_MESSAGE_BUFFER_SIZE = 2048;
+static const unsigned long NETPIE_LOCAL_PRIORITY_RETRY_INTERVAL = 120000;
 
 // Exponential backoff for reconnection
 static unsigned long _reconnectInterval = MQTT_RECONNECT_INTERVAL;  // Start at 5s
@@ -311,7 +312,14 @@ void netpieLoop(void) {
     
     if (!_mqtt.connected()) {
         unsigned long now = millis();
-        if (now - _lastReconnectAttempt >= _reconnectInterval) {
+        unsigned long effectiveReconnectInterval = _reconnectInterval;
+
+        // When the local dashboard path is healthy, avoid letting cloud reconnects stall it.
+        if (localMqttIsConnected() && effectiveReconnectInterval < NETPIE_LOCAL_PRIORITY_RETRY_INTERVAL) {
+            effectiveReconnectInterval = NETPIE_LOCAL_PRIORITY_RETRY_INTERVAL;
+        }
+
+        if (now - _lastReconnectAttempt >= effectiveReconnectInterval) {
             _lastReconnectAttempt = now;
             if (_mqttReconnect()) {
                 _lastReconnectAttempt = 0;

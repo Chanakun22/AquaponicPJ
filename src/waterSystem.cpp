@@ -455,6 +455,7 @@ void waterSystemLoop(void) {
     char stateReason[96];
     stateReason[0] = '\0';
     bool waitingForInterval = false;
+    bool refillMonitoringActive = _config.manualRefill || _config.refillEnabled;
     unsigned long mixIntervalRemainingMs = _getRemainingIntervalMs(now, _lastMixRefillStopMs, _config.refillMinIntervalMs);
     unsigned long fishIntervalRemainingMs = _getFishRefillWaitRemainingMs(now);
 
@@ -478,7 +479,6 @@ void waterSystemLoop(void) {
     _status.dilutionHoldRemainingMs = 0;
     _status.fishRefillReady = _isFishRefillReady(now, _status.overflowAlarm);
     _status.fishRefillWaitRemainingMs = fishIntervalRemainingMs;
-
     bool circulationDesired = _config.circulationEnabled;
     bool refillDesired = false;
     bool blocked = false;

@@ -403,6 +403,8 @@ def _current_water_status():
     status.setdefault('has_route_valve', last_data.get('has_route_valve', False))
     status.setdefault('circulation_output', last_data.get('circulation_output', False))
     status.setdefault('refill_output', last_data.get('refill_output', False))
+    status.setdefault('has_circulation_pump', None)
+    status.setdefault('has_refill_pump', None)
     status.setdefault('circulation_pump_output', last_data.get('circulation_pump_output', False))
     status.setdefault('fish_tank_refill_output', last_data.get('fish_tank_refill_output', False))
     status.setdefault('mix_tank_refill_output', last_data.get('mix_tank_refill_output', False))
@@ -606,6 +608,8 @@ def load_settings():
             "dilution_hold_remaining_ms": 0,
             "fish_refill_ready": True,
             "fish_refill_wait_remaining_ms": 0,
+            "has_circulation_pump": None,
+            "has_refill_pump": None,
             "sump_low": False,
             "sump_high": False,
             "overflow_alarm": False,
@@ -2254,6 +2258,8 @@ def build_dashboard_data():
         "preferred_route": water_status.get("preferred_route", dashboard_sensors.get("preferred_route", WATER_CONFIG_DEFAULTS["preferred_route"])),
         "allow_direct_sump_refill": water_status.get("allow_direct_sump_refill", dashboard_sensors.get("allow_direct_sump_refill", False)),
         "manual_refill": water_status.get("manual_refill", dashboard_sensors.get("manual_refill", False)),
+        "has_circulation_pump": water_status.get("has_circulation_pump", dashboard_sensors.get("has_circulation_pump")),
+        "has_refill_pump": water_status.get("has_refill_pump", dashboard_sensors.get("has_refill_pump")),
         "route_blocked": water_status.get("route_blocked", dashboard_sensors.get("route_blocked", False)),
         "route_valve_output": water_status.get("route_valve_output", dashboard_sensors.get("route_valve_output", False)),
         "has_route_valve": water_status.get("has_route_valve", dashboard_sensors.get("has_route_valve", False)),

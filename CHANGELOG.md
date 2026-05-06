@@ -13,6 +13,10 @@ All notable changes to the **Smart Aquaponics AI** project will be documented in
   - ทำให้หน้า Settings ปิด control ที่ hardware ใช้ไม่ได้ตามสถานะที่ ESP32 รายงาน เช่น ปิด Auto Refill เมื่อไม่มี level sensors และปิด Fish Route เมื่อยังไม่มี overflow sensor หรือ route valve
   - ทำให้ Water System apply/save ฝั่งหน้าเว็บส่งเฉพาะ config fields ที่มีผลจริงกับระบบ และ reload สถานะจาก server หลัง apply เพื่อให้ UI แสดงค่าที่ normalize แล้วจริง
 
+- **fix: gate Water System controls by installed pump capability (`pi_server/app.py`, `pi_server/settings.html`):**
+  - ส่ง `has_circulation_pump` และ `has_refill_pump` ผ่าน Pi water status/default snapshot ให้หน้าเว็บแยกได้ว่า control ไหนยัง unknown กับ control ไหน unsupported จริง
+  - ปิด `Circulation Pump`, `Auto Refill`, และปุ่ม `Manual Refill On/Off` เมื่อ ESP32 รายงานว่าไม่มี actuator ตัวนั้น และกันไม่ให้หน้าเว็บส่ง config/command ที่ hardware ใช้ไม่ได้กลับไปหา firmware
+
 ## [2026-05-03] - Switch Board To ESP32-S3 N16R8
 
 ### Changed

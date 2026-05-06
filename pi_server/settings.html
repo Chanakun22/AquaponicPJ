@@ -1180,10 +1180,10 @@
                         <button class="btn btn-primary" onclick="saveWaterSystemConfig()" style="flex:1; min-width:170px;">
                             <i class="fas fa-save"></i> Apply Water Config
                         </button>
-                        <button class="btn" onclick="manualRefill(true)" style="flex:1; min-width:140px;">
+                        <button class="btn" id="water_manual_refill_on_btn" onclick="manualRefill(true)" style="flex:1; min-width:140px;">
                             <i class="fas fa-fill-drip"></i> Manual Refill On
                         </button>
-                        <button class="btn" onclick="manualRefill(false)" style="flex:1; min-width:140px;">
+                        <button class="btn" id="water_manual_refill_off_btn" onclick="manualRefill(false)" style="flex:1; min-width:140px;">
                             <i class="fas fa-stop"></i> Manual Refill Off
                         </button>
                         <button class="btn btn-danger" onclick="clearWaterAlarm()" style="flex:1; min-width:140px;">
@@ -1808,27 +1808,47 @@
 
         function updateWaterCapabilityControls() {
             const water = settings.water_system || {};
+            const circulationToggle = document.getElementById('water_circulation_enabled');
             const refillToggle = document.getElementById('water_refill_enabled');
             const routeSelect = document.getElementById('water_preferred_route');
             const capabilityHint = document.getElementById('water_capability_hint');
             const fishRouteOption = routeSelect?.querySelector('option[value="FISH_TANK"]');
-            if (!refillToggle || !routeSelect || !capabilityHint) {
+            if (!circulationToggle || !refillToggle || !routeSelect || !capabilityHint) {
                 return;
             }
 
+            const hasCirculationPump = water.has_circulation_pump;
+            const hasRefillPump = water.has_refill_pump;
             const hasLevelSensors = water.has_level_sensors;
             const hasOverflowSensor = water.has_overflow_sensor;
             const hasRouteValve = water.has_route_valve;
-            const autoRefillSupported = hasLevelSensors !== false;
+            const circulationSupported = hasCirculationPump !== false;
+            const refillPumpSupported = hasRefillPump !== false;
+            const autoRefillSupported = refillPumpSupported && hasLevelSensors !== false;
             const routeStrategySupported = hasRouteValve !== false;
             const fishRouteSupported = routeStrategySupported && hasOverflowSensor !== false;
             const capabilityMessages = [];
 
+            circulationToggle.disabled = !circulationSupported;
+            if (!circulationSupported) {
+                circulationToggle.checked = false;
+                capabilityMessages.push('Circulation Pump ถูกปิดไว้ เพราะ firmware ยังไม่พบ circulation pump');
+            }
+
             refillToggle.disabled = !autoRefillSupported;
-            if (!autoRefillSupported) {
+            if (!refillPumpSupported) {
+                refillToggle.checked = false;
+                capabilityMessages.push('Auto Refill และ Manual Refill ถูกปิดไว้ เพราะ firmware ยังไม่พบ refill pump');
+            } else if (!autoRefillSupported) {
                 refillToggle.checked = false;
                 capabilityMessages.push('Auto Refill ถูกปิดไว้ เพราะ firmware ยังไม่พบ mix tank low/high sensors');
             }
+
+            setButtonsDisabled(
+                ['water_manual_refill_on_btn', 'water_manual_refill_off_btn'],
+                !refillPumpSupported,
+                'Available only when firmware reports a refill pump'
+            );
 
             routeSelect.disabled = !routeStrategySupported;
             routeSelect.dataset.fishRouteSupported = fishRouteSupported ? 'true' : 'false';
@@ -1855,6 +1875,7 @@
         }
 
         function collectWaterSystemConfig(overrides = {}) {
+            const circulationToggle = document.getElementById('water_circulation_enabled');
             const refillToggle = document.getElementById('water_refill_enabled');
             const routeSelect = document.getElementById('water_preferred_route');
             const fallbackToggle = document.getElementById('water_allow_direct_sump_refill');
@@ -1863,7 +1884,7 @@
                 : (routeSelect.value || WATER_CONFIG_DEFAULTS.preferred_route);
 
             return {
-                circulation_enabled: document.getElementById('water_circulation_enabled').checked,
+                circulation_enabled: !circulationToggle.disabled && circulationToggle.checked,
                 refill_enabled: !refillToggle.disabled && refillToggle.checked,
                 refill_max_runtime_ms: readWaterTimeFieldMs('water_refill_max_runtime_ms'),
                 refill_min_interval_ms: readWaterTimeFieldMs('water_refill_min_interval_sec'),
@@ -2493,6 +2514,10 @@
         }
 
         function manualRefill(enabled) {
+            if (settings.water_system?.has_refill_pump === false) {
+                showToast('Manual Refill is unavailable because firmware did not detect a refill pump', true);
+                return;
+            }
             saveWaterSystemConfig({ manual_refill: enabled, clear_alarm: false });
         }
 

@@ -117,23 +117,23 @@ void TaskNetworking(void *pvParameters) {
             otaLoop();
         }
         
+        // Prioritize the Pi dashboard path before cloud MQTT so local updates stay responsive.
+        taskCheckpoint(TASK_NETWORKING, "local_mqtt_loop");
+        localMqttLoop();
+        
+        // Reset heartbeat after Local MQTT (connect can take up to 5s)
+        taskCheckpoint(TASK_NETWORKING, "post_local_mqtt");
+
+        // Yield to IDLE task to prevent Task WDT accumulation timeout
+        systemSetTaskProgress(TASK_NETWORKING, "yield_after_local_mqtt");
+        vTaskDelay(pdMS_TO_TICKS(10));
+
         // Handle Netpie MQTT (connect timeout set to 5s in netpieSetup)
         taskCheckpoint(TASK_NETWORKING, "netpie_loop");
         netpieLoop();
         
         // Reset heartbeat after Netpie (connect can take up to 5s)
         taskCheckpoint(TASK_NETWORKING, "post_netpie");
-        
-        // Yield to IDLE task to prevent Task WDT accumulation timeout
-        systemSetTaskProgress(TASK_NETWORKING, "yield_after_netpie");
-        vTaskDelay(pdMS_TO_TICKS(10));
-        
-        // Handle Local MQTT (Pi) (connect timeout set to 5s in localMqttSetup)
-        taskCheckpoint(TASK_NETWORKING, "local_mqtt_loop");
-        localMqttLoop();
-        
-        // Reset heartbeat after Local MQTT (connect can take up to 5s)
-        taskCheckpoint(TASK_NETWORKING, "post_local_mqtt");
         
         // Command Handling from Serial/Telnet is safe here or needs mutex?
         // Serial is hardware, Telnet is network. 
@@ -150,17 +150,17 @@ void TaskNetworking(void *pvParameters) {
         if (millis() - lastPublish >= 2000) { // Throttled publish check
             lastPublish = millis();
             if (wifiIsConnected()) {
+                taskCheckpoint(TASK_NETWORKING, "local_publish");
+                localMqttPublishData(currentWaterTemp, currentAirTemp, currentHumidity, currentTds, currentLight, currentPh);
+
+                // Yield between publish calls — each publish may block up to 5s on TCP timeout
+                taskCheckpoint(TASK_NETWORKING, "yield_between_publish");
+                vTaskDelay(pdMS_TO_TICKS(10));
+
                 if (netpieIsConnected()) {
                     taskCheckpoint(TASK_NETWORKING, "netpie_publish");
                     netpiePublishData(currentWaterTemp, currentAirTemp, currentHumidity, currentTds, currentLight, currentPh);
                 }
-                
-                // Yield between publish calls — each publish may block up to 5s on TCP timeout
-                taskCheckpoint(TASK_NETWORKING, "yield_between_publish");
-                vTaskDelay(pdMS_TO_TICKS(10));
-                
-                taskCheckpoint(TASK_NETWORKING, "local_publish");
-                localMqttPublishData(currentWaterTemp, currentAirTemp, currentHumidity, currentTds, currentLight, currentPh);
                 taskCheckpoint(TASK_NETWORKING, "post_publish");
             }
         }

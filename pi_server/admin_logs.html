@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>📋 Activity Logs - Smart Aquaponics</title>
+    <title>📋 บันทึกกิจกรรม - ระบบอควาโปนิกส์อัจฉริยะ</title>
     <link rel="manifest" href="/pwa/manifest.json">
     <meta name="theme-color" content="#00f2aa">
     <link href="/static/fonts/fonts.css" rel="stylesheet">
@@ -170,8 +170,8 @@
             <div class="brand">
                 <i class="fas fa-clipboard-list"></i>
                 <div>
-                    <h1>Activity Logs</h1>
-                    <div class="subtitle">Admin Audit Trail</div>
+                    <h1>บันทึกกิจกรรม</h1>
+                    <div class="subtitle">ประวัติการใช้งานฝั่งผู้ดูแล</div>
                 </div>
             </div>
         </div>
@@ -180,13 +180,13 @@
     <!-- Toolbar -->
     <div class="toolbar">
         <select id="filterAction">
-            <option value="">All Actions</option>
-            <option value="login">Login</option>
-            <option value="logout">Logout</option>
-            <option value="settings">Settings</option>
-            <option value="calibration">Calibration</option>
-            <option value="ota">OTA Update</option>
-            <option value="user_mgmt">User Management</option>
+            <option value="">ทุกกิจกรรม</option>
+            <option value="login">เข้าสู่ระบบ</option>
+            <option value="logout">ออกจากระบบ</option>
+            <option value="settings">ตั้งค่า</option>
+            <option value="calibration">ปรับเทียบ</option>
+            <option value="ota">อัปเดต OTA</option>
+            <option value="user_mgmt">จัดการผู้ใช้</option>
         </select>
         <input type="date" id="filterDate">
         <button class="btn btn-primary" onclick="loadLogs()">
@@ -245,7 +245,7 @@
             const body = document.getElementById('logBody');
 
             if (!data.logs || data.logs.length === 0) {
-                body.innerHTML = '<tr><td colspan="5" class="empty-state"><i class="fas fa-inbox"></i> No activity logs found</td></tr>';
+                body.innerHTML = '<tr><td colspan="5" class="empty-state"><i class="fas fa-inbox"></i> ไม่พบบันทึกกิจกรรม</td></tr>';
                 return;
             }
 
@@ -271,7 +271,7 @@
 
             // Stats
             const stats = document.getElementById('statsRow');
-            stats.innerHTML = `<div class="stat-pill">Total: <strong>${data.total || data.logs.length}</strong></div>`;
+            stats.innerHTML = `<div class="stat-pill">ทั้งหมด: <strong>${data.total || data.logs.length}</strong></div>`;
 
         } catch (err) {
             document.getElementById('logBody').innerHTML =
