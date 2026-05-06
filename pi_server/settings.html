@@ -1092,6 +1092,7 @@
                     </label>
                 </div>
                 <span class="field-tip" id="water_route_hint">ใช้ตอนเลือก `Auto` เท่านั้น ถ้าเปิดไว้ระบบจะยอม fallback ไปทาง Direct Sump เมื่อ fish route หยุดแล้วแต่ mix tank ยังไม่พอ</span>
+                <span class="field-tip" id="water_capability_hint">กำลังรอสถานะ hardware จาก ESP32 เพื่อยืนยันว่า route และ auto refill ใช้ได้ครบหรือไม่</span>
             </div>
 
             <div class="water-section-title">Live Status from ESP32</div>
@@ -1682,6 +1683,16 @@
 
     <script>
         let settings = {};
+        const WATER_CONFIG_DEFAULTS = {
+            circulation_enabled: true,
+            refill_enabled: false,
+            refill_max_runtime_ms: 120000,
+            refill_min_interval_ms: 300000,
+            preferred_route: 'SUMP_DIRECT',
+            allow_direct_sump_refill: false,
+            fish_refill_interval_ms: 604800000,
+            fish_refill_max_runtime_ms: 30000
+        };
         const WATER_TIME_UNITS = {
             sec: { label: 'วินาที', multiplier: 1000 },
             min: { label: 'นาที', multiplier: 60 * 1000 },
@@ -1778,10 +1789,90 @@
             }
 
             const isAuto = routeSelect.value === 'AUTO';
-            fallbackToggle.disabled = !isAuto;
-            hint.textContent = isAuto
-                ? 'ใช้ตอนเลือก `Auto` เท่านั้น ถ้าเปิดไว้ระบบจะยอม fallback ไปทาง Direct Sump เมื่อ Fish Route หยุดแล้วแต่ mix tank ยังไม่พอ'
-                : 'ตอนนี้เลือก route แบบบังคับแล้ว ค่า fallback จะไม่ถูกใช้จนกว่าจะกลับมาเลือกโหมด Auto';
+            const fishRouteSupported = routeSelect.dataset.fishRouteSupported !== 'false';
+            fallbackToggle.disabled = !isAuto || !fishRouteSupported || routeSelect.disabled;
+            if (fallbackToggle.disabled) {
+                fallbackToggle.checked = false;
+            }
+
+            if (routeSelect.disabled) {
+                hint.textContent = 'Route strategy ถูกล็อกเป็น Direct Sump เพราะ firmware ยังไม่พบ route valve ในระบบนี้';
+            } else if (!fishRouteSupported) {
+                hint.textContent = 'Fish Route ใช้ไม่ได้ในตอนนี้ เพราะ firmware ยังไม่พบ overflow sensor ที่ต้องใช้กับ route นี้';
+            } else {
+                hint.textContent = isAuto
+                    ? 'ใช้ตอนเลือก `Auto` เท่านั้น ถ้าเปิดไว้ระบบจะยอม fallback ไปทาง Direct Sump เมื่อ Fish Route หยุดแล้วแต่ mix tank ยังไม่พอ'
+                    : 'ตอนนี้เลือก route แบบบังคับแล้ว ค่า fallback จะไม่ถูกใช้จนกว่าจะกลับมาเลือกโหมด Auto';
+            }
+        }
+
+        function updateWaterCapabilityControls() {
+            const water = settings.water_system || {};
+            const refillToggle = document.getElementById('water_refill_enabled');
+            const routeSelect = document.getElementById('water_preferred_route');
+            const capabilityHint = document.getElementById('water_capability_hint');
+            const fishRouteOption = routeSelect?.querySelector('option[value="FISH_TANK"]');
+            if (!refillToggle || !routeSelect || !capabilityHint) {
+                return;
+            }
+
+            const hasLevelSensors = water.has_level_sensors;
+            const hasOverflowSensor = water.has_overflow_sensor;
+            const hasRouteValve = water.has_route_valve;
+            const autoRefillSupported = hasLevelSensors !== false;
+            const routeStrategySupported = hasRouteValve !== false;
+            const fishRouteSupported = routeStrategySupported && hasOverflowSensor !== false;
+            const capabilityMessages = [];
+
+            refillToggle.disabled = !autoRefillSupported;
+            if (!autoRefillSupported) {
+                refillToggle.checked = false;
+                capabilityMessages.push('Auto Refill ถูกปิดไว้ เพราะ firmware ยังไม่พบ mix tank low/high sensors');
+            }
+
+            routeSelect.disabled = !routeStrategySupported;
+            routeSelect.dataset.fishRouteSupported = fishRouteSupported ? 'true' : 'false';
+            if (fishRouteOption) {
+                fishRouteOption.disabled = !fishRouteSupported;
+            }
+
+            if (!routeStrategySupported) {
+                routeSelect.value = WATER_CONFIG_DEFAULTS.preferred_route;
+                capabilityMessages.push('Route strategy ถูกลดเหลือ Direct Sump เพราะ firmware ยังไม่พบ route valve');
+            } else if (!fishRouteSupported && routeSelect.value === 'FISH_TANK') {
+                routeSelect.value = WATER_CONFIG_DEFAULTS.preferred_route;
+            }
+
+            if (routeStrategySupported && hasOverflowSensor === false) {
+                capabilityMessages.push('Fish Route ถูกปิดไว้ เพราะ firmware ยังไม่พบ overflow sensor');
+            }
+
+            capabilityHint.textContent = capabilityMessages.length > 0
+                ? capabilityMessages.join(' ')
+                : 'ค่าหน้านี้พร้อมใช้งานตาม hardware ที่ ESP32 รายงานอยู่ตอนนี้';
+
+            updateWaterRouteControls();
+        }
+
+        function collectWaterSystemConfig(overrides = {}) {
+            const refillToggle = document.getElementById('water_refill_enabled');
+            const routeSelect = document.getElementById('water_preferred_route');
+            const fallbackToggle = document.getElementById('water_allow_direct_sump_refill');
+            const preferredRoute = routeSelect.disabled
+                ? WATER_CONFIG_DEFAULTS.preferred_route
+                : (routeSelect.value || WATER_CONFIG_DEFAULTS.preferred_route);
+
+            return {
+                circulation_enabled: document.getElementById('water_circulation_enabled').checked,
+                refill_enabled: !refillToggle.disabled && refillToggle.checked,
+                refill_max_runtime_ms: readWaterTimeFieldMs('water_refill_max_runtime_ms'),
+                refill_min_interval_ms: readWaterTimeFieldMs('water_refill_min_interval_sec'),
+                preferred_route: preferredRoute,
+                allow_direct_sump_refill: !fallbackToggle.disabled && fallbackToggle.checked,
+                fish_refill_interval_ms: readWaterTimeFieldMs('water_fish_refill_interval_sec'),
+                fish_refill_max_runtime_ms: readWaterTimeFieldMs('water_fish_refill_max_runtime_sec'),
+                ...overrides
+            };
         }
 
         function normalizeInteger(value, fallback, min = null, max = null) {
@@ -1877,16 +1968,16 @@
             document.getElementById('fan_reason_text').textContent = settings.fan_control?.reason ?? '-';
 
             // Water System
-            document.getElementById('water_circulation_enabled').checked = settings.water_system?.circulation_enabled ?? true;
-            document.getElementById('water_refill_enabled').checked = settings.water_system?.refill_enabled ?? false;
-            setWaterTimeFieldValue('water_refill_max_runtime_ms', settings.water_system?.refill_max_runtime_ms ?? 120000);
-            setWaterTimeFieldValue('water_refill_min_interval_sec', settings.water_system?.refill_min_interval_ms ?? 300000);
-            setWaterTimeFieldValue('water_fish_refill_max_runtime_sec', settings.water_system?.fish_refill_max_runtime_ms ?? 30000);
-            setWaterTimeFieldValue('water_fish_refill_interval_sec', settings.water_system?.fish_refill_interval_ms ?? 604800000);
-            document.getElementById('water_preferred_route').value = settings.water_system?.preferred_route ?? 'AUTO';
-            document.getElementById('water_allow_direct_sump_refill').checked = settings.water_system?.allow_direct_sump_refill ?? false;
+            document.getElementById('water_circulation_enabled').checked = settings.water_system?.circulation_enabled ?? WATER_CONFIG_DEFAULTS.circulation_enabled;
+            document.getElementById('water_refill_enabled').checked = settings.water_system?.refill_enabled ?? WATER_CONFIG_DEFAULTS.refill_enabled;
+            setWaterTimeFieldValue('water_refill_max_runtime_ms', settings.water_system?.refill_max_runtime_ms ?? WATER_CONFIG_DEFAULTS.refill_max_runtime_ms);
+            setWaterTimeFieldValue('water_refill_min_interval_sec', settings.water_system?.refill_min_interval_ms ?? WATER_CONFIG_DEFAULTS.refill_min_interval_ms);
+            setWaterTimeFieldValue('water_fish_refill_max_runtime_sec', settings.water_system?.fish_refill_max_runtime_ms ?? WATER_CONFIG_DEFAULTS.fish_refill_max_runtime_ms);
+            setWaterTimeFieldValue('water_fish_refill_interval_sec', settings.water_system?.fish_refill_interval_ms ?? WATER_CONFIG_DEFAULTS.fish_refill_interval_ms);
+            document.getElementById('water_preferred_route').value = settings.water_system?.preferred_route ?? WATER_CONFIG_DEFAULTS.preferred_route;
+            document.getElementById('water_allow_direct_sump_refill').checked = settings.water_system?.allow_direct_sump_refill ?? WATER_CONFIG_DEFAULTS.allow_direct_sump_refill;
             document.getElementById('water_state_text').textContent = formatWaterState(settings.water_system?.state ?? 'UNKNOWN');
-            document.getElementById('water_preferred_route_text').textContent = formatWaterRoute(settings.water_system?.preferred_route ?? 'AUTO');
+            document.getElementById('water_preferred_route_text').textContent = formatWaterRoute(settings.water_system?.preferred_route ?? WATER_CONFIG_DEFAULTS.preferred_route);
             document.getElementById('water_active_route_text').textContent = formatWaterRoute(settings.water_system?.active_route ?? 'NONE');
             document.getElementById('water_circulation_output_text').textContent = formatWaterBool(settings.water_system?.circulation_pump_output ?? false);
             document.getElementById('water_fish_refill_text').textContent = formatWaterBool(settings.water_system?.fish_tank_refill_output ?? false);
@@ -1902,7 +1993,7 @@
             document.getElementById('water_overflow_text').textContent = formatWaterBool(settings.water_system?.overflow_alarm ?? false);
             document.getElementById('water_alarm_text').textContent = formatWaterBool(settings.water_system?.alarm_active ?? false);
             document.getElementById('water_reason_text').textContent = settings.water_system?.reason ?? '-';
-            updateWaterRouteControls();
+            updateWaterCapabilityControls();
 
             // Thresholds
             document.getElementById('ph_min').value = settings.thresholds?.ph_min ?? 6.0;
@@ -2088,35 +2179,7 @@
                     reason: settings.fan_control?.reason ?? '-'
                 },
                 water_system: {
-                    circulation_enabled: document.getElementById('water_circulation_enabled').checked,
-                    refill_enabled: document.getElementById('water_refill_enabled').checked,
-                    manual_refill: settings.water_system?.manual_refill ?? false,
-                    refill_max_runtime_ms: readWaterTimeFieldMs('water_refill_max_runtime_ms'),
-                    refill_min_interval_ms: readWaterTimeFieldMs('water_refill_min_interval_sec'),
-                    preferred_route: document.getElementById('water_preferred_route').value,
-                    allow_direct_sump_refill: document.getElementById('water_allow_direct_sump_refill').checked,
-                    fish_refill_interval_ms: readWaterTimeFieldMs('water_fish_refill_interval_sec'),
-                    fish_refill_max_runtime_ms: readWaterTimeFieldMs('water_fish_refill_max_runtime_sec'),
-                    state: settings.water_system?.state ?? 'UNKNOWN',
-                    state_label_th: settings.water_system?.state_label_th ?? 'พร้อมทำงาน',
-                    active_route: settings.water_system?.active_route ?? 'NONE',
-                    reason: settings.water_system?.reason ?? '-',
-                    alarm_active: settings.water_system?.alarm_active ?? false,
-                    circulation_pump_output: settings.water_system?.circulation_pump_output ?? false,
-                    fish_tank_refill_output: settings.water_system?.fish_tank_refill_output ?? false,
-                    mix_tank_refill_output: settings.water_system?.mix_tank_refill_output ?? false,
-                    water_dilution_active: settings.water_system?.water_dilution_active ?? false,
-                    mix_tank_settling_active: settings.water_system?.mix_tank_settling_active ?? false,
-                    mix_tank_control_zone: settings.water_system?.mix_tank_control_zone ?? true,
-                    dilution_hold_remaining_ms: settings.water_system?.dilution_hold_remaining_ms ?? 0,
-                    fish_refill_ready: settings.water_system?.fish_refill_ready ?? true,
-                    fish_refill_wait_remaining_ms: settings.water_system?.fish_refill_wait_remaining_ms ?? 0,
-                    route_blocked: settings.water_system?.route_blocked ?? false,
-                    route_valve_output: settings.water_system?.route_valve_output ?? false,
-                    has_route_valve: settings.water_system?.has_route_valve ?? false,
-                    sump_low: settings.water_system?.sump_low ?? false,
-                    sump_high: settings.water_system?.sump_high ?? false,
-                    overflow_alarm: settings.water_system?.overflow_alarm ?? false
+                    ...collectWaterSystemConfig()
                 },
                 thresholds: {
                     ph_min: parseFloat(document.getElementById('ph_min').value),
@@ -2409,17 +2472,7 @@
         }
 
         async function saveWaterSystemConfig(extra = {}) {
-            const data = {
-                circulation_enabled: document.getElementById('water_circulation_enabled').checked,
-                refill_enabled: document.getElementById('water_refill_enabled').checked,
-                refill_max_runtime_ms: readWaterTimeFieldMs('water_refill_max_runtime_ms'),
-                refill_min_interval_ms: readWaterTimeFieldMs('water_refill_min_interval_sec'),
-                preferred_route: document.getElementById('water_preferred_route').value,
-                allow_direct_sump_refill: document.getElementById('water_allow_direct_sump_refill').checked,
-                fish_refill_interval_ms: readWaterTimeFieldMs('water_fish_refill_interval_sec'),
-                fish_refill_max_runtime_ms: readWaterTimeFieldMs('water_fish_refill_max_runtime_sec'),
-                ...extra
-            };
+            const data = collectWaterSystemConfig(extra);
 
             try {
                 const res = await fetch('/api/water_system/config', {
@@ -2429,12 +2482,8 @@
                 });
                 const result = await res.json();
                 if (result.status === 'ok') {
-                    settings.water_system = {
-                        ...(settings.water_system || {}),
-                        ...data
-                    };
                     showToast('Water System Applied to ESP32! ✅');
-                    loadSettings();
+                    await loadSettings();
                 } else {
                     showToast('Error: ' + result.message, true);
                 }

@@ -2,6 +2,17 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-05-07] - Water Settings Consistency Hardening
+
+### Changed
+
+- **fix: make Water System settings use one normalized config model across Pi UI, backend, and ESP32 payloads (`pi_server/app.py`, `pi_server/settings.html`):**
+  - รวม default และ validation ของ Water System ไว้ที่ backend ฝั่ง Pi เพื่อลดกรณีหน้าเว็บ save ได้ค่าแบบหนึ่ง แต่ ESP32 sanitize ไปใช้อีกค่าแบบหนึ่ง
+  - ทำให้ `GET /api/settings` ส่ง Water System เป็นสถานะ runtime ล่าสุดจาก `_current_water_status()` แทนการคืน runtime fields เก่าที่เคยถูก save ค้างไว้ใน settings file
+  - หยุด persist ค่า direct-action อย่าง `manual_refill` และ runtime-only fields ปะปนกับ config ปกติ เพื่อไม่ให้การกด manual commands หรือการกด Save General Settings ทิ้งค่า stale ข้าม restart
+  - ทำให้หน้า Settings ปิด control ที่ hardware ใช้ไม่ได้ตามสถานะที่ ESP32 รายงาน เช่น ปิด Auto Refill เมื่อไม่มี level sensors และปิด Fish Route เมื่อยังไม่มี overflow sensor หรือ route valve
+  - ทำให้ Water System apply/save ฝั่งหน้าเว็บส่งเฉพาะ config fields ที่มีผลจริงกับระบบ และ reload สถานะจาก server หลัง apply เพื่อให้ UI แสดงค่าที่ normalize แล้วจริง
+
 ## [2026-05-03] - Switch Board To ESP32-S3 N16R8
 
 ### Changed

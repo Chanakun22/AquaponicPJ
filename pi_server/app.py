@@ -340,6 +340,25 @@ def _load_water_hardware_defaults():
 
 WATER_HARDWARE_DEFAULTS = _load_water_hardware_defaults()
 
+WATER_ROUTE_AUTO = "AUTO"
+WATER_ROUTE_FISH_TANK = "FISH_TANK"
+WATER_ROUTE_SUMP_DIRECT = "SUMP_DIRECT"
+WATER_ALLOWED_PREFERRED_ROUTES = (
+    WATER_ROUTE_AUTO,
+    WATER_ROUTE_FISH_TANK,
+    WATER_ROUTE_SUMP_DIRECT,
+)
+WATER_CONFIG_DEFAULTS = {
+    "circulation_enabled": True,
+    "refill_enabled": False,
+    "refill_max_runtime_ms": 120000,
+    "refill_min_interval_ms": 300000,
+    "preferred_route": WATER_ROUTE_SUMP_DIRECT,
+    "allow_direct_sump_refill": False,
+    "fish_refill_interval_ms": 604800000,
+    "fish_refill_max_runtime_ms": 30000,
+}
+
 
 def _apply_water_hardware_defaults(water_status):
     normalized = dict(water_status or {})
@@ -349,17 +368,7 @@ def _apply_water_hardware_defaults(water_status):
     return normalized
 
 
-WATER_CONFIG_KEYS = (
-    "circulation_enabled",
-    "refill_enabled",
-    "manual_refill",
-    "refill_max_runtime_ms",
-    "refill_min_interval_ms",
-    "preferred_route",
-    "allow_direct_sump_refill",
-    "fish_refill_interval_ms",
-    "fish_refill_max_runtime_ms",
-)
+WATER_CONFIG_KEYS = tuple(WATER_CONFIG_DEFAULTS.keys())
 
 _water_runtime_status = {}
 
@@ -384,9 +393,9 @@ def _current_water_status():
     status.setdefault('state', last_data.get('water_state', 'IDLE'))
     status.setdefault('state_label_th', last_data.get('water_state_label_th', 'พร้อมทำงาน'))
     status.setdefault('reason', last_data.get('water_reason', 'Waiting for ESP32 status'))
-    status.setdefault('preferred_route', last_data.get('preferred_route', 'AUTO'))
+    status.setdefault('preferred_route', last_data.get('preferred_route', WATER_CONFIG_DEFAULTS['preferred_route']))
     status.setdefault('active_route', last_data.get('active_route', 'NONE'))
-    status.setdefault('allow_direct_sump_refill', last_data.get('allow_direct_sump_refill', False))
+    status.setdefault('allow_direct_sump_refill', last_data.get('allow_direct_sump_refill', WATER_CONFIG_DEFAULTS['allow_direct_sump_refill']))
     status.setdefault('manual_refill', last_data.get('manual_refill', False))
     status.setdefault('alarm_active', last_data.get('water_alarm', False))
     status.setdefault('route_blocked', last_data.get('route_blocked', False))
@@ -437,6 +446,80 @@ def _coerce_int(value, fallback, minimum=None, maximum=None):
     if maximum is not None and normalized > maximum:
         normalized = maximum
     return normalized
+
+
+def _normalize_water_duration_ms(value, default, maximum, allow_zero=False):
+    normalized = _coerce_int(value, default)
+    if allow_zero:
+        if normalized < 0 or normalized > maximum:
+            return default
+        return normalized
+
+    if normalized <= 0 or normalized > maximum:
+        return default
+    return normalized
+
+
+def _normalize_water_system_settings(water_system, current=None):
+    current = current if isinstance(current, dict) else {}
+    water_system = water_system if isinstance(water_system, dict) else {}
+
+    normalized = {
+        key: current.get(key, WATER_CONFIG_DEFAULTS[key])
+        for key in WATER_CONFIG_KEYS
+    }
+
+    normalized["circulation_enabled"] = bool(
+        water_system.get("circulation_enabled", normalized["circulation_enabled"])
+    )
+    normalized["refill_enabled"] = bool(
+        water_system.get("refill_enabled", normalized["refill_enabled"])
+    )
+    normalized["refill_max_runtime_ms"] = _normalize_water_duration_ms(
+        water_system.get("refill_max_runtime_ms", normalized["refill_max_runtime_ms"]),
+        WATER_CONFIG_DEFAULTS["refill_max_runtime_ms"],
+        WATER_CONFIG_DEFAULTS["refill_max_runtime_ms"],
+    )
+    normalized["refill_min_interval_ms"] = _normalize_water_duration_ms(
+        water_system.get("refill_min_interval_ms", normalized["refill_min_interval_ms"]),
+        WATER_CONFIG_DEFAULTS["refill_min_interval_ms"],
+        WATER_CONFIG_DEFAULTS["fish_refill_interval_ms"],
+        allow_zero=True,
+    )
+
+    preferred_route = str(
+        water_system.get("preferred_route", normalized["preferred_route"])
+    ).upper()
+    if preferred_route not in WATER_ALLOWED_PREFERRED_ROUTES:
+        preferred_route = str(normalized["preferred_route"]).upper()
+    if preferred_route not in WATER_ALLOWED_PREFERRED_ROUTES:
+        preferred_route = WATER_CONFIG_DEFAULTS["preferred_route"]
+    normalized["preferred_route"] = preferred_route
+
+    normalized["allow_direct_sump_refill"] = bool(
+        water_system.get("allow_direct_sump_refill", normalized["allow_direct_sump_refill"])
+    )
+    normalized["fish_refill_interval_ms"] = _normalize_water_duration_ms(
+        water_system.get("fish_refill_interval_ms", normalized["fish_refill_interval_ms"]),
+        WATER_CONFIG_DEFAULTS["fish_refill_interval_ms"],
+        30 * 24 * 60 * 60 * 1000,
+    )
+    normalized["fish_refill_max_runtime_ms"] = _normalize_water_duration_ms(
+        water_system.get("fish_refill_max_runtime_ms", normalized["fish_refill_max_runtime_ms"]),
+        WATER_CONFIG_DEFAULTS["fish_refill_max_runtime_ms"],
+        WATER_CONFIG_DEFAULTS["refill_max_runtime_ms"],
+    )
+
+    return normalized
+
+
+def _build_water_system_payload(water_settings, manual_refill=False, clear_alarm=False):
+    normalized = _normalize_water_system_settings(water_settings)
+    return {
+        **normalized,
+        "manual_refill": bool(manual_refill),
+        "clear_alarm": bool(clear_alarm),
+    }
 
 
 def _normalize_fish_feeder_settings(fish_feeder, current=None):
@@ -505,7 +588,7 @@ def load_settings():
             "manual_refill": False,
             "refill_max_runtime_ms": 120000,
             "refill_min_interval_ms": 300000,
-            "preferred_route": "AUTO",
+            "preferred_route": "SUMP_DIRECT",
             "active_route": "NONE",
             "allow_direct_sump_refill": False,
             "fish_refill_interval_ms": 604800000,
@@ -603,7 +686,10 @@ def load_settings():
             with open(SETTINGS_FILE, "r") as f:
                 loaded = json.load(f)
                 merged = _deep_merge_dict(default, loaded)
-                merged["water_system"] = _apply_water_hardware_defaults(merged.get("water_system", {}))
+                merged["water_system"] = _normalize_water_system_settings(
+                    merged.get("water_system", {}),
+                    default.get("water_system", {}),
+                )
                 merged["fish_feeder"] = _normalize_fish_feeder_settings(
                     merged.get("fish_feeder", {}),
                     default["fish_feeder"],
@@ -611,7 +697,10 @@ def load_settings():
                 return merged
     except Exception as e:
         print(f"Error loading settings: {e}")
-    default["water_system"] = _apply_water_hardware_defaults(default.get("water_system", {}))
+    default["water_system"] = _normalize_water_system_settings(
+        default.get("water_system", {}),
+        default.get("water_system", {}),
+    )
     return default
 
 
@@ -829,7 +918,16 @@ def save_settings_to_db(settings):
 def save_settings(settings):
     """Save settings to JSON file atomically and Database"""
     try:
-        settings_to_save = _deep_merge_dict(load_settings(), settings)
+        current_defaults = load_settings()
+        settings_to_save = _deep_merge_dict(current_defaults, settings)
+        settings_to_save["water_system"] = _normalize_water_system_settings(
+            settings_to_save.get("water_system", {}),
+            current_defaults.get("water_system", {}),
+        )
+        settings_to_save["fish_feeder"] = _normalize_fish_feeder_settings(
+            settings_to_save.get("fish_feeder", {}),
+            current_defaults.get("fish_feeder", {}),
+        )
 
         # 1. Save to File (Actual Config) - Atomic Write
         tmp_file = f"{SETTINGS_FILE}.tmp"
@@ -1042,7 +1140,7 @@ def on_message(client, userdata, msg):
                 "state": data.get("water_state", current_water.get("state", "IDLE")),
                 "state_label_th": data.get("water_state_label_th", current_water.get("state_label_th", "พร้อมทำงาน")),
                 "reason": data.get("water_reason", current_water.get("reason", "Waiting for ESP32 status")),
-                "preferred_route": data.get("preferred_route", current_water.get("preferred_route", "AUTO")),
+                "preferred_route": data.get("preferred_route", current_water.get("preferred_route", WATER_CONFIG_DEFAULTS["preferred_route"])),
                 "active_route": data.get("active_route", current_water.get("active_route", "NONE")),
                 "allow_direct_sump_refill": data.get("allow_direct_sump_refill", current_water.get("allow_direct_sump_refill", False)),
                 "manual_refill": data.get("manual_refill", current_water.get("manual_refill", False)),
@@ -1372,9 +1470,11 @@ def camera_status():
 @admin_required
 def get_settings():
     global app_settings
-    if isinstance(app_settings.get('automation'), dict):
-        app_settings['automation'].pop('target_ph', None)
-    return jsonify(app_settings)
+    settings_snapshot = copy.deepcopy(app_settings)
+    if isinstance(settings_snapshot.get('automation'), dict):
+        settings_snapshot['automation'].pop('target_ph', None)
+    settings_snapshot['water_system'] = _current_water_status()
+    return jsonify(settings_snapshot)
 
 @app.route('/api/water_system/status', methods=['GET'])
 @admin_required
@@ -1395,10 +1495,20 @@ def post_settings():
                 }
 
             current_settings = _deep_merge_dict(load_settings(), app_settings)
+            if isinstance(new_settings.get("water_system"), dict):
+                new_settings["water_system"] = _normalize_water_system_settings(
+                    new_settings.get("water_system", {}),
+                    current_settings.get("water_system", {}),
+                )
+
             app_settings = _deep_merge_dict(current_settings, new_settings)
             if isinstance(app_settings.get("automation"), dict):
                 app_settings["automation"].pop("target_ph", None)
 
+            app_settings["water_system"] = _normalize_water_system_settings(
+                app_settings.get("water_system", {}),
+                current_settings.get("water_system", {}),
+            )
             app_settings["fish_feeder"] = _normalize_fish_feeder_settings(
                 app_settings.get("fish_feeder", {}),
                 current_settings.get("fish_feeder", {}),
@@ -1466,18 +1576,7 @@ def post_settings():
 
             if "water_system" in new_settings:
                 try:
-                    water_payload = {
-                        "circulation_enabled": new_settings["water_system"].get("circulation_enabled", True),
-                        "refill_enabled": new_settings["water_system"].get("refill_enabled", False),
-                        "manual_refill": new_settings["water_system"].get("manual_refill", False),
-                        "refill_max_runtime_ms": new_settings["water_system"].get("refill_max_runtime_ms", 120000),
-                        "refill_min_interval_ms": new_settings["water_system"].get("refill_min_interval_ms", 300000),
-                        "preferred_route": new_settings["water_system"].get("preferred_route", "SUMP_DIRECT"),
-                        "allow_direct_sump_refill": new_settings["water_system"].get("allow_direct_sump_refill", False),
-                        "fish_refill_interval_ms": new_settings["water_system"].get("fish_refill_interval_ms", 604800000),
-                        "fish_refill_max_runtime_ms": new_settings["water_system"].get("fish_refill_max_runtime_ms", 30000),
-                        "clear_alarm": False
-                    }
+                    water_payload = _build_water_system_payload(new_settings["water_system"])
                     if mqtt_client and mqtt_client.is_connected():
                         mqtt_client.publish("aquaponics/config/water_system", json.dumps(water_payload), qos=1)
                         print(f"📤 Water System Config sent to ESP32: {water_payload}")
@@ -1932,47 +2031,21 @@ def water_system_config():
     """Receive water system settings from Web Dashboard and publish to MQTT"""
     global app_settings
     try:
-        data = request.get_json()
-        circulation_enabled = data.get('circulation_enabled', True)
-        refill_enabled = data.get('refill_enabled', False)
-        manual_refill = data.get('manual_refill', False)
-        clear_alarm = data.get('clear_alarm', False)
-        refill_max_runtime_ms = int(data.get('refill_max_runtime_ms', 120000))
-        refill_min_interval_ms = int(data.get('refill_min_interval_ms', 300000))
-        preferred_route = str(data.get('preferred_route', 'AUTO')).upper()
-        allow_direct_sump_refill = bool(data.get('allow_direct_sump_refill', False))
-        fish_refill_interval_ms = int(data.get('fish_refill_interval_ms', 604800000))
-        fish_refill_max_runtime_ms = int(data.get('fish_refill_max_runtime_ms', 30000))
-
-        if preferred_route not in ['AUTO', 'FISH_TANK', 'SUMP_DIRECT']:
-            return jsonify({'status': 'error', 'message': 'Invalid preferred_route'}), 400
+        data = request.get_json() or {}
+        current_water_settings = app_settings.get('water_system', {})
+        normalized = _normalize_water_system_settings(data, current_water_settings)
+        manual_refill = bool(data.get('manual_refill', False))
+        clear_alarm = bool(data.get('clear_alarm', False))
 
         app_settings.setdefault('water_system', {})
-        app_settings['water_system'].update({
-            'circulation_enabled': circulation_enabled,
-            'refill_enabled': refill_enabled,
-            'manual_refill': manual_refill,
-            'refill_max_runtime_ms': refill_max_runtime_ms,
-            'refill_min_interval_ms': refill_min_interval_ms,
-            'preferred_route': preferred_route,
-            'allow_direct_sump_refill': allow_direct_sump_refill,
-            'fish_refill_interval_ms': fish_refill_interval_ms,
-            'fish_refill_max_runtime_ms': fish_refill_max_runtime_ms
-        })
+        app_settings['water_system'] = normalized
         save_settings(app_settings)
 
-        payload = {
-            'circulation_enabled': circulation_enabled,
-            'refill_enabled': refill_enabled,
-            'manual_refill': manual_refill,
-            'clear_alarm': clear_alarm,
-            'refill_max_runtime_ms': refill_max_runtime_ms,
-            'refill_min_interval_ms': refill_min_interval_ms,
-            'preferred_route': preferred_route,
-            'allow_direct_sump_refill': allow_direct_sump_refill,
-            'fish_refill_interval_ms': fish_refill_interval_ms,
-            'fish_refill_max_runtime_ms': fish_refill_max_runtime_ms
-        }
+        payload = _build_water_system_payload(
+            normalized,
+            manual_refill=manual_refill,
+            clear_alarm=clear_alarm,
+        )
 
         if mqtt_client and mqtt_client.is_connected():
             mqtt_client.publish('aquaponics/config/water_system', json.dumps(payload), qos=1)
@@ -1980,10 +2053,10 @@ def water_system_config():
         socketio.emit('water_status_update', _current_water_status())
 
         save_log(
-            f"💧 Water system config -> circ={circulation_enabled}, refill={refill_enabled}, "
-            f"manual={manual_refill}, route={preferred_route}, direct={allow_direct_sump_refill}, "
-            f"clear_alarm={clear_alarm}, max={refill_max_runtime_ms}ms, gap={refill_min_interval_ms}ms, "
-            f"fish_int={fish_refill_interval_ms}ms, fish_max={fish_refill_max_runtime_ms}ms"
+            f"💧 Water system config -> circ={normalized['circulation_enabled']}, refill={normalized['refill_enabled']}, "
+            f"manual={manual_refill}, route={normalized['preferred_route']}, direct={normalized['allow_direct_sump_refill']}, "
+            f"clear_alarm={clear_alarm}, max={normalized['refill_max_runtime_ms']}ms, gap={normalized['refill_min_interval_ms']}ms, "
+            f"fish_int={normalized['fish_refill_interval_ms']}ms, fish_max={normalized['fish_refill_max_runtime_ms']}ms"
         )
         log_activity(session.get('username', '?'), 'water_system', 'Water system config updated', request.remote_addr)
         return jsonify({'status': 'ok', 'message': 'Water system settings applied successfully'})
@@ -2178,7 +2251,7 @@ def build_dashboard_data():
     water_status = _current_water_status()
     dashboard_sensors.update({
         "active_route": water_status.get("active_route", dashboard_sensors.get("active_route", "NONE")),
-        "preferred_route": water_status.get("preferred_route", dashboard_sensors.get("preferred_route", "AUTO")),
+        "preferred_route": water_status.get("preferred_route", dashboard_sensors.get("preferred_route", WATER_CONFIG_DEFAULTS["preferred_route"])),
         "allow_direct_sump_refill": water_status.get("allow_direct_sump_refill", dashboard_sensors.get("allow_direct_sump_refill", False)),
         "manual_refill": water_status.get("manual_refill", dashboard_sensors.get("manual_refill", False)),
         "route_blocked": water_status.get("route_blocked", dashboard_sensors.get("route_blocked", False)),
