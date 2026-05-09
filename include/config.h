@@ -97,6 +97,16 @@
 #define TDS_VREF            3.3     // แรงดันอ้างอิง ADC ของ ESP32 (ไม่ใช่ไฟเลี้ยง sensor)
 #define TDS_ADC_RESOLUTION  4096.0  // ความละเอียด ADC (12-bit = 4096)
 #define TDS_SAMPLE_COUNT    30      // จำนวนจุด sampling
+#define TDS_OVERSAMPLE_COUNT 8      // จำนวน analogRead ต่อ 1 รอบ sampling เพื่อลด noise
+#define TDS_ADC_SETTLE_US   250     // Quiet time หลัง analog channel activity ก่อนเก็บ sample
+#define TDS_ADC_DUMMY_READS 2       // ทิ้ง sample แรก ๆ เพื่อให้ ADC settle ก่อนอ่านจริง
+#define TDS_CONVERSION_FACTOR 0.695f // แปลง EC25 -> TDS ให้ใกล้ handheld meter ที่อ่าน 1413 uS/cm ≈ 982 ppm
+#define TDS_MIN_CALIBRATION_SPAN_V 0.050f // calibration 2 จุดต้องต่างกันพอ ไม่งั้นจะขยาย noise จาก ADC มากเกินไป
+#define TDS_VOLTAGE_FILTER_ALPHA 0.15f // EMA สำหรับแรงดันดิบหลัง median
+#define TDS_VOLTAGE_DEADBAND_V 0.003f  // กันแรงดันแกว่งเล็กน้อยไม่ให้โชว์สั่น
+#define TDS_VALUE_FILTER_ALPHA 0.10f   // EMA สำหรับค่า TDS หลังชดเชยอุณหภูมิ
+#define TDS_VALUE_DEADBAND_PPM 5.0f    // กันค่า TDS แกว่งเล็กน้อยไม่ให้เปลี่ยนผลลัพธ์ทันที
+#define TDS_VALUE_MAX_STEP_PPM 20.0f   // จำกัดการกระโดดต่อรอบเพื่อให้ค่าดูนิ่งขึ้น
 
 /**
  * @section Sensor Value Validation Ranges
@@ -326,13 +336,20 @@
 #define DOSING_PUMP_RATED_VOLTAGE_V         12.0f   // สเปกปั๊มโดส: DC 12V
 #define DOSING_PUMP_RATED_CURRENT_A         0.25f   // สเปกปั๊มโดส: กระแสประมาณ 0.25A
 #define DOSING_PUMP_FLOW_RATE_ML_PER_MIN    39.0f   // สเปกปั๊มโดส: อัตราการไหล 39 mL/min
-#define AUTOMATOR_DOSE_VOLUME_ML            1.5f    // จ่ายสารต่อรอบแบบ conservative ประมาณ 1.5 mL ต่อปั๊ม
+#define AUTOMATOR_DOSE_A_VOLUME_ML          1.5f    // ปริมาตรสาร A ต่อรอบ (เริ่มต้น 1:1 กับสาร B)
+#define AUTOMATOR_DOSE_B_VOLUME_ML          1.5f    // ปริมาตรสาร B ต่อรอบ (เริ่มต้น 1:1 กับสาร A)
+#define AUTOMATOR_DOSE_VOLUME_ML            AUTOMATOR_DOSE_A_VOLUME_ML // legacy alias
 #define HW_TEST_PUMP_TEST_VOLUME_ML         2.0f    // ทดสอบปั๊มครั้งละประมาณ 2.0 mL
 #define AUTOMATOR_CHECK_INTERVAL    5000    // ตรวจสอบสถานะทุก 5 วินาที
-#define AUTOMATOR_PUMP_DOSE_MS      ((unsigned long)((AUTOMATOR_DOSE_VOLUME_ML * 60000.0f / DOSING_PUMP_FLOW_RATE_ML_PER_MIN) + 0.5f))
+#define AUTOMATOR_DOSE_A_MS         ((unsigned long)((AUTOMATOR_DOSE_A_VOLUME_ML * 60000.0f / DOSING_PUMP_FLOW_RATE_ML_PER_MIN) + 0.5f))
+#define AUTOMATOR_DOSE_B_MS         ((unsigned long)((AUTOMATOR_DOSE_B_VOLUME_ML * 60000.0f / DOSING_PUMP_FLOW_RATE_ML_PER_MIN) + 0.5f))
+#define AUTOMATOR_PUMP_DOSE_MS      AUTOMATOR_DOSE_A_MS
+#define AUTOMATOR_MIX_AFTER_A_MS    (10UL * 60UL * 1000UL) // รอให้สาร A กระจายตัวก่อนจ่ายสาร B
 #define HW_TEST_PUMP_DURATION_MS    ((unsigned long)((HW_TEST_PUMP_TEST_VOLUME_ML * 60000.0f / DOSING_PUMP_FLOW_RATE_ML_PER_MIN) + 0.5f))
-#define AUTOMATOR_COOLDOWN_MS       600000  // พักระบบ 10 นาที (600,000 ms) หลังจากการจ่ายปุ๋ย
+#define AUTOMATOR_POST_DOSE_MIX_MS  (20UL * 60UL * 1000UL) // รอให้สาร A+B เข้ากันก่อนวัด TDS ใหม่
+#define AUTOMATOR_COOLDOWN_MS       AUTOMATOR_POST_DOSE_MIX_MS
 #define AUTOMATOR_DEFAULT_TDS       800.0f  // ค่า TDS พื้นฐาน
+#define AUTOMATOR_TDS_HYSTERESIS_PPM 30.0f  // เริ่มจ่ายเมื่อ TDS ต่ำกว่าเป้าหมายเกิน deadband นี้
 
 // ============================================================================
 // WATER SYSTEM CONFIGURATION

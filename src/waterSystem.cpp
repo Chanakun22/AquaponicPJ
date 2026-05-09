@@ -61,6 +61,13 @@ static bool _refillWasActive = false;
 static WaterRefillRoute _lastActiveRefillRoute = WATER_REFILL_ROUTE_NONE;
 
 static const unsigned long WATER_MIX_SETTLING_MS = 120000UL;
+
+static bool _fishRefillCycleActive(void) {
+    return _refillWasActive
+        && _lastActiveRefillRoute == WATER_REFILL_ROUTE_FISH_TANK
+        && _refillStartMs != 0;
+}
+
 static void _resetRuntimeState(void) {
     _alarmLatched = false;
     _refillStartMs = 0;
@@ -480,6 +487,7 @@ void waterSystemLoop(void) {
     _status.fishRefillReady = _isFishRefillReady(now, _status.overflowAlarm);
     _status.fishRefillWaitRemainingMs = fishIntervalRemainingMs;
     bool circulationDesired = _config.circulationEnabled;
+    bool fishRefillCycleActive = _fishRefillCycleActive();
     bool refillDesired = false;
     bool blocked = false;
     WaterRefillRoute desiredRoute = WATER_REFILL_ROUTE_NONE;
@@ -501,6 +509,8 @@ void waterSystemLoop(void) {
         } else if (_status.levelHigh) {
             refillDesired = false;
             _refillStartMs = 0;
+        } else if (fishRefillCycleActive) {
+            refillDesired = true;
         } else if (_status.levelLow) {
             if (mixIntervalRemainingMs > 0 && _lastMixRefillStopMs != 0) {
                 waitingForInterval = true;
@@ -553,7 +563,9 @@ void waterSystemLoop(void) {
 
         if (refillDesired && desiredRoute == WATER_REFILL_ROUTE_FISH_TANK) {
             bool fishRuntimeReached = (now - _refillStartMs) >= _config.fishRefillMaxRuntimeMs;
-            bool fishShouldStop = _status.overflowAlarm || fishRuntimeReached;
+            bool mixTankHighReached = _status.hasLevelSensors && _status.levelHigh;
+            bool fishSafetyStop = _status.overflowAlarm || mixTankHighReached;
+            bool fishShouldStop = fishSafetyStop || fishRuntimeReached;
 
             if (fishShouldStop) {
                 _lastFishRefillStopMs = now;
@@ -562,7 +574,8 @@ void waterSystemLoop(void) {
                     && _status.levelLow
                     && !_status.levelHigh;
 
-                if (!_config.manualRefill
+                if (!fishSafetyStop
+                        && !_config.manualRefill
                         && _config.preferredRoute == WATER_REFILL_ROUTE_AUTO
                         && _config.allowDirectSumpRefill
                         && mixTankStillNeedsRefill
@@ -645,13 +658,13 @@ void waterSystemLoop(void) {
             snprintf(stateReason,
                      sizeof(stateReason),
                      _status.activeRoute == WATER_REFILL_ROUTE_FISH_TANK
-                         ? "กำลังสั่งปั๊มเติมน้ำเข้าตู้ปลาแบบสั่งด้วยมือ (หยุดเมื่อครบเวลา/overflow)"
+                         ? "กำลังสั่งปั๊มเติมน้ำเข้าตู้ปลาแบบสั่งด้วยมือ (หยุดเมื่อครบเวลา/overflow/high level)"
                          : "กำลังเปิดโซลินอยด์เติมน้ำเข้าถังผสมแบบสั่งด้วยมือ");
         } else {
             snprintf(stateReason,
                      sizeof(stateReason),
                      _status.activeRoute == WATER_REFILL_ROUTE_FISH_TANK
-                         ? "ถังผสมระดับต่ำ ระบบกำลังปั๊มน้ำเข้าตู้ปลาแบบจำกัดเวลา/overflow"
+                         ? "ถังผสมระดับต่ำ ระบบกำลังปั๊มน้ำเข้าตู้ปลาแบบจำกัดเวลา/overflow/high level"
                          : "ถังผสมระดับต่ำ ระบบกำลังเปิดโซลินอยด์น้ำเข้า");
         }
         _setState(_status.activeRoute == WATER_REFILL_ROUTE_FISH_TANK

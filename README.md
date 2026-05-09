@@ -1,428 +1,500 @@
-# 🐟 Smart Aquaponics System Project
+# Smart Aquaponics System
 
-**ระบบตรวจสอบคุณภาพน้ำอัจฉริยะสำหรับฟาร์มอควาโปนิกส์**
+ระบบนี้คือชุดควบคุมและติดตามคุณภาพน้ำสำหรับงาน aquaponics ที่แยกออกเป็น 2 ฝั่งชัดเจน
 
-> Firmware v2.3.0 · ESP32-S3-DevKitC-1-N16R8 · Raspberry Pi Zero 2 W · PlatformIO + Arduino Framework
+- ESP32-S3 ทำหน้าที่อ่านเซ็นเซอร์, ควบคุมอุปกรณ์, และตัดสินใจงานอัตโนมัติที่ต้องตอบสนองเร็ว
+- Raspberry Pi ทำหน้าที่เป็น dashboard, MQTT broker ภายในระบบ, OTA endpoint, หน้าทดสอบฮาร์ดแวร์, และเก็บประวัติการใช้งาน
 
----
+โค้ดใน repository นี้ครอบคลุมทั้ง firmware, Pi web dashboard, test ชุด native, เอกสารทดสอบ, และ flow diagram สำหรับระบบน้ำ
 
-## 📋 สารบัญ
+## ภาพรวมระบบ
 
-- [ภาพรวมระบบ](#-ภาพรวมระบบ)
-- [ฟีเจอร์หลัก](#-ฟีเจอร์หลัก)
-- [สถาปัตยกรรม](#-สถาปัตยกรรม)
-- [ฮาร์ดแวร์](#-ฮาร์ดแวร์)
-- [การติดตั้ง](#-การติดตั้ง)
-- [การใช้งาน](#-การใช้งาน)
-- [คู่มือทดสอบระบบ](#-คู่มือทดสอบระบบ)
-- [Web Dashboard (Pi)](#-web-dashboard-pi)
-- [คำสั่ง CLI](#-คำสั่ง-cli)
-- [MQTT Topics](#-mqtt-topics)
-- [โครงสร้างโปรเจค](#-โครงสร้างโปรเจค)
-- [Tech Stack](#-tech-stack)
+### สิ่งที่ระบบทำได้ตอนนี้
 
----
+- อ่านค่าเซ็นเซอร์หลัก 5 กลุ่ม: อุณหภูมิน้ำ, อุณหภูมิอากาศ, ความชื้น, TDS, pH, และแสง
+- ควบคุมไฟปลูกพืชตามตารางเวลา หรือสั่ง manual ได้
+- ควบคุมเครื่องให้อาหารปลาแบบตั้งเวลา หรือสั่ง manual ได้
+- ควบคุมพัดลมระบายอากาศแบบ auto/manual จากอุณหภูมิและความชื้น
+- ควบคุมระบบน้ำแยกเป็น circulation, refill, route, overflow protection, และ alarm
+- มีระบบ automator สำหรับปรับค่า TDS แบบ staged dosing A -> mix -> B -> cooldown
+- ส่งข้อมูลขึ้น NETPIE และส่งข้อมูลภายในระบบไป Raspberry Pi ผ่าน Local MQTT
+- ใช้งานผ่าน Web Dashboard, Serial CLI, Telnet, และ OTA
+- มี login, role-based access, admin activity logs, และ user management ฝั่ง Pi
 
-## 🌐 ภาพรวมระบบ
+### ภาพรวมการไหลของข้อมูล
 
-ระบบ Smart Aquaponics ประกอบด้วย **2 ส่วนหลัก**:
+1. ESP32 อ่านเซ็นเซอร์และเก็บค่าไว้ใน cache
+2. TaskControl ใช้ค่าที่อ่านได้ไปตัดสินใจเรื่องไฟ, feeder, fan, ระบบน้ำ, และ automator
+3. TaskNetworking ส่งข้อมูลไป Local MQTT ทุก 2 วินาที และ NETPIE ทุก 10 วินาที
+4. Raspberry Pi รับข้อมูล, แสดงผลหน้าเว็บแบบ real-time, และบันทึกประวัติสำหรับหน้า graph/logs
+5. คำสั่งจาก Pi หรือ NETPIE จะถูกแปลงเป็น MQTT/config payload แล้วส่งกลับมาที่ ESP32
 
-| ส่วน         | อุปกรณ์               | หน้าที่                                             |
-| ------------ | --------------------- | --------------------------------------------------- |
-| **Firmware** | ESP32-S3              | อ่านค่าเซ็นเซอร์, ควบคุมอุปกรณ์, ส่งข้อมูลผ่าน MQTT |
-| **Server**   | Raspberry Pi Zero 2 W | Web Dashboard, MQTT Broker, กล้อง Live, OTA Update  |
+## สถาปัตยกรรม
 
-Pi ทำหน้าที่เป็น **Access Point (AP)** ชื่อ `Aquaponics-LAN` ให้ ESP32 เชื่อมต่อโดยตรง พร้อมสามารถ Bridge อินเทอร์เน็ตจาก WiFi บ้านได้
+### ฝั่ง ESP32
 
----
+เฟิร์มแวร์ใช้ FreeRTOS แยกงานหลักเป็น 3 task
 
-## ✨ ฟีเจอร์หลัก
+- `TaskNetworking` ดูแล WiFi, Local MQTT, NETPIE, OTA, Telnet, และ CLI
+- `TaskSensors` อ่านเซ็นเซอร์ทั้งหมดและทำ validation/filtering
+- `TaskControl` รัน `waterSystem`, `lightController`, `fishFeeder`, `fanController`, และ `automator`
 
-### 📊 เซ็นเซอร์ 5 ชนิด
+แนวคิดหลักของ firmware
 
-| เซ็นเซอร์      | ค่าที่วัด                | ช่วงค่า         | ฟีเจอร์พิเศษ                            |
-| -------------- | ------------------------ | --------------- | --------------------------------------- |
-| **DS18B20**    | อุณหภูมิน้ำ              | 0-50°C          | Async Non-Blocking                      |
-| **DHT22**      | อุณหภูมิอากาศ + ความชื้น | 0-50°C / 0-100% | —                                       |
-| **TDS Sensor** | ค่า TDS (ppm)            | 0-2000 ppm      | 2-Point Calibration + Temp Compensation |
-| **pH Sensor**  | ค่า pH                   | 0-14            | 3-Point Calibration (pH 4.01 / 6.86 / 9.18) |
-| **BH1750**     | ความเข้มแสง              | 0-65535 lux     | I2C Digital                             |
+- ใช้ non-blocking loop เป็นหลัก เพื่อลดโอกาสค้าง
+- ใช้ watchdog และ heartbeat ตรวจจับ task ที่ค้าง
+- เก็บ config/calibration ลง NVS
+- ทำ validation ของค่าก่อนเผยแพร่ขึ้น dashboard หรือใช้ตัดสินใจ
 
-### 📡 การเชื่อมต่อ
+### ฝั่ง Raspberry Pi
 
-- **WiFi Manager** — Captive Portal ตั้งค่า WiFi ครั้งแรก ไม่ต้อง hardcode
-- **NETPIE (Cloud MQTT)** — ส่งข้อมูลขึ้น Cloud ทุก 10 วินาที
-- **Local MQTT (Pi)** — ส่งข้อมูลภายใน LAN ทุก 2 วินาที + ค้นหา Pi ผ่าน mDNS
-- **OTA Update** — อัพเดต Firmware ผ่าน WiFi (ทั้ง PlatformIO CLI และ Web UI)
-- **Telnet Console** — Debug ระยะไกล Port 23 (มี Password)
+Pi server ในโฟลเดอร์ `pi_server` ใช้ Flask + Flask-SocketIO เป็นศูนย์กลางของระบบหน้าบ้าน
 
-### 💡 ควบคุมแสง
+- Dashboard แบบ real-time
+- Settings และ calibration UI
+- Hardware Test สำหรับสั่งอุปกรณ์จริงทีละตัว
+- OTA upload page
+- Camera page
+- WiFi/terminal/admin pages
+- login + session + role separation (`admin`, `user`)
+- rate limit สำหรับ admin actions และ activity audit log
 
-- **NeoPixel RGB LED** (GPIO 48) บน ESP32-S3
-- **Schedule System** — ตั้งเวลาเปิด/ปิดอัตโนมัติ รองรับข้ามวัน
-- **Manual Override** — สั่งเปิด/ปิดผ่าน MQTT หรือ CLI
-- **NTP Time Sync** — ซิงค์เวลาจาก Internet (GMT+7)
+## โมดูลหลักของ firmware
 
-### 🛡️ ความเสถียร
+### Sensors
 
-- **Non-Blocking Design** — ไม่มี `delay()` ใน loop → ระบบไม่ค้าง
-- **FreeRTOS Dual-Core** — Sensor (Core 1) / Network (Core 0) ทำงานคู่ขนาน
-- **Watchdog Timer** — รีเซ็ตอัตโนมัติหากระบบค้างเกิน 60 วินาที
-- **Auto Reconnect** — WiFi/MQTT หลุดแล้วเชื่อมใหม่อัตโนมัติ
-- **Offline Mode** — เซ็นเซอร์ทำงานได้ 100% แม้ไม่มี WiFi
-- **NVS Persistence** — เก็บ Calibration + สถิติระบบลง Flash
+| โมดูล | หน้าที่ |
+| --- | --- |
+| `tempSensor` | อ่านอุณหภูมิน้ำจาก DS18B20 |
+| `dhtSensor` | อ่านอุณหภูมิอากาศและความชื้นจาก DHT22 |
+| `TdsSensor` | อ่าน TDS, ชดเชยอุณหภูมิ, filter, และ 2-point calibration |
+| `phSensor` | อ่าน pH และรองรับ 3-point calibration |
+| `lightSensor` | อ่านความเข้มแสงจาก BH1750 |
 
----
+จุดสำคัญของ TDS ในเวอร์ชันปัจจุบัน
 
-## 🏗️ สถาปัตยกรรม
+- ใช้ temperature compensation ตอน runtime และตอน calibration
+- ใช้ conversion factor ที่ตั้งไว้ใน `include/config.h` ให้ scale ใกล้ handheld meter มากขึ้น
+- มี guard ไม่ให้รับ calibration 2 จุดที่ช่วงแรงดันแคบเกินไป เพราะจะขยาย noise
+- เพิ่ม filtering, deadband, และ max-step เพื่อลดอาการค่าแกว่งเล็กน้อย
 
-```
-┌─────────────────────────────────────────────────┐
-│                 ESP32-S3 (Dual Core)             │
-│                                                  │
-│   ┌──────────────┐     ┌──────────────────────┐  │
-│   │   Core 1     │     │      Core 0          │  │
-│   │              │     │                      │  │
-│   │ TaskSensors  │     │  TaskNetworking      │  │
-│   │  - DS18B20   │     │   - WiFi Manager     │  │
-│   │  - DHT22     │     │   - NETPIE MQTT      │  │
-│   │  - TDS       │     │   - Local MQTT (Pi)  │  │
-│   │  - pH        │     │   - OTA Update       │  │
-│   │  - BH1750    │     │   - Telnet Server    │  │
-│   │              │     │   - Serial Commands  │  │
-│   │ TaskControl  │     │                      │  │
-│   │  - Light Ctl │     │                      │  │
-│   │  - System    │     │                      │  │
-│   └──────┬───────┘     └──────────┬───────────┘  │
-│          │  Shared Variables      │              │
-│          └────────────────────────┘              │
-└─────────────────────────────────────────────────┘
-          │                          │
-          ▼                          ▼
-   ┌─────────────┐    ┌──────────────────────────┐
-   │  NVS Flash  │    │   Raspberry Pi Zero 2 W  │
-   │ Calibration │    │  ┌────────────────────┐  │
-   │ Statistics  │    │  │ Flask Web Dashboard│  │
-   └─────────────┘    │  │ MQTT Broker        │  │
-                      │  │ Camera Server      │  │
-                      │  │ SQLite Database    │  │
-                      │  └────────────────────┘  │
-                      │        │                 │
-                      │   WiFi Bridge ──→ Internet
-                      └──────────────────────────┘
-                               │
-                       ┌───────┴───────┐
-                       │  NETPIE Cloud │
-                       │  (MQTT)       │
-                       └───────────────┘
-```
+### Automator
 
----
+โมดูล `automator` ใช้ค่า TDS เป็นตัวตัดสินใจหลักในการโดสปุ๋ยอัตโนมัติ
 
-## 🔌 ฮาร์ดแวร์
+- มี `target_tds`
+- แยกรอบโดส A และ B ออกจากกัน
+- มีช่วง `mix_after_a` และ `post_dose_mix`
+- มี `tds_hysteresis_ppm` กันอาการจ่ายถี่เกินเมื่อค่าใกล้เป้าหมาย
+- จะ pause หรือ block เมื่อระบบน้ำยังไม่พร้อม เช่น refill active, settling active, หรือ alarm
 
-### บอร์ด
+หมายเหตุ: ปัจจุบัน automator ใช้ TDS เป็นตัวคุมหลัก ส่วน pH ยังเป็น monitor/calibration เป็นหลัก ไม่ได้เอาไปตัดสินใจโดสอัตโนมัติใน flow ปัจจุบัน
 
-- **ESP32-S3-DevKitC-1-N16R8** (16MB QIO Flash, 8MB OPI PSRAM)
-- **Raspberry Pi Zero 2 W** (Server + AP + Camera)
+### Water System
 
-### การต่อสาย (Pin Configuration)
+โมดูล `waterSystem` ดูแลการหมุนเวียนน้ำและเติมน้ำ โดยสถานะหลักที่มีอยู่ตอนนี้คือ
 
-| อุปกรณ์           | GPIO    | หมายเหตุ                  |
-| ----------------- | ------- | ------------------------- |
-| TDS Sensor        | GPIO 5  | Analog Input              |
-| DHT22             | GPIO 15 | Digital                   |
-| DS18B20 (OneWire) | GPIO 13 | ต้องมี Pull-up 4.7kΩ      |
-| pH Sensor         | GPIO 6  | Analog Input              |
-| BH1750 SDA        | GPIO 8  | I2C                       |
-| BH1750 SCL        | GPIO 9  | I2C                       |
-| NeoPixel LED      | GPIO 48 | On-board RGB LED          |
-| Factory Reset     | GPIO 0  | BOOT Button (กดค้าง 5 วิ) |
+- `IDLE`
+- `MIX_TANK_REFILL`
+- `WAIT_REFILL_INTERVAL`
+- `MIX_TANK_SETTLING`
+- `FISH_TANK_REFILL`
+- `BLOCKED`
+- `ALARM`
 
----
+พฤติกรรมสำคัญของระบบน้ำปัจจุบัน
 
-## 🚀 การติดตั้ง
+- ใช้ `sump low` และ `sump high` เป็นตัวดูระดับถังผสม
+- ใช้ `fish tank overflow` เป็นตัวกันน้ำล้นตอนเติมผ่านตู้ปลา
+- fish-route refill เป็นรอบที่ latch แล้ว: เมื่อเริ่มเติมผ่านตู้ปลาแล้ว ระบบจะวิ่งต่อจนกว่าจะครบเวลา, overflow ทำงาน, หรือ mix-tank high ทำงานเป็น safety stop
+- มี `preferred_route`, `allow_direct_sump_refill`, `refill_min_interval_ms`, `fish_refill_interval_ms`, และ `fish_refill_max_runtime_ms`
+- ขณะ refill หรือ settling ระบบ automator จะถูกกันไม่ให้จ่ายสารเพื่อไม่ให้วัดค่าผิดช่วง
 
-### ข้อกำหนดเบื้องต้น
+ดู flow operator-friendly เพิ่มเติมได้ที่ `forTestFlow/water-system-auto-flow.json` และหน้า planner ใน `forTestFlow/index.html`
 
-- [PlatformIO](https://platformio.org/) (แนะนำ VS Code Extension)
-- ESP32-S3-DevKitC-1-N16R8
-- Raspberry Pi Zero 2 W (สำหรับ Dashboard)
+### Light Control
 
-### ESP32 Firmware
+โมดูล `lightController` คุมไฟปลูกพืชผ่าน relay
 
-> โปรเจกต์นี้ใช้ custom PlatformIO board manifest ที่ [boards/esp32-s3-devkitc-1-n16r8.json](boards/esp32-s3-devkitc-1-n16r8.json) เพื่อให้ค่าของ 16MB flash และ 8MB OPI PSRAM ตรงกับบอร์ดจริง
->
-> OTA ใช้ `default_16MB.csv` ซึ่งแบ่ง app slot ไว้ประมาณ 6.25MB ต่อ slot เพียงพอกับขนาด firmware ปัจจุบันที่ build ได้ราว 0.94MB
+- ตั้งเวลาเปิด/ปิดได้เป็นวันและเวลา
+- รองรับ manual override
+- รองรับ `command_source` เป็น `netpie` หรือ `local_web`
+- ใช้ NTP เพื่ออิงเวลาจริง
 
-1. **Clone โปรเจค**
+### Fish Feeder
 
-   ```bash
-   git clone <repo-url>
-   cd test
-   ```
+โมดูล `fishFeeder` คุมการให้อาหารปลา
 
-2. **ตั้งค่า Secrets** — สร้างไฟล์ `secrets.ini` ใน root:
+- ตั้งวันและเวลาให้อาหารได้
+- กำหนดระยะเวลาหมุน feeder ได้
+- สั่ง manual feed ได้
+- รองรับ `command_source` เป็น `netpie` หรือ `local_web`
+- เก็บ config ลง NVS
 
-   ```ini
-   [secrets]
-   WIFI_AP_NAME = Aquaponics-Setup
-   WIFI_AP_PASS = replace_with_unique_ap_password
-   NETPIE_CLIENT_ID = your_client_id
-   NETPIE_TOKEN = your_token
-   NETPIE_SECRET = your_secret
-   OTA_PASSWORD = your_ota_pass
-   TELNET_PASSWORD = your_telnet_pass
-   ```
+### Fan Controller
 
-3. **Build & Upload (USB)**
+โมดูล `fanController` ใช้ค่าจาก DHT22 เป็นตัวช่วยตัดสินใจ
 
-   ```bash
-   pio run --target upload
-   ```
+- เปิด/ปิดแบบ auto ตาม `temp_on/off` และ `humidity_on/off`
+- หรือสั่ง manual on/off ได้
+- มี hysteresis ผ่านการตั้งค่า on/off แยกกัน
 
-4. **Build & Upload (OTA)**
+## ฮาร์ดแวร์และ pin map
 
-   ```bash
-   pio run -e ota_upload --target upload
-   ```
+ค่าด้านล่างอ้างอิงจาก `include/config.h` ปัจจุบัน
 
-5. **เปิด Serial Monitor**
-   ```bash
-   pio device monitor --baud 115200
-   ```
+### Sensor pins
 
-### Raspberry Pi Server
+| อุปกรณ์ | GPIO |
+| --- | --- |
+| TDS Sensor | 5 |
+| pH Sensor | 6 |
+| BH1750 SDA | 8 |
+| BH1750 SCL | 9 |
+| DS18B20 | 13 |
+| DHT22 | 15 |
+| Factory Reset / BOOT | 0 |
 
-1. **Copy ไฟล์ไปยัง Pi**
+### Output pins
 
-   ```bash
-   scp pi_server/app.py pi_server/*.html admin@<pi-ip>:~/myserver/
-   ```
+| อุปกรณ์ | GPIO |
+| --- | --- |
+| Pump Nutrient A | 10 |
+| Pump Nutrient B | 11 |
+| Light Relay | 12 |
+| Circulation Pump | 16 |
+| Fish Feeder | 21 |
+| Route Valve | 39 |
+| Sump Level Low | 40 |
+| Sump Level High | 41 |
+| Refill Pump | 42 |
+| Fish Tank Overflow | 47 |
+| Exhaust Fan | 2 |
 
-2. **ติดตั้ง Dependencies**
+หมายเหตุ
 
-   ```bash
-   pip install flask flask-socketio requests psutil paho-mqtt
-   ```
+- output หลักของระบบใช้ active-low relay logic
+- ถ้าฮาร์ดแวร์บางตัวไม่ได้ติดตั้งจริง ให้เช็กทั้งค่า pin และการแสดง `has_*` status บนหน้าเว็บ/CLI ก่อนสั่งงาน
 
-3. **รัน Server**
+## หน้าเว็บของ Pi Server
 
-   ```bash
-   python3 app.py
-   ```
+### หน้าติดตามระบบ
 
-4. **ตั้งค่า AP (ถ้าต้องการให้ Pi เป็น Access Point)**
-   ```bash
-   sudo bash setup_ap.sh
-   ```
+| หน้า | Route | หน้าที่ |
+| --- | --- | --- |
+| Dashboard | `/` | ดูค่าหลัก, สถานะ ESP/Pi, และภาพรวมระบบ |
+| Live Camera | `/live` | ดูภาพกล้องสดจาก Pi |
+| Graphs | `/graphs` | ดูข้อมูลย้อนหลัง |
+| Full Logs | `/full_logs` | ดูบันทึกระบบแบบเต็ม |
 
----
+### หน้าสำหรับสั่งงานและผู้ดูแล
 
-## 📱 การใช้งาน
+หน้ากลุ่มนี้ถูกผูกกับสิทธิ์ `admin`
 
-### การเริ่มใช้งานครั้งแรก (ESP32)
+| หน้า | Route | หน้าที่ |
+| --- | --- | --- |
+| Hardware Test | `/hwtest` | ทดสอบ output จริงทีละตัว, flow test, safe stop |
+| Settings | `/settings` | ตั้งค่าระบบ, calibration, thresholds, automation, water, fan, feeder, light |
+| OTA | `/ota` | อัปโหลดไฟล์ firmware ไป ESP32 |
+| WiFi | `/wifi` | จัดการการเชื่อมต่อเครือข่ายของ Pi |
+| Terminal | `/terminal` | สั่งงานจากหน้าเว็บ |
+| Activity Logs | `/admin/logs` | ดู admin audit trail |
+| User Management | `/admin/users` | จัดการผู้ใช้และ role |
 
-## 🧪 คู่มือทดสอบระบบ
+### การเข้าใช้ระบบ
 
-สำหรับผู้ทดสอบที่ไม่ได้รู้โครงสร้างระบบมาก่อน ให้ใช้คู่มือ [TEST_OPERATOR_GUIDE.md](TEST_OPERATOR_GUIDE.md) เพื่อไล่ test แบบ step-by-step จาก Dashboard → Hardware Test → Settings → Safe Stop โดยไม่ต้องรู้รายละเอียดภายใน firmware ก่อน
+| หน้า | Route | หน้าที่ |
+| --- | --- | --- |
+| Login | `/login` | เข้าสู่ระบบและสร้าง session ของผู้ใช้ |
 
-1. จ่ายไฟเข้าบอร์ด
-2. เชื่อมต่อ WiFi ชื่อ **`Aquaponics-Setup`** (หรือชื่อที่ตั้งไว้)
-3. เปิด Browser ไปที่ `http://192.168.4.1`
-4. เลือก WiFi แล้วใส่รหัสผ่าน
-5. บอร์ดจะรีบูทและเชื่อมต่ออัตโนมัติ
+## การติดตั้งแบบใช้งานจริง
 
-### การ Calibrate เซ็นเซอร์
+### 1. เตรียม firmware secrets
 
-**pH Sensor** (ผ่าน Serial/Telnet):
+โปรเจกต์นี้ใช้ `secrets.ini` สำหรับ inject secret เข้า build flags ของ PlatformIO
 
-```
-cal686  → จุ่มในน้ำยาบัฟเฟอร์ pH 6.86 แล้วพิมพ์คำสั่ง
-cal401  → จุ่มในน้ำยาบัฟเฟอร์ pH 4.01 แล้วพิมพ์คำสั่ง
-cal918  → จุ่มในน้ำยาบัฟเฟอร์ pH 9.18 แล้วพิมพ์คำสั่ง
+ตัวอย่าง
+
+```ini
+[secrets]
+wifi_ap_name = Aquaponics-LAN
+wifi_ap_pass = your_ap_password
+netpie_client_id = your_netpie_client_id
+netpie_token = your_netpie_token
+netpie_secret = your_netpie_secret
+ota_password = your_ota_password
+telnet_password = your_telnet_password
 ```
 
-**TDS Sensor** (ผ่าน Web Dashboard):
+ไฟล์ที่ควรรู้
 
-- ใช้หน้า Settings → TDS Calibration ส่งค่า low/high voltage + ppm
+- `secrets.ini` ใช้ตอน build
+- `include/secrets.h.example` ใช้เป็นตัวอย่างสำหรับเครื่องใหม่
+- `include/config.h` ใช้ปรับค่าคงที่, pin map, MQTT host, และ default behavior
 
-### Factory Reset
+### 2. build และ upload firmware
 
-- **กดปุ่ม BOOT ค้าง 5 วินาที** หรือพิมพ์ `reset` ใน CLI
-- ล้างค่า WiFi, Calibration, และสถิติทั้งหมด
+คำสั่งหลักของโปรเจกต์นี้
 
----
-
-## 🖥️ Web Dashboard (Pi)
-
-Dashboard รองรับทั้ง Desktop และ Mobile ผ่าน WebSocket (Real-time) หรือ HTTP Polling (Fallback)
-
-| หน้า              | Route        | คำอธิบาย                                                      |
-| ----------------- | ------------ | ------------------------------------------------------------- |
-| **Dashboard**     | `/`          | แสดงค่าเซ็นเซอร์ทั้งหมด, สถานะ ESP32/Pi, System Logs          |
-| **Live Camera**   | `/live`      | กล้อง Live Stream จาก Pi (รองรับหมุนภาพ)                      |
-| **Graphs**        | `/graphs`    | กราฟข้อมูลเซ็นเซอร์ย้อนหลัง                                   |
-| **Full Logs**     | `/full_logs` | บันทึก Log ทั้งหมดจากระบบ                                     |
-| **Settings**      | `/settings`  | ตั้งค่า Threshold, Calibration, เปิด/ปิดเซ็นเซอร์, ตั้งเวลาไฟ |
-| **OTA Update**    | `/ota`       | อัพเดต Firmware ESP32 ผ่าน Web UI (ลาก & วาง .bin)            |
-| **WiFi Settings** | `/wifi`      | ตั้งค่า WiFi ของ Pi (สแกน, เชื่อมต่อเครือข่ายบ้าน)            |
-
----
-
-## ⌨️ คำสั่ง CLI
-
-ใช้ได้ทั้ง **Serial Monitor** และ **Telnet** (Port 23):
-
-| คำสั่ง       | รายละเอียด                                |
-| ------------ | ----------------------------------------- |
-| `help`       | แสดงรายการคำสั่ง                          |
-| `status`     | แสดงค่าเซ็นเซอร์ทั้งหมด                   |
-| `test`       | รัน System Diagnostic ครบทุกส่วน          |
-| `health`     | แสดงสุขภาพระบบ (Heap, Uptime, Reconnects) |
-| `wifi`       | แสดงข้อมูล WiFi (SSID, IP, RSSI)          |
-| `mqtt`       | แสดงสถานะ NETPIE MQTT                     |
-| `ph`         | อ่านค่า pH + Voltage ปัจจุบัน             |
-| `cal686`     | Calibrate pH จุด 6.86                     |
-| `cal401`     | Calibrate pH จุด 4.01                     |
-| `cal918`     | Calibrate pH จุด 9.18                     |
-| `light on`   | เปิดไฟปลูกพืช (Manual)                    |
-| `light off`  | ปิดไฟปลูกพืช (Manual)                     |
-| `light auto` | กลับสู่โหมด Schedule                      |
-| `version`    | แสดง Firmware Version                     |
-| `reboot`     | รีสตาร์ทบอร์ด                             |
-| `reset`      | Factory Reset (ล้างทุกอย่าง)              |
-| `clear`      | ล้างหน้าจอ                                |
-
----
-
-## 📝 MQTT Topics
-
-### NETPIE (Cloud)
-
-| Topic                       | ทิศทาง      | รายละเอียด                         |
-| --------------------------- | ----------- | ---------------------------------- |
-| `@shadow/data/update`       | ESP → Cloud | ส่งค่าเซ็นเซอร์                    |
-| `@shadow/data/get/response` | Cloud → ESP | รับ Shadow data                    |
-| `@shadow/data/updated`      | Cloud → ESP | Shadow เปลี่ยนแปลง                 |
-| `@msg/#`                    | Cloud → ESP | คำสั่งควบคุม (lightOn/Off/Enabled) |
-
-### Local MQTT (Raspberry Pi)
-
-| Topic                       | ทิศทาง   | รายละเอียด                   |
-| --------------------------- | -------- | ---------------------------- |
-| `aquaponics/sensors`        | ESP → Pi | ค่าเซ็นเซอร์ + System Health |
-| `aquaponics/logs`           | ESP → Pi | System Logs                  |
-| `aquaponics/config/sensors` | Pi → ESP | เปิด/ปิดเซ็นเซอร์            |
-| `aquaponics/config/tds_cal` | Pi → ESP | TDS Calibration Data         |
-| `aquaponics/config/ph_cal`  | Pi → ESP | pH Calibration Data          |
-| `aquaponics/status/sensors` | ESP → Pi | Feedback หลังเปลี่ยน Config  |
-
----
-
-## 📁 โครงสร้างโปรเจค
-
-```
-├── include/                      # Header Files
-│   ├── config.h                  # Pin Configuration & Constants
-│   ├── logger.h                  # Logging System (LOG_ERROR/WARN/INFO/DEBUG)
-│   ├── system.h                  # System Health & Sensor Management
-│   ├── TdsSensor.h               # TDS Sensor Interface
-│   ├── phSensor.h                # pH Sensor Interface
-│   ├── dhtSensor.h               # DHT22 Interface
-│   ├── tempSensor.h              # DS18B20 Interface
-│   ├── lightSensor.h             # BH1750 Interface
-│   ├── lightController.h         # Light Schedule Controller
-│   ├── wifiConn.h                # WiFi Connection Manager
-│   ├── netpie.h                  # NETPIE Cloud MQTT
-│   ├── localMqtt.h               # Local MQTT (Raspberry Pi)
-│   ├── ota.h                     # OTA Update
-│   ├── telnetServer.h            # Telnet Debug Server
-│   └── commandHandler.h          # CLI Command Handler
-│
-├── src/                          # Implementation Files
-│   ├── main.cpp                  # Entry Point + FreeRTOS Tasks
-│   ├── system.cpp                # System Management + NVS Persistence
-│   ├── TdsSensor.cpp             # TDS with 2-Point Calibration
-│   ├── phSensor.cpp              # pH with NVS Calibration
-│   ├── dhtSensor.cpp             # DHT22 Sensor
-│   ├── tempSensor.cpp            # DS18B20 Async Reading
-│   ├── lightSensor.cpp           # BH1750 I2C Light Sensor
-│   ├── lightController.cpp       # NeoPixel RGB + Schedule Logic
-│   ├── wifiConn.cpp              # WiFi Manager (Non-Blocking)
-│   ├── netpie.cpp                # NETPIE MQTT Client
-│   ├── localMqtt.cpp             # Local MQTT + mDNS Discovery
-│   ├── ota.cpp                   # OTA Update Handler
-│   ├── telnetServer.cpp          # Telnet with Authentication
-│   └── commandHandler.cpp        # CLI Command Parser
-│
-├── pi_server/                    # Raspberry Pi Server
-│   ├── app.py                    # Flask Backend (API + WebSocket)
-│   ├── cam_server.py             # Camera Live Stream Server
-│   ├── espota.py                 # ESP32 OTA Flash Script
-│   ├── index.html                # Main Dashboard
-│   ├── live.html                 # Live Camera Page
-│   ├── graphs.html               # Sensor Graphs Page
-│   ├── full_logs.html            # Full Logs Page
-│   ├── settings.html             # Settings & Calibration Page
-│   ├── ota.html                  # OTA Firmware Upload Page
-│   ├── wifi.html                 # Pi WiFi Settings Page
-│   ├── settings.json             # Default Settings
-│   ├── setup.sh                  # Pi Install Script
-│   ├── setup_ap.sh               # AP + Bridge Setup Script
-│   ├── hostapd.conf              # AP Configuration
-│   ├── dnsmasq_ap.conf           # DHCP Configuration
-│   └── pwa/                      # PWA Manifest & Icons
-│
-├── lib/WiFiManager/              # WiFiManager Library (Custom Fork)
-├── platformio.ini                # PlatformIO Configuration
-├── secrets.ini                   # Credentials (ไม่อยู่ใน Git)
-├── CHANGELOG.md                  # บันทึกการเปลี่ยนแปลง
-└── README.md                     # ← คุณอยู่ที่นี่
+```bash
+pio run -e production
+pio run --target upload
+pio run -e ota_upload -t upload
+pio device monitor --baud 115200
 ```
 
----
+environment ที่มีใน `platformio.ini`
 
-## 📦 Tech Stack
+- `production` สำหรับ build ใช้งานจริง
+- `ota_upload` สำหรับอัปเดตผ่านเครือข่าย
+- `native` สำหรับ test บนเครื่องพัฒนา
 
-### ESP32 Firmware
+### 3. ตั้งค่า Pi server
 
-| Component        | Technology                  | Version                       |
-| ---------------- | --------------------------- | ----------------------------- |
-| **MCU**          | ESP32-S3-DevKitC-1-N16R8    | 240MHz, 320KB RAM, 16MB Flash, 8MB OPI PSRAM |
-| **Platform**     | Espressif 32                | 6.4.0                         |
-| **Framework**    | Arduino Core for ESP32      | 2.0.11                        |
-| **RTOS**         | FreeRTOS                    | (built-in)                    |
-| **MQTT**         | PubSubClient                | 2.8.0                         |
-| **JSON**         | ArduinoJson                 | 6.21.5                        |
-| **WiFi Config**  | WiFiManager                 | 2.0.17                        |
-| **LED**          | Adafruit NeoPixel           | 1.12.0                        |
-| **Temp (Water)** | DallasTemperature + OneWire | 3.11.0 / 2.3.8                |
-| **Temp (Air)**   | DHT sensor library          | 1.4.6                         |
-| **Light**        | BH1750                      | 1.3.0                         |
+ไฟล์หลักอยู่ในโฟลเดอร์ `pi_server`
 
-### Raspberry Pi Server
+ลำดับที่ควรทำ
 
-| Component         | Technology                  |
-| ----------------- | --------------------------- |
-| **OS**            | Raspberry Pi OS (Lite)      |
-| **Web Framework** | Flask + Flask-SocketIO      |
-| **MQTT Broker**   | Mosquitto                   |
-| **Database**      | SQLite                      |
-| **Camera**        | picamera2 + Flask Streaming |
-| **AP Mode**       | hostapd + dnsmasq           |
+1. คัดลอกโฟลเดอร์ `pi_server` ไปยัง Raspberry Pi
+2. ติดตั้ง dependency และ service ตามสคริปต์ใน `pi_server/setup.sh`
+3. ถ้ามี asset ฝั่งหน้าเว็บที่ต้องโหลดเก็บไว้ในเครื่อง ให้รัน `pi_server/download_assets.sh`
+4. ถ้าต้องให้ Pi ทำหน้าที่เป็น access point ให้ดู `pi_server/setup_ap.sh`, `hostapd.conf`, และ `dnsmasq_ap.conf`
+5. restart service หลัง deploy
 
----
+ตัวอย่างคำสั่งที่ใช้บ่อยบน Pi
 
-## 📊 Resource Usage
-
-```
-RAM:   [==        ]  16.0% (52,592 / 327,680 bytes)
-Flash: [=         ]  14.9% (975,765 / 6,553,600 bytes)
+```bash
+cd ~/pi_server
+bash download_assets.sh
+sudo systemctl restart aquaponics
+sudo systemctl restart aquaponics-cam
 ```
 
----
+### 4. ตั้งค่า environment variables ฝั่ง Pi
 
-## 📄 License
+ฝั่ง `pi_server/app.py` รองรับ environment variables สำคัญดังนี้
 
-This project is for educational purposes.
+- `AQUAPONICS_BOOTSTRAP_ADMIN_PASSWORD` รหัส admin เริ่มต้นสำหรับ bootstrap เครื่องใหม่
+- `AQUAPONICS_SECRET_KEY` ใช้เป็น Flask session secret
+- `AQUAPONICS_SESSION_SECURE` เปิด secure session cookie เมื่อรันหลัง HTTPS/reverse proxy
+- `AQUAPONICS_OTA_PASSWORD` รหัสผ่าน OTA ที่หน้าเว็บใช้ส่งต่อ
+
+ถ้าไม่ได้ตั้ง `AQUAPONICS_BOOTSTRAP_ADMIN_PASSWORD` ระบบจะขึ้นสถานะว่าต้อง bootstrap admin ก่อนใช้งานฝั่งเว็บ
+
+## การใช้งานประจำวัน
+
+### ลำดับการเริ่มระบบ
+
+1. เปิด Raspberry Pi ให้ dashboard และ broker ทำงานก่อน
+2. เปิด ESP32 แล้วดู Serial หรือ Dashboard ว่าขึ้น online
+3. ตรวจหน้า Dashboard ว่าค่าเซ็นเซอร์อัปเดตต่อเนื่อง
+4. ถ้าจะทดสอบ output ให้เริ่มจากหน้า Hardware Test
+5. ถ้าจะใช้งานจริง ให้ตั้งค่าที่หน้า Settings แล้วปล่อยให้ controller ทำงานตาม config
+
+### จุดที่ operator ควรตรวจทุกครั้ง
+
+- ค่า sensor ไม่ค้าง
+- water status ไม่มี alarm
+- automator ไม่ติด state ที่ผิดปกติ
+- fan/light/feeder ใช้ command source ตรงกับที่ต้องการ
+- hardware test ไม่ค้างอยู่ใน flow-test mode หลังเลิกทดสอบ
+
+สำหรับผู้ทดสอบใหม่ ให้เริ่มจาก `TEST_OPERATOR_GUIDE.md`
+
+## Calibration และการตั้งค่า
+
+### pH calibration
+
+ทำผ่าน Serial CLI หรือ Telnet
+
+```text
+cal686
+cal401
+cal918
+```
+
+มี alias สั้น
+
+```text
+cal7
+cal4
+```
+
+### TDS calibration
+
+ทำผ่านหน้า Settings ของ Pi
+
+- กรอกจุด low/high ของ standard solution ให้ครบ
+- ใช้อุณหภูมิของ standard ให้ใกล้ค่าจริงตอน calibrate
+- ถ้าช่วงแรงดัน 2 จุดใกล้กันเกินไป firmware จะปฏิเสธ calibration เพื่อกันค่าเพี้ยน
+
+### command source ของไฟและ feeder
+
+ไฟและ feeder สามารถเลือกได้ว่าใครเป็นคนคุม
+
+- `netpie` ให้ cloud command คุม
+- `local_web` ให้ Pi/web/local MQTT คุม
+
+แนวคิดนี้ช่วยกันคำสั่งชนกันระหว่าง cloud กับคนหน้างาน
+
+## CLI Commands
+
+คำสั่งด้านล่างใช้ได้จาก Serial monitor และ Telnet
+
+### ข้อมูลระบบ
+
+| คำสั่ง | หน้าที่ |
+| --- | --- |
+| `help` | แสดงรายการคำสั่ง |
+| `clear` | ล้างหน้าจอ |
+| `status` | แสดงค่าเซ็นเซอร์ทั้งหมด |
+| `test` | รัน self-test |
+| `health` | แสดงสุขภาพระบบ |
+| `tasks` | แสดง heartbeat และ stack ของ task |
+| `crash` | แสดง last crash / last task stage |
+| `wifi` | แสดงข้อมูล WiFi |
+| `mqtt` | แสดงสถานะ NETPIE |
+| `version` | แสดง firmware version |
+| `reboot` | รีสตาร์ทบอร์ด |
+| `reset` | factory reset |
+
+### Sensor และ calibration
+
+| คำสั่ง | หน้าที่ |
+| --- | --- |
+| `ph` | แสดงค่า pH ปัจจุบัน |
+| `cal686` | calibrate pH 6.86 |
+| `cal401` | calibrate pH 4.01 |
+| `cal918` | calibrate pH 9.18 |
+| `cal7` | alias ของ `cal686` |
+| `cal4` | alias ของ `cal401` |
+
+### Controller commands
+
+| คำสั่ง | หน้าที่ |
+| --- | --- |
+| `light` | ดูสถานะ light controller |
+| `light on` | เปิดไฟแบบ manual |
+| `light off` | ปิดไฟแบบ manual |
+| `light auto` | กลับไปใช้ schedule |
+| `light netpie` | ให้ NETPIE คุมไฟ |
+| `light web` | ให้เว็บ/Pi คุมไฟ |
+| `feed` | ดูสถานะ feeder |
+| `feed now` | ให้อาหารทันที |
+| `feed enable` | เปิด schedule feeder |
+| `feed disable` | ปิด schedule feeder |
+| `feed netpie` | ให้ NETPIE คุม feeder |
+| `feed web` | ให้เว็บ/Pi คุม feeder |
+| `fan` | ดูสถานะพัดลม |
+| `fan on` | เปิดพัดลม manual |
+| `fan off` | ปิดพัดลม manual |
+| `fan auto` | กลับไปโหมด auto |
+| `auto` | ดูสถานะ automator |
+| `water` | ดูสถานะระบบน้ำ |
+| `circ on` / `circ off` | เปิดหรือปิด circulation |
+| `refill on` / `refill off` | เปิดหรือปิด manual refill |
+| `route auto` | ใช้ route แบบ auto |
+| `route fish` | บังคับ route ผ่านตู้ปลา |
+| `route sump` | บังคับ route เข้าถังรวมตรง |
+| `water clear` | ล้าง alarm ระบบน้ำ |
+| `pump a` / `pump b` | ทดสอบปั๊มโดส |
+| `pump stop` | หยุดปั๊มโดสทั้งหมด |
+
+## MQTT Topics
+
+### NETPIE
+
+| Topic | ทิศทาง | หน้าที่ |
+| --- | --- | --- |
+| `@shadow/data/update` | ESP -> Cloud | ส่งค่า sensor และ state ขึ้น shadow |
+| `@shadow/data/updated` | Cloud -> ESP | รับการเปลี่ยนแปลง shadow |
+| `@msg/#` | Cloud -> ESP | รับคำสั่งควบคุมจาก NETPIE |
+
+### Local MQTT
+
+| Topic | ทิศทาง | หน้าที่ |
+| --- | --- | --- |
+| `aquaponics/sensors` | ESP -> Pi | sensor data + health + live status |
+| `aquaponics/logs` | ESP -> Pi | log ของระบบ |
+| `aquaponics/config/sensors` | Pi -> ESP | เปิด/ปิด sensor |
+| `aquaponics/status/sensors` | ESP -> Pi | feedback config sensor |
+| `aquaponics/config/automation` | Pi -> ESP | config automator |
+| `aquaponics/status/automation` | ESP -> Pi | runtime/config automator |
+| `aquaponics/config/fan_control` | Pi -> ESP | config fan |
+| `aquaponics/status/fan_control` | ESP -> Pi | status fan |
+| `aquaponics/config/light_control` | Pi -> ESP | config light |
+| `aquaponics/status/light_control` | ESP -> Pi | status light |
+| `aquaponics/config/fish_feeder` | Pi -> ESP | config feeder |
+| `aquaponics/status/fish_feeder` | ESP -> Pi | status feeder |
+| `aquaponics/config/water_system` | Pi -> ESP | config water system |
+| `aquaponics/status/water_system` | ESP -> Pi | status water system |
+| `aquaponics/config/tds_cal` | Pi -> ESP | TDS calibration |
+| `aquaponics/config/ph_cal` | Pi -> ESP | pH calibration |
+| `aquaponics/test/command` | Pi -> ESP | สั่ง hardware test |
+| `aquaponics/test/result` | ESP -> Pi | ผลลัพธ์ hardware test |
+
+## การทดสอบและ validation
+
+ก่อน deploy จริง แนะนำอย่างน้อย 3 ขั้นตอนนี้
+
+```bash
+pio test -e native -f test_tds_native
+pio test -e native -f test_water_system_native
+pio run -e production
+```
+
+test ชุด native อื่น ๆ มีอยู่ในโฟลเดอร์ `test/test_native` สำหรับ sensor/controller หลายส่วน
+
+ถ้าต้องทดสอบหน้างานจริง
+
+1. เริ่มจาก Dashboard ว่าค่าอัปเดตจริง
+2. ใช้หน้า Hardware Test ทดสอบอุปกรณ์ทีละตัว
+3. ใช้ Safe Stop ก่อนจบงานทุกครั้ง
+
+คู่มือทดสอบทีละขั้นอยู่ใน `TEST_OPERATOR_GUIDE.md`
+
+## โครงสร้างโปรเจกต์
+
+```text
+test/
+|- include/                 header และค่าคงที่กลางของระบบ
+|- src/                     firmware implementation
+|- pi_server/               Flask dashboard, pages, scripts, services
+|- test/                    native/unit tests
+|- docs/                    เอกสารประกอบและ vault
+|- forTestFlow/             flow planner และ JSON diagram
+|- lib/WiFiManager/         library ที่ใช้งานร่วมกับ firmware
+|- platformio.ini           build environments
+|- CHANGELOG.md             ประวัติการเปลี่ยนแปลง
+|- PRODUCTION.md            แนวทาง deploy ใช้งานจริง
+|- TEST_OPERATOR_GUIDE.md   คู่มือทดสอบหน้างาน
+|- HARDWARE_TO_BUY.md       รายการฮาร์ดแวร์ที่เกี่ยวข้อง
+```
+
+## ไฟล์สำคัญที่ควรรู้จัก
+
+- `include/config.h` จุดรวม pin map, constants, MQTT topics, และ default behavior
+- `src/main.cpp` จุดเริ่มต้นของ firmware และการสร้าง FreeRTOS tasks
+- `src/automator.cpp` flow การโดสอัตโนมัติ
+- `src/waterSystem.cpp` logic ระบบน้ำ
+- `src/localMqtt.cpp` bridge ระหว่าง ESP32 กับ Pi
+- `pi_server/app.py` backend หลักของ dashboard และ API
+- `pi_server/header.js` shared navigation, alerts, และ role-aware header
+- `forTestFlow/index.html` เครื่องมือดู/แก้ flow diagram
+
+## เอกสารที่เกี่ยวข้อง
+
+- `TEST_OPERATOR_GUIDE.md` สำหรับผู้ทดสอบหน้างาน
+- `PRODUCTION.md` สำหรับการ deploy ใช้งานจริง
+- `HARDWARE_TO_BUY.md` สำหรับเช็กรายการอุปกรณ์
+- `PROJECT_REFERENCE.md` สำหรับดูภาพรวม reference เพิ่มเติม
+- `CHANGELOG.md` สำหรับประวัติการแก้ไขล่าสุด
+
+## หมายเหตุสำคัญก่อนแก้ระบบ
+
+- ถ้าจะแก้ pin, timing, MQTT topic, หรือ default behavior ให้เริ่มที่ `include/config.h`
+- ถ้าจะแก้ logic ตัดสินใจของระบบน้ำหรือ automator ให้ดู interlock ระหว่างสองโมดูลนี้เสมอ
+- ถ้าจะแก้หน้าเว็บหรือ asset กลางฝั่ง Pi ให้ตรวจผลกับ `header.js`, `base.css`, และ PWA cache ไปพร้อมกัน
+- ถ้าจะแก้ calibration หรือ state payload ให้เช็กทั้ง firmware, Local MQTT payload, และหน้า Settings ว่าใช้ key ตรงกัน
+
+README นี้ตั้งใจให้เป็นจุดเริ่มต้นสำหรับคนที่ต้องรับช่วงงานต่อ, ทดสอบระบบ, หรือ deploy ระบบชุดปัจจุบัน ถ้าต้องลงมือหน้างานทันที ให้เปิด `TEST_OPERATOR_GUIDE.md` ควบคู่กันไปด้วย

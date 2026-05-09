@@ -791,9 +791,10 @@
 
     <div class="settings-grid">
         <!-- TDS Auto-Dosing -->
-        <div class="card">
+        <div class="card friendly-card">
             <h2><i class="fas fa-robot"></i> TDS Auto-Dosing <span class="card-mode apply-now">Apply Now</span></h2>
-            <div class="card-hint">ตั้งค่า TDS Auto-Dosing สำหรับปั๊ม Nutrient A/B เท่านั้น ส่วน pH จะใช้วัดในตู้ปลาเพื่อ monitor อย่างเดียว.</div>
+            <div class="card-hint">ตั้งค่ารอบจ่ายปุ๋ย A/B แบบ staged dosing: A -> รอผสม -> B -> รอผสม -> วัด TDS ใหม่ โดยยังยึด <strong>Target TDS</strong> เป็นเป้าหมายรวม.</div>
+            <div class="settings-guide"><strong>อ่านแบบสั้นๆ:</strong> `Dose A/B` คือปริมาณต่อรอบ, `Mix After A` คือเวลารอให้ A กระจายก่อนจ่าย B, `Post Dose Mix` คือเวลารอหลังจบ A+B ก่อนวัดใหม่, และ `TDS Hysteresis` คือระยะต่ำกว่าเป้าหมายที่ยอมให้ตกลงมาก่อนเริ่มรอบใหม่.</div>
             
             <div class="form-group">
                 <div class="toggle-container" style="justify-content: space-between; margin-bottom: 20px;">
@@ -808,12 +809,59 @@
             <div class="form-group">
                 <label>Target TDS (ppm)</label>
                 <input type="number" id="auto_tgt_tds" step="10" placeholder="e.g. 800">
-                <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 5px;">Nutrient A/B will dose when TDS falls below this value.</span>
+                <span class="field-tip">ระบบจะเริ่มรอบใหม่เมื่อ TDS ต่ำกว่า <strong>Target TDS - TDS Hysteresis</strong> ไม่ได้เริ่มทันทีที่ต่ำกว่า target ตรง ๆ</span>
             </div>
+
+            <div class="form-group">
+                <div class="range-grid">
+                    <div class="range-field">
+                        <label class="range-field-label" for="auto_dose_a_ml">Dose A Per Cycle (mL)</label>
+                        <input type="number" id="auto_dose_a_ml" min="0" max="20" step="0.1" placeholder="e.g. 1.5">
+                        <span class="field-tip">ปริมาณปุ๋ย A ที่จะจ่ายในหนึ่งรอบ ถ้าใช้สูตร A:B เท่ากัน ปกติจะตั้งใกล้กับ Dose B</span>
+                    </div>
+                    <div class="range-field">
+                        <label class="range-field-label" for="auto_dose_b_ml">Dose B Per Cycle (mL)</label>
+                        <input type="number" id="auto_dose_b_ml" min="0" max="20" step="0.1" placeholder="e.g. 1.5">
+                        <span class="field-tip">ปริมาณปุ๋ย B ที่จะจ่ายหลังจากรอ Mix After A ครบ เพื่อหลีกเลี่ยงการชนกันของสารเข้มข้น</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <div class="range-grid">
+                    <div class="range-field">
+                        <label class="range-field-label" for="auto_mix_after_a_min">Mix After A (minutes)</label>
+                        <input type="number" id="auto_mix_after_a_min" min="0.5" max="60" step="0.5" placeholder="e.g. 10">
+                        <span class="field-tip">เวลารอให้น้ำในถังผสมวนและกระจาย A ก่อนถึงค่อยจ่าย B</span>
+                    </div>
+                    <div class="range-field">
+                        <label class="range-field-label" for="auto_post_dose_mix_min">Post Dose Mix (minutes)</label>
+                        <input type="number" id="auto_post_dose_mix_min" min="1" max="360" step="1" placeholder="e.g. 20">
+                        <span class="field-tip">เวลารอหลังจ่าย A+B ครบทั้งคู่ ก่อนรอบถัดไปจะกลับไปวัด TDS ใหม่</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>TDS Hysteresis (ppm)</label>
+                <input type="number" id="auto_tds_hysteresis_ppm" min="0" max="300" step="5" placeholder="e.g. 30">
+                <span class="field-tip">ช่วยกันรอบ dosing กระพือใกล้จุดเป้าหมาย ตัวอย่าง: target `800` กับ hysteresis `30` จะเริ่มรอบใหม่เมื่อ TDS ต่ำกว่า `770`</span>
+            </div>
+
+            <details class="advanced-panel" open>
+                <summary>
+                    Cycle Preview
+                    <span class="advanced-hint" id="automation_advanced_hint">Trigger threshold preview</span>
+                </summary>
+                <div class="advanced-body">
+                    <div class="status-block" id="automation_plan_summary">ระบบจะคำนวณ flow รอบจ่ายจากค่าที่กรอกด้านบนโดยอัตโนมัติ</div>
+                </div>
+            </details>
             
-            <button class="btn btn-primary" onclick="saveAutomationConfig()" style="width: 100%; margin-top: 10px;">
+            <button class="btn btn-primary" id="automation_apply_btn" onclick="saveAutomationConfig()" style="width: 100%; margin-top: 10px;">
                 <i class="fas fa-save"></i> Apply TDS Auto-Dosing
             </button>
+            <div class="action-feedback" id="automation_feedback"></div>
         </div>
 
         <div class="card friendly-card">
@@ -1522,6 +1570,7 @@
         <!-- TDS Calibration -->
         <div class="card">
             <h2><i class="fas fa-flask"></i> TDS Calibration</h2>
+            <div class="card-hint">กรอกอุณหภูมิของน้ำยามาตรฐานจริงในแต่ละจุดด้วย ปุ่ม Read จะเก็บ <strong>raw voltage</strong> จาก sensor แล้วให้ firmware ชดเชย temp กลับไปที่ reference 25°C กลางทางเดียว.</div>
             
             <div class="form-group">
                 <label>Current TDS Voltage (Raw)</label>
@@ -1537,6 +1586,7 @@
                     <div>
                         <span>Temperature</span>
                         <input type="number" id="low_temp" value="25" step="0.1">
+                        <span class="field-tip">ถ้าเป็น calibration เก่าที่ยังไม่ได้กด Read ใหม่ ระบบจะถือว่า voltage ช่องนี้เป็นค่าที่ compensate มาแล้วแบบ legacy</span>
                     </div>
                     <div>
                         <span>PPM Value</span>
@@ -1555,6 +1605,7 @@
                     <div>
                         <span>Temperature</span>
                         <input type="number" id="high_temp" value="25" step="0.1">
+                        <span class="field-tip">กด Read ใหม่ทั้งสองจุดถ้าต้องการ migrate ไปใช้ raw-voltage calibration แบบใหม่</span>
                     </div>
                     <div>
                         <span>PPM Value</span>
@@ -1722,6 +1773,12 @@
             }
         };
         const actionFeedbackState = {
+            automation: {
+                status: 'idle',
+                title: 'Ready to apply',
+                detail: 'Automation tuning in this card will be sent to ESP32 when you press Apply TDS Auto-Dosing',
+                icon: 'fa-info-circle'
+            },
             light: {
                 status: 'idle',
                 title: 'Ready to apply',
@@ -1949,10 +2006,66 @@
             return Math.max(0, Math.round(safeValue * multiplier));
         }
 
+        function normalizeDecimal(value, fallback, min = null, max = null, decimals = null) {
+            let normalized = Number.parseFloat(value);
+            if (!Number.isFinite(normalized)) {
+                normalized = fallback;
+            }
+            if (min !== null) {
+                normalized = Math.max(min, normalized);
+            }
+            if (max !== null) {
+                normalized = Math.min(max, normalized);
+            }
+            if (decimals !== null) {
+                normalized = Number(normalized.toFixed(decimals));
+            }
+            return normalized;
+        }
+
+        function minutesFromMs(ms, fallbackMinutes) {
+            const numericMs = Number(ms);
+            if (!Number.isFinite(numericMs)) {
+                return fallbackMinutes;
+            }
+            return Number((numericMs / 60000).toFixed(2));
+        }
+
+        function collectAutomationConfig() {
+            const mixAfterAMin = normalizeDecimal(document.getElementById('auto_mix_after_a_min').value, 10, 0.5, 60, 2);
+            const postDoseMixMin = normalizeDecimal(document.getElementById('auto_post_dose_mix_min').value, 20, 1, 360, 2);
+            return {
+                enabled: document.getElementById('auto_enabled').checked,
+                target_tds: normalizeDecimal(document.getElementById('auto_tgt_tds').value, 800, 0, 3000, 1),
+                dose_a_ml: normalizeDecimal(document.getElementById('auto_dose_a_ml').value, 1.5, 0, 20, 2),
+                dose_b_ml: normalizeDecimal(document.getElementById('auto_dose_b_ml').value, 1.5, 0, 20, 2),
+                mix_after_a_ms: normalizeInteger(Math.round(mixAfterAMin * 60000), 600000, 30000, 3600000),
+                post_dose_mix_ms: normalizeInteger(Math.round(postDoseMixMin * 60000), 1200000, 60000, 21600000),
+                tds_hysteresis_ppm: normalizeDecimal(document.getElementById('auto_tds_hysteresis_ppm').value, 30, 0, 300, 1)
+            };
+        }
+
+        function updateAutomationPlanSummary() {
+            const automation = collectAutomationConfig();
+            const triggerTds = Math.max(0, automation.target_tds - automation.tds_hysteresis_ppm);
+            const mixAfterAMin = (automation.mix_after_a_ms / 60000).toFixed(1);
+            const postDoseMixMin = (automation.post_dose_mix_ms / 60000).toFixed(1);
+            document.getElementById('automation_advanced_hint').textContent = `Trigger < ${triggerTds.toFixed(1)} ppm`;
+            document.getElementById('automation_plan_summary').innerHTML = `
+                <strong>Cycle summary:</strong> เมื่อ TDS ต่ำกว่า <strong>${triggerTds.toFixed(1)} ppm</strong> ระบบจะจ่าย <strong>${automation.dose_a_ml.toFixed(2)} mL ของ A</strong>, รอ <strong>${mixAfterAMin} นาที</strong>, จ่าย <strong>${automation.dose_b_ml.toFixed(2)} mL ของ B</strong>, แล้วรอ <strong>${postDoseMixMin} นาที</strong> ก่อนวัด TDS ใหม่อีกครั้ง.
+            `;
+        }
+
         function populateForm() {
             // Automation
             document.getElementById('auto_enabled').checked = settings.automation?.enabled ?? false;
             document.getElementById('auto_tgt_tds').value = settings.automation?.target_tds ?? 800;
+            document.getElementById('auto_dose_a_ml').value = settings.automation?.dose_a_ml ?? 1.5;
+            document.getElementById('auto_dose_b_ml').value = settings.automation?.dose_b_ml ?? 1.5;
+            document.getElementById('auto_mix_after_a_min').value = minutesFromMs(settings.automation?.mix_after_a_ms, 10);
+            document.getElementById('auto_post_dose_mix_min').value = minutesFromMs(settings.automation?.post_dose_mix_ms, 20);
+            document.getElementById('auto_tds_hysteresis_ppm').value = settings.automation?.tds_hysteresis_ppm ?? 30;
+            updateAutomationPlanSummary();
 
             // Light Control
             document.getElementById('light_command_source').value = settings.light_control?.command_source ?? 'netpie';
@@ -2052,6 +2165,7 @@
             document.getElementById('cam_fps').value = settings.camera?.framerate ?? 15;
             document.getElementById('cam_quality').value = settings.camera?.quality ?? 80;
 
+            renderActionFeedback('automation');
             renderActionFeedback('light');
             renderActionFeedback('feeder');
             updateSourceDrivenActions();
@@ -2157,10 +2271,7 @@
 
         function collectForm() {
             return {
-                automation: {
-                    enabled: document.getElementById('auto_enabled').checked,
-                    target_tds: parseFloat(document.getElementById('auto_tgt_tds').value || 800)
-                },
+                automation: collectAutomationConfig(),
                 light_control: {
                     command_source: document.getElementById('light_command_source').value,
                     enabled: document.getElementById('light_enabled').checked,
@@ -2265,10 +2376,9 @@
         }
 
         async function saveAutomationConfig() {
-            const data = {
-                enabled: document.getElementById('auto_enabled').checked,
-                target_tds: parseFloat(document.getElementById('auto_tgt_tds').value || 800)
-            };
+            const data = collectAutomationConfig();
+            setActionButtonBusy('automation_apply_btn', true, '<i class="fas fa-spinner fa-spin"></i> Applying...', '<i class="fas fa-save"></i> Apply TDS Auto-Dosing');
+            setActionFeedback('automation', 'pending', 'Automation config is being sent', 'Waiting for Pi server to forward this tuning profile to ESP32 and refresh the latest saved values.', 'fa-spinner fa-spin');
             try {
                 const res = await fetch('/api/automation/config', {
                     method: 'POST',
@@ -2277,12 +2387,19 @@
                 });
                 const result = await res.json();
                 if (result.status === 'ok') {
+                    setActionFeedback('automation', 'pending', 'Automation config applied', 'Pi accepted the request. Reloading settings now so this card reflects the normalized values stored on the server.', 'fa-rotate');
+                    await loadSettings();
+                    setActionFeedback('automation', 'success', 'Automation config confirmed', 'Latest settings were reloaded after the apply call, so this card now reflects the newest automation tuning profile.', 'fa-circle-check');
                     showToast('Automation Config Applied to ESP32! ✅');
                 } else {
+                    setActionFeedback('automation', 'error', 'Automation config failed', result.message || 'The server rejected this request.', 'fa-triangle-exclamation');
                     showToast('Error: ' + result.message, true);
                 }
             } catch (e) {
+                setActionFeedback('automation', 'error', 'Automation config failed', 'Could not reach the server while sending automation tuning to ESP32.', 'fa-triangle-exclamation');
                 showToast('Failed to connect to server', true);
+            } finally {
+                setActionButtonBusy('automation_apply_btn', false, '<i class="fas fa-spinner fa-spin"></i> Applying...', '<i class="fas fa-save"></i> Apply TDS Auto-Dosing');
             }
         }
 
@@ -2544,6 +2661,9 @@
         document.getElementById('light_command_source').addEventListener('change', updateSourceDrivenActions);
         document.getElementById('feeder_command_source').addEventListener('change', updateSourceDrivenActions);
         document.getElementById('water_preferred_route').addEventListener('change', updateWaterRouteControls);
+        ['auto_tgt_tds', 'auto_dose_a_ml', 'auto_dose_b_ml', 'auto_mix_after_a_min', 'auto_post_dose_mix_min', 'auto_tds_hysteresis_ppm'].forEach((id) => {
+            document.getElementById(id).addEventListener('input', updateAutomationPlanSummary);
+        });
 
         // === TDS Calibration Functions ===
         async function refreshVoltage() {
@@ -2556,20 +2676,13 @@
             }
         }
 
-        function calculateCompensatedVoltage(rawV, tempElementId) {
-            const temp = parseFloat(document.getElementById(tempElementId).value) || 25.0;
-            // Formula: Vcomp = Vraw / (1 + 0.02 * (T - 25))
-            const compV = rawV / (1.0 + 0.02 * (temp - 25.0));
-            return compV;
-        }
-
         function readLowVoltage() {
             refreshVoltage().then(() => {
                 const currentV = parseFloat(document.getElementById('current_voltage').value);
                 if (!isNaN(currentV)) {
-                    const compV = calculateCompensatedVoltage(currentV, 'low_temp');
-                    document.getElementById('low_voltage').value = compV.toFixed(3);
-                    showToast(`Low point captured! (Compensated @ ${document.getElementById('low_temp').value}°C) ✅`);
+                    document.getElementById('low_voltage').value = currentV.toFixed(3);
+                    settings.tds_calibration = { ...settings.tds_calibration, raw_voltage: true };
+                    showToast(`Low point captured! Raw voltage saved, firmware will apply ${document.getElementById('low_temp').value}°C compensation ✅`);
                 }
             });
         }
@@ -2578,9 +2691,9 @@
             refreshVoltage().then(() => {
                 const currentV = parseFloat(document.getElementById('current_voltage').value);
                 if (!isNaN(currentV)) {
-                    const compV = calculateCompensatedVoltage(currentV, 'high_temp');
-                    document.getElementById('high_voltage').value = compV.toFixed(3);
-                    showToast(`High point captured! (Compensated @ ${document.getElementById('high_temp').value}°C) ✅`);
+                    document.getElementById('high_voltage').value = currentV.toFixed(3);
+                    settings.tds_calibration = { ...settings.tds_calibration, raw_voltage: true };
+                    showToast(`High point captured! Raw voltage saved, firmware will apply ${document.getElementById('high_temp').value}°C compensation ✅`);
                 }
             });
         }
@@ -2592,7 +2705,8 @@
                 low_voltage: parseFloat(document.getElementById('low_voltage').value) || 0,
                 high_temp: parseFloat(document.getElementById('high_temp').value) || 25,
                 high_ppm: parseFloat(document.getElementById('high_ppm').value) || 0,
-                high_voltage: parseFloat(document.getElementById('high_voltage').value) || 0
+                high_voltage: parseFloat(document.getElementById('high_voltage').value) || 0,
+                raw_voltage: settings.tds_calibration?.raw_voltage ?? false
             };
 
             if (data.low_voltage <= 0 || data.high_voltage <= 0) {
@@ -2628,6 +2742,7 @@
             document.getElementById('high_temp').value = cal.high_temp || 25;
             document.getElementById('high_ppm').value = cal.high_ppm || 1000;
             document.getElementById('high_voltage').value = cal.high_voltage || '';
+            settings.tds_calibration = { ...cal };
             document.getElementById('cal_status').textContent = cal.calibrated ? 'Calibrated ✅' : 'Not Calibrated';
             refreshVoltage();
         }

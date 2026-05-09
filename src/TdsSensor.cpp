@@ -41,16 +41,95 @@ static float _offset = 0.0f;      // Offset factor (shifting)
 static bool _isCalibrated = false;
 static float _calLowPpm = 0.0f;
 static float _calLowVoltage = 0.0f;
+static float _calLowTemperature = 25.0f;
 static float _calHighPpm = 0.0f;
 static float _calHighVoltage = 0.0f;
+static float _calHighTemperature = 25.0f;
+static bool _calibrationUsesRawVoltage = false;
 
-// Standard DFRobot Polynomial for TDS (ppm) from Voltage (V)
-// Relation: TDS = (133.42*v^3 - 255.86*v^2 + 857.39*v) * 0.5
-static float _getStandardTds(float voltage) {
+// Standard DFRobot polynomial returns EC@25C-like base value before applying
+// the project-specific TDS conversion factor.
+static float _getStandardEc(float voltage) {
     if (voltage <= 0) return 0;
     return (133.42f * voltage * voltage * voltage 
           - 255.86f * voltage * voltage 
-          + 857.39f * voltage) * 0.5f;
+          + 857.39f * voltage);
+}
+
+static float _getStandardTds(float voltage) {
+    return _getStandardEc(voltage) * TDS_CONVERSION_FACTOR;
+}
+
+static float _getCompensatedVoltage(float voltage, float temperature) {
+    if (!isfinite(voltage) || voltage <= 0.0f) {
+        return 0.0f;
+    }
+
+    float safeTemperature = isfinite(temperature) ? temperature : 25.0f;
+    float compensationCoefficient = 1.0f + 0.019f * (safeTemperature - 25.0f);
+    if (compensationCoefficient <= 0.0f) {
+        compensationCoefficient = 1.0f;
+    }
+
+    return voltage / compensationCoefficient;
+}
+
+static float _normalizeCalibrationVoltage(float voltage,
+                                          float temperature,
+                                          bool rawVoltageInput) {
+    return rawVoltageInput ? _getCompensatedVoltage(voltage, temperature) : voltage;
+}
+
+static bool _hasValidCalibrationSpan(float lowVoltage,
+                                     float lowTemperature,
+                                     float highVoltage,
+                                     float highTemperature,
+                                     bool rawVoltageInput) {
+    float normalizedLowVoltage = _normalizeCalibrationVoltage(lowVoltage, lowTemperature,
+                                                              rawVoltageInput);
+    float normalizedHighVoltage = _normalizeCalibrationVoltage(highVoltage,
+                                                               highTemperature,
+                                                               rawVoltageInput);
+    return fabsf(normalizedHighVoltage - normalizedLowVoltage) >= TDS_MIN_CALIBRATION_SPAN_V;
+}
+
+static float _applyDeadband(float previousValue, float candidateValue, float deadband) {
+    if (previousValue < 0.0f || isnan(previousValue)) {
+        return candidateValue;
+    }
+
+    return fabsf(candidateValue - previousValue) < deadband ? previousValue : candidateValue;
+}
+
+static float _limitStep(float previousValue, float candidateValue, float maxStep) {
+    if (previousValue < 0.0f || isnan(previousValue)) {
+        return candidateValue;
+    }
+
+    float delta = candidateValue - previousValue;
+    if (delta > maxStep) {
+        return previousValue + maxStep;
+    }
+    if (delta < -maxStep) {
+        return previousValue - maxStep;
+    }
+    return candidateValue;
+}
+
+static int _readOversampledAdc(void) {
+    long sum = 0;
+
+    for (int i = 0; i < TDS_ADC_DUMMY_READS; i++) {
+        delayMicroseconds(TDS_ADC_SETTLE_US);
+        (void)analogRead(TDS_PIN);
+    }
+
+    for (int i = 0; i < TDS_OVERSAMPLE_COUNT; i++) {
+        delayMicroseconds(TDS_ADC_SETTLE_US);
+        sum += analogRead(TDS_PIN);
+    }
+
+    return static_cast<int>(sum / TDS_OVERSAMPLE_COUNT);
 }
 
 // ============================================================================
@@ -58,15 +137,35 @@ static float _getStandardTds(float voltage) {
 // ============================================================================
 
 static void _calculateCalibrationFactors() {
-    if (_calHighVoltage == _calLowVoltage) {
+    float normalizedLowVoltage = _normalizeCalibrationVoltage(_calLowVoltage,
+                                                              _calLowTemperature,
+                                                              _calibrationUsesRawVoltage);
+    float normalizedHighVoltage = _normalizeCalibrationVoltage(_calHighVoltage,
+                                                               _calHighTemperature,
+                                                               _calibrationUsesRawVoltage);
+
+    if (!_hasValidCalibrationSpan(_calLowVoltage,
+                                  _calLowTemperature,
+                                  _calHighVoltage,
+                                  _calHighTemperature,
+                                  _calibrationUsesRawVoltage)) {
+        _kValue = 1.0f;
+        _offset = 0.0f;
+        _isCalibrated = false;
+        LOG_ERROR("TDS calibration rejected: voltage span %.3fV is too small (need >= %.3fV)",
+                  fabsf(normalizedHighVoltage - normalizedLowVoltage),
+                  TDS_MIN_CALIBRATION_SPAN_V);
+        return;
+    }
+    
+    // Normalize both calibration points back to the 25C reference used by the runtime formula.
+    float baseLow = _getStandardTds(normalizedLowVoltage);
+    float baseHigh = _getStandardTds(normalizedHighVoltage);
+    if (fabsf(baseHigh - baseLow) < 0.0001f) {
         _kValue = 1.0f;
         _offset = 0.0f;
         return;
     }
-    
-    // Calculate expected base TDS from voltages
-    float baseLow = _getStandardTds(_calLowVoltage);
-    float baseHigh = _getStandardTds(_calHighVoltage);
     
     // Calculate K and Offset to map Base -> Actual
     // Actual = K * Base + Offset
@@ -82,8 +181,11 @@ static void _loadCalibrationFromNVS() {
     if (_isCalibrated) {
         _calLowPpm = _tdsPrefs.getFloat("lowPpm", 0);
         _calLowVoltage = _tdsPrefs.getFloat("lowV", 0);
+        _calLowTemperature = _tdsPrefs.getFloat("lowT", 25.0f);
         _calHighPpm = _tdsPrefs.getFloat("highPpm", 0);
         _calHighVoltage = _tdsPrefs.getFloat("highV", 0);
+        _calHighTemperature = _tdsPrefs.getFloat("highT", 25.0f);
+        _calibrationUsesRawVoltage = _tdsPrefs.getBool("rawV", false);
         _calculateCalibrationFactors(); // Recalculate K/Offset
     }
     _tdsPrefs.end();
@@ -94,8 +196,11 @@ static void _saveCalibrationToNVS() {
     _tdsPrefs.putBool("calibrated", _isCalibrated);
     _tdsPrefs.putFloat("lowPpm", _calLowPpm);
     _tdsPrefs.putFloat("lowV", _calLowVoltage);
+    _tdsPrefs.putFloat("lowT", _calLowTemperature);
     _tdsPrefs.putFloat("highPpm", _calHighPpm);
     _tdsPrefs.putFloat("highV", _calHighVoltage);
+    _tdsPrefs.putFloat("highT", _calHighTemperature);
+    _tdsPrefs.putBool("rawV", _calibrationUsesRawVoltage);
     _tdsPrefs.end();
     LOG_INFO("TDS Calibration saved to NVS");
 }
@@ -126,7 +231,7 @@ static int _getMedian(int* bArray, int iFilterLen) {
 }
 
 static float _calculateTdsFromVoltage(float voltage) {
-    // 1. Get Base TDS from Standard Polynomial
+    // 1. Get Base TDS from standard EC polynomial + configurable conversion factor
     float baseTds = _getStandardTds(voltage);
     
     // 2. Apply Calibration Adjustment
@@ -140,9 +245,11 @@ static float _calculateTdsFromVoltage(float voltage) {
 static float _calculateFilteredVoltage(void) {
     int tempBuffer[TDS_SAMPLE_COUNT];
     bool ready = false;
+    float previousVoltage = -1.0f;
 
     TDS_LOCK();
     ready = _tdsReady;
+    previousVoltage = _tdsLastVoltage;
     for (int i = 0; i < TDS_SAMPLE_COUNT; i++) {
         tempBuffer[i] = _tdsBuffer[i];
     }
@@ -154,13 +261,15 @@ static float _calculateFilteredVoltage(void) {
 
     float rawVoltage = _getMedian(tempBuffer, TDS_SAMPLE_COUNT) * TDS_VREF / TDS_ADC_RESOLUTION;
 
-    if (_tdsVoltageMovingAverage < 0) {
+    if (_tdsVoltageMovingAverage < 0 || isnan(_tdsVoltageMovingAverage)) {
         _tdsVoltageMovingAverage = rawVoltage;
     } else {
-        _tdsVoltageMovingAverage = (rawVoltage * 0.15f) + (_tdsVoltageMovingAverage * 0.85f);
+        _tdsVoltageMovingAverage =
+            (rawVoltage * TDS_VOLTAGE_FILTER_ALPHA) +
+            (_tdsVoltageMovingAverage * (1.0f - TDS_VOLTAGE_FILTER_ALPHA));
     }
 
-    return _tdsVoltageMovingAverage;
+    return _applyDeadband(previousVoltage, _tdsVoltageMovingAverage, TDS_VOLTAGE_DEADBAND_V);
 }
 
 // ============================================================================
@@ -169,6 +278,10 @@ static float _calculateFilteredVoltage(void) {
 
 void tdsSetup(void) {
     pinMode(TDS_PIN, INPUT);
+
+#if defined(ESP32)
+    analogSetAttenuation(ADC_11db);
+#endif
     
     // โหลด calibration จาก NVS
     _loadCalibrationFromNVS();
@@ -188,8 +301,9 @@ void tdsSetup(void) {
     LOG_INFO("TDS sensor initialized, collecting %d samples...", TDS_SAMPLE_COUNT);
     
     if (_isCalibrated) {
-        LOG_INFO("TDS Calibration loaded from NVS: Low=%.0f ppm @ %.3fV, High=%.0f ppm @ %.3fV", 
-                 _calLowPpm, _calLowVoltage, _calHighPpm, _calHighVoltage);
+        LOG_INFO("TDS Calibration loaded from NVS: Low=%.0f ppm @ %.3fV / %.1fC, High=%.0f ppm @ %.3fV / %.1fC, mode=%s", 
+             _calLowPpm, _calLowVoltage, _calLowTemperature, _calHighPpm, _calHighVoltage, _calHighTemperature,
+             _calibrationUsesRawVoltage ? "raw" : "compensated");
     } else {
         LOG_WARN("TDS not calibrated, using default formula");
     }
@@ -218,10 +332,12 @@ bool tdsIsCalibrated(void) {
 
 
 float tdsRead(float temperature) {
-    int sample = analogRead(TDS_PIN);
+    int sample = _readOversampledAdc();
     bool becameReady = false;
+    float previousTds = -1.0f;
 
     TDS_LOCK();
+    previousTds = _tdsLastResult;
     _tdsBuffer[_tdsBufferIndex] = sample;
     _tdsBufferIndex = (_tdsBufferIndex + 1) % TDS_SAMPLE_COUNT;
 
@@ -259,10 +375,7 @@ float tdsRead(float temperature) {
         _tdsLastResult = NAN;
         return NAN;
     }
-    float tempP = temperature; // Copy to avoid modifying param directly if needed.
-    
-    float compensationCoefficient = 1.0f + 0.019f * (tempP - 25.0f);
-    float compensationVoltage = voltage / compensationCoefficient;
+    float compensationVoltage = _getCompensatedVoltage(voltage, temperature);
     
     float tdsValue = _calculateTdsFromVoltage(compensationVoltage);
     
@@ -270,11 +383,17 @@ float tdsRead(float temperature) {
     if (tdsValue < TDS_MIN) tdsValue = TDS_MIN;
     if (tdsValue > TDS_MAX) tdsValue = TDS_MAX;
     
-    // --- Moving Average Filter (Alpha 0.1) ---
-    if (_tdsMovingAverage < 0) {
+    // --- Stabilization Layer ---
+    if (_tdsMovingAverage < 0 || isnan(_tdsMovingAverage)) {
         _tdsMovingAverage = tdsValue;
     } else {
-        _tdsMovingAverage = (tdsValue * 0.1f) + (_tdsMovingAverage * 0.9f);
+        _tdsMovingAverage =
+            (tdsValue * TDS_VALUE_FILTER_ALPHA) +
+            (_tdsMovingAverage * (1.0f - TDS_VALUE_FILTER_ALPHA));
+        float stabilizedTds = _applyDeadband(previousTds, _tdsMovingAverage,
+                                             TDS_VALUE_DEADBAND_PPM);
+        _tdsMovingAverage = _limitStep(previousTds, stabilizedTds,
+                                       TDS_VALUE_MAX_STEP_PPM);
     }
     
     TDS_LOCK();
@@ -291,21 +410,42 @@ float tdsGetLastValue(void) {
     return lastValue;
 }
 
-void tdsSetCalibration(float lowPpm, float lowVoltage, float highPpm, float highVoltage) {
+void tdsSetCalibration(float lowPpm,
+                       float lowVoltage,
+                       float lowTemperature,
+                       float highPpm,
+                       float highVoltage,
+                       float highTemperature,
+                       bool rawVoltageInput) {
     _calLowPpm = lowPpm;
     _calLowVoltage = lowVoltage;
+    _calLowTemperature = isfinite(lowTemperature) ? lowTemperature : 25.0f;
     _calHighPpm = highPpm;
     _calHighVoltage = highVoltage;
+    _calHighTemperature = isfinite(highTemperature) ? highTemperature : 25.0f;
+    _calibrationUsesRawVoltage = rawVoltageInput;
     
-    if (highVoltage != lowVoltage) {
+    if (_hasValidCalibrationSpan(_calLowVoltage,
+                                 _calLowTemperature,
+                                 _calHighVoltage,
+                                 _calHighTemperature,
+                                 _calibrationUsesRawVoltage)) {
         _calculateCalibrationFactors(); // Calculate K & Offset
         _isCalibrated = true;
         _saveCalibrationToNVS();
         
         LOG_INFO("TDS Calibration set (Hybrid Mode):");
-        LOG_INFO("  K: %.4f, Offset: %.4f", _kValue, _offset);
+        LOG_INFO("  K: %.4f, Offset: %.4f, LowTemp: %.1fC, HighTemp: %.1fC, mode=%s", _kValue, _offset, _calLowTemperature, _calHighTemperature, _calibrationUsesRawVoltage ? "raw" : "compensated");
     } else {
-        LOG_ERROR("TDS Calibration failed: voltages are the same!");
+        float normalizedLowVoltage = _normalizeCalibrationVoltage(_calLowVoltage,
+                                                                  _calLowTemperature,
+                                                                  _calibrationUsesRawVoltage);
+        float normalizedHighVoltage = _normalizeCalibrationVoltage(_calHighVoltage,
+                                                                   _calHighTemperature,
+                                                                   _calibrationUsesRawVoltage);
+        LOG_ERROR("TDS Calibration failed: voltage span %.3fV is too small (need >= %.3fV)",
+                  fabsf(normalizedHighVoltage - normalizedLowVoltage),
+                  TDS_MIN_CALIBRATION_SPAN_V);
         _isCalibrated = false;
     }
 }

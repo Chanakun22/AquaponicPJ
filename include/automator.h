@@ -16,15 +16,21 @@ enum AutomatorState {
     AUTO_STATE_IDLE,        // รอตรวจสอบเซ็นเซอร์
     AUTO_STATE_EVALUATING,  // ตรวจพบค่าผิดปกติ กำลังประเมินผล
     AUTO_STATE_DOSING_A,    // กำลังจ่ายปุ๋ย A
+    AUTO_STATE_MIXING_AFTER_A, // รอให้สาร A กระจายตัวก่อนจ่ายสาร B
     AUTO_STATE_DOSING_B,    // กำลังจ่ายปุ๋ย B
     AUTO_STATE_WATER_FILL,  // กำลังเติมน้ำ
-    AUTO_STATE_COOLDOWN     // พักระบบเพื่อรอสารละลายเข้ากัน
+    AUTO_STATE_COOLDOWN     // รอให้สาร A+B เข้ากันก่อนวัดใหม่
 };
 
 // Configuration Struct
 struct AutomatorConfig {
     bool enabled;
     float targetTds;
+    float doseAVolumeMl;
+    float doseBVolumeMl;
+    unsigned long mixAfterAMs;
+    unsigned long postDoseMixMs;
+    float tdsHysteresisPpm;
 };
 
 // Public Functions
@@ -32,7 +38,13 @@ void automatorSetup(void);
 void automatorLoop(void);
 
 // NVS Settings Management
-void automatorSetConfig(bool enabled, float targetTds);
+void automatorSetConfig(bool enabled,
+                       float targetTds,
+                       float doseAVolumeMl,
+                       float doseBVolumeMl,
+                       unsigned long mixAfterAMs,
+                       unsigned long postDoseMixMs,
+                       float tdsHysteresisPpm);
 void automatorGetConfig(AutomatorConfig* config);
 
 // Get current state for MQTT

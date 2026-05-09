@@ -2,9 +2,41 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-05-09] - README Standardization
+
+### Changed
+
+- **docs: rewrite `README.md` to match the current system architecture, modules, and operator workflow:**
+  - เปลี่ยน README จากเอกสารภาพรวมแบบเก่าที่ยังอ้างอิงระบบ/ฮาร์ดแวร์บางส่วนไม่ตรงกับ code ปัจจุบัน ให้เป็นคู่มือเริ่มต้นของโปรเจกต์ที่ครอบคลุม firmware, Pi dashboard, automator, water system, fan, light, fish feeder, security, setup, MQTT topics, CLI commands, และ test flow
+  - ตัดข้อมูลเก่าที่ทำให้เข้าใจผิด เช่นคำอธิบายหน้าเว็บและฮาร์ดแวร์บางจุดที่ไม่ตรงกับ implementation ปัจจุบัน แล้วจัดโครงสร้างใหม่ให้อ่านง่ายสำหรับทั้ง operator และคนรับช่วงงานต่อ
+
+## [2026-05-09] - Water Refill Safety Tightening
+
+### Changed
+
+- **fix: keep fish-tank refill latched until timeout/overflow while adding mix-tank high-level safety (`src/waterSystem.cpp`, `test/test_native/test_water_system_native.cpp`):**
+  - เมื่อเริ่มเติมผ่าน route เข้าตู้ปลาแล้ว ระบบจะวิ่งต่อให้ครบ `fish_refill_max_runtime_ms` แม้ `low level` ของถังผสมจะหลุดระหว่างทาง แทนการหยุดกลางคันจากการอ่าน sensor รายรอบ
+  - เพิ่ม `high level` ของถังผสมเป็น safety stop สำหรับ fish-tank refill ทั้งแบบ auto และ manual เพื่อกันน้ำในถังผสมล้น แม้ overflow ของตู้ปลายังไม่ทำงาน
+  - เพิ่ม native regression tests ครอบคลุมเคสเติมเข้าตู้ปลาต่อเนื่องหลัง low sensor หลุด และเคสหยุดทันทีเมื่อ `high level` ของถังผสม active
+
 ## [2026-05-07] - Water Settings Consistency Hardening
 
 ### Changed
+
+- **fix: align TDS base model with 982 ppm handheld scale and reject unsafe narrow-span calibration (`src/TdsSensor.cpp`, `include/config.h`, `test/test_native/test_tds_native.cpp`):**
+  - แยก EC polynomial ออกจาก TDS conversion factor แล้วตั้ง default factor เป็น `0.695` เพื่อให้ scale เริ่มต้นใกล้ handheld meter ที่อ่าน `1413 uS/cm ≈ 982 ppm` มากกว่า model เดิมแบบ `0.5`
+  - เพิ่ม guard ไม่ให้ calibration 2 จุดผ่านถ้า normalized voltage span แคบเกิน `0.050V` เพราะจะขยาย noise และ pump/fองอากาศให้ค่า ppm แกว่งแรงผิดจริง
+  - อัปเดต native tests ให้สะท้อน conversion factor ใหม่และเพิ่ม regression test กัน calibration จากช่วงแรงดันแคบเกินไป
+
+- **fix: stabilize live TDS readings against small ADC jitter (`src/TdsSensor.cpp`, `include/config.h`, `test/test_native/test_tds_native.cpp`):**
+  - เพิ่ม deadband ให้ทั้ง filtered voltage และค่า TDS หลัง temperature compensation เพื่อกันการแกว่งเล็กน้อยไม่ให้กระทบค่าที่โชว์ทุก cycle
+  - จำกัดการเปลี่ยนค่า TDS ต่อรอบด้วย max-step หลัง EMA เพื่อให้ค่าที่รายงานนิ่งขึ้นโดยยังตามการเปลี่ยนจริงได้
+  - tighten native regression test ให้จับเคส single-sample jump ที่ไม่ควรทำให้ค่า TDS กระโดดเกินเพดานใหม่
+
+- **fix: make TDS calibration temperature-aware end-to-end (`src/TdsSensor.cpp`, `include/TdsSensor.h`, `src/localMqtt.cpp`, `pi_server/app.py`, `pi_server/settings.html`, `test/test_native/test_tds_native.cpp`):**
+  - ส่ง `low_temp` และ `high_temp` จากหน้า Pi ไปยัง ESP32 จริง แทนการเก็บไว้แค่ใน settings file ฝั่ง Pi
+  - ทำให้ firmware normalize calibration voltage ของ standard solution กลับไปที่ reference 25°C ก่อนคำนวณ K/offset เพื่อให้สูตร calibration กับ runtime ใช้ฐาน temperature compensation ชุดเดียวกัน
+  - เพิ่ม native regression test สำหรับเคส calibrate ที่อุณหภูมิของ standard ไม่เท่ากับ 25°C เพื่อกัน regression วัด standard เพี้ยนซ้ำ
 
 - **fix: make Water System settings use one normalized config model across Pi UI, backend, and ESP32 payloads (`pi_server/app.py`, `pi_server/settings.html`):**
   - รวม default และ validation ของ Water System ไว้ที่ backend ฝั่ง Pi เพื่อลดกรณีหน้าเว็บ save ได้ค่าแบบหนึ่ง แต่ ESP32 sanitize ไปใช้อีกค่าแบบหนึ่ง
@@ -16,6 +48,22 @@ All notable changes to the **Smart Aquaponics AI** project will be documented in
 - **fix: gate Water System controls by installed pump capability (`pi_server/app.py`, `pi_server/settings.html`):**
   - ส่ง `has_circulation_pump` และ `has_refill_pump` ผ่าน Pi water status/default snapshot ให้หน้าเว็บแยกได้ว่า control ไหนยัง unknown กับ control ไหน unsupported จริง
   - ปิด `Circulation Pump`, `Auto Refill`, และปุ่ม `Manual Refill On/Off` เมื่อ ESP32 รายงานว่าไม่มี actuator ตัวนั้น และกันไม่ให้หน้าเว็บส่ง config/command ที่ hardware ใช้ไม่ได้กลับไปหา firmware
+
+- **fix: restore admin-only navigation and add backend Water guards (`pi_server/header.js`, `pi_server/app.py`, `pi_server/pwa/sw.js`):**
+  - คืน `admin` gate ให้ลิงก์ Activity Logs ใน shared header เพื่อไม่ให้ผู้ใช้ทั่วไปเห็นเมนูที่ backend ยังป้องกันไว้ด้วย `@admin_required`
+  - เพิ่ม server-side clamp ให้ `circulation_enabled`, `refill_enabled`, และ `manual_refill` ถูกปิดอัตโนมัติเมื่อ ESP32 รายงานว่า actuator หรือ level sensors ที่จำเป็นไม่มีจริง แม้ request จะไม่ได้มาจากหน้า Settings
+  - bump cache version ของ PWA service worker เพื่อให้ client โหลด `header.js`, `base.css`, และหน้า settings/admin ชุดล่าสุดแทน asset เก่าที่ค้างใน cache
+
+- **feat: make automator dose A/B in staged mix cycles (`src/automator.cpp`, `include/automator.h`, `include/config.h`):**
+  - เปลี่ยน flow การจ่ายปุ๋ยจาก A -> B ทันที เป็น A -> รอผสม -> B -> รอผสม -> วัด TDS ใหม่ โดยยังคงยึด `target TDS` เป็นเป้าหมายรวมและเริ่มต้นที่สัดส่วน A:B แบบ 1:1
+  - เพิ่ม deadband `AUTOMATOR_TDS_HYSTERESIS_PPM` เพื่อลดอาการกระพือรอบจ่ายเมื่อค่า TDS อยู่ใกล้เป้าหมาย
+  - ทำให้ timer ของรอบ dosing/mixing ถูก pause ระหว่างที่ Water System block automation เพื่อไม่ให้รอบผสมหรือรอบจ่ายหมดเวลาไปเองตอน circulation ไม่พร้อม
+
+- **feat: expose automation tuning for staged A/B dosing on Pi Settings (`pi_server/app.py`, `pi_server/settings.html`, `src/localMqtt.cpp`, `src/automator.cpp`, `include/automator.h`):**
+  - เปิดให้ปรับ `dose_a_ml`, `dose_b_ml`, `mix_after_a_ms`, `post_dose_mix_ms`, และ `tds_hysteresis_ppm` จากหน้า Settings พร้อมคำอธิบายแบบ operator-friendly ว่าแต่ละค่ามีผลกับรอบจ่ายอย่างไร
+  - รวม automation defaults และ validation ไว้ที่ backend ฝั่ง Pi เพื่อให้ `Save All` และ `Apply TDS Auto-Dosing` ใช้ normalization rule เดียวกันก่อน publish ไป ESP32
+  - ทำให้ ESP32 persist ค่า automation tuning ชุดใหม่ลง NVS, รับค่าผ่าน MQTT, และรายงาน config ที่ใช้งานจริงกลับมาทาง local status payload
+  - bump cache version ของ PWA service worker เพื่อให้ client ได้หน้า Settings automation card ชุดล่าสุดแทน cache เดิม
 
 ## [2026-05-03] - Switch Board To ESP32-S3 N16R8
 

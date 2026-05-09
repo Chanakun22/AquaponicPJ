@@ -98,8 +98,11 @@ typedef struct {
         struct {
             float lowPpm;
             float lowVoltage;
+            float lowTemperature;
             float highPpm;
             float highVoltage;
+            float highTemperature;
+            bool rawVoltage;
         } tdsCal;
         struct {
             uint8_t action;
@@ -110,6 +113,11 @@ typedef struct {
         struct {
             bool enabled;
             float targetTds;
+            float doseAVolumeMl;
+            float doseBVolumeMl;
+            unsigned long mixAfterAMs;
+            unsigned long postDoseMixMs;
+            float tdsHysteresisPpm;
         } automation;
         struct {
             CommandSource source;
@@ -450,8 +458,11 @@ static void _processDeferredAction(const LocalDeferredAction* action) {
             tdsSetCalibration(
                 action->data.tdsCal.lowPpm,
                 action->data.tdsCal.lowVoltage,
+                action->data.tdsCal.lowTemperature,
                 action->data.tdsCal.highPpm,
-                action->data.tdsCal.highVoltage
+                action->data.tdsCal.highVoltage,
+                action->data.tdsCal.highTemperature,
+                action->data.tdsCal.rawVoltage
             );
             LOG_INFO("TDS Calibration received from Pi!");
             break;
@@ -510,12 +521,22 @@ static void _processDeferredAction(const LocalDeferredAction* action) {
         case LOCAL_DEFERRED_AUTOMATION_CONFIG:
             automatorSetConfig(
                 action->data.automation.enabled,
-                action->data.automation.targetTds
+                action->data.automation.targetTds,
+                action->data.automation.doseAVolumeMl,
+                action->data.automation.doseBVolumeMl,
+                action->data.automation.mixAfterAMs,
+                action->data.automation.postDoseMixMs,
+                action->data.automation.tdsHysteresisPpm
             );
             LOG_INFO(
-                "Automation Config updated: En=%d, TDS=%.1f",
+                "Automation Config updated: En=%d, TDS=%.1f, doseA=%.2f, doseB=%.2f, mixA=%lu, postMix=%lu, hyst=%.1f",
                 action->data.automation.enabled,
-                action->data.automation.targetTds
+                action->data.automation.targetTds,
+                action->data.automation.doseAVolumeMl,
+                action->data.automation.doseBVolumeMl,
+                action->data.automation.mixAfterAMs,
+                action->data.automation.postDoseMixMs,
+                action->data.automation.tdsHysteresisPpm
             );
             break;
 
@@ -643,8 +664,11 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
         action.type = LOCAL_DEFERRED_TDS_CAL;
         action.data.tdsCal.lowPpm = doc["low_ppm"] | 0.0f;
         action.data.tdsCal.lowVoltage = doc["low_voltage"] | 0.0f;
+        action.data.tdsCal.lowTemperature = doc["low_temp"] | 25.0f;
         action.data.tdsCal.highPpm = doc["high_ppm"] | 0.0f;
         action.data.tdsCal.highVoltage = doc["high_voltage"] | 0.0f;
+        action.data.tdsCal.highTemperature = doc["high_temp"] | 25.0f;
+        action.data.tdsCal.rawVoltage = doc["raw_voltage"] | false;
 
         if (action.data.tdsCal.lowVoltage > 0 && action.data.tdsCal.highVoltage > 0 &&
             action.data.tdsCal.lowVoltage != action.data.tdsCal.highVoltage) {
@@ -701,10 +725,17 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
     
     // Handle Automation Target Config
     if (strcmp(topic, LOCAL_MQTT_TOPIC_CONFIG_AUTOMATION) == 0) {
+        AutomatorConfig cfg;
+        automatorGetConfig(&cfg);
         LocalDeferredAction action = {};
         action.type = LOCAL_DEFERRED_AUTOMATION_CONFIG;
-        action.data.automation.enabled = doc["enabled"] | false;
-        action.data.automation.targetTds = doc["target_tds"] | AUTOMATOR_DEFAULT_TDS;
+        action.data.automation.enabled = doc.containsKey("enabled") ? doc["enabled"].as<bool>() : cfg.enabled;
+        action.data.automation.targetTds = doc.containsKey("target_tds") ? doc["target_tds"].as<float>() : cfg.targetTds;
+        action.data.automation.doseAVolumeMl = doc.containsKey("dose_a_ml") ? doc["dose_a_ml"].as<float>() : cfg.doseAVolumeMl;
+        action.data.automation.doseBVolumeMl = doc.containsKey("dose_b_ml") ? doc["dose_b_ml"].as<float>() : cfg.doseBVolumeMl;
+        action.data.automation.mixAfterAMs = doc.containsKey("mix_after_a_ms") ? doc["mix_after_a_ms"].as<unsigned long>() : cfg.mixAfterAMs;
+        action.data.automation.postDoseMixMs = doc.containsKey("post_dose_mix_ms") ? doc["post_dose_mix_ms"].as<unsigned long>() : cfg.postDoseMixMs;
+        action.data.automation.tdsHysteresisPpm = doc.containsKey("tds_hysteresis_ppm") ? doc["tds_hysteresis_ppm"].as<float>() : cfg.tdsHysteresisPpm;
         _enqueueDeferredAction(&action);
     }
 
@@ -1141,6 +1172,11 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
     automatorGetConfig(&authCfg);
     _sensorPublishDoc["auto_enabled"] = authCfg.enabled;
     _sensorPublishDoc["auto_tgt_tds"] = authCfg.targetTds;
+    _sensorPublishDoc["auto_dose_a_ml"] = authCfg.doseAVolumeMl;
+    _sensorPublishDoc["auto_dose_b_ml"] = authCfg.doseBVolumeMl;
+    _sensorPublishDoc["auto_mix_after_a_ms"] = authCfg.mixAfterAMs;
+    _sensorPublishDoc["auto_post_dose_mix_ms"] = authCfg.postDoseMixMs;
+    _sensorPublishDoc["auto_tds_hysteresis_ppm"] = authCfg.tdsHysteresisPpm;
     _sensorPublishDoc["auto_state"] = automatorGetStateString(automatorGetCurrentState());
     _sensorPublishDoc["auto_next_state"] = automatorGetNextStateString();
     _sensorPublishDoc["auto_reason"] = automatorGetActionReason();

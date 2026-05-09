@@ -523,7 +523,7 @@
             label: 'ผู้ดูแล',
             icon: 'fa-solid fa-shield-halved',
             links: [
-                { href: '/admin/logs',  icon: 'fa-solid fa-clipboard-list', label: 'กิจกรรม' },
+                { href: '/admin/logs',  icon: 'fa-solid fa-clipboard-list', label: 'กิจกรรม', admin: true },
                 { href: '/admin/users', icon: 'fa-solid fa-users-cog',      label: 'ผู้ใช้', admin: true }
             ]
         }

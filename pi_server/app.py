@@ -359,6 +359,16 @@ WATER_CONFIG_DEFAULTS = {
     "fish_refill_max_runtime_ms": 30000,
 }
 
+AUTOMATION_CONFIG_DEFAULTS = {
+    "enabled": False,
+    "target_tds": 800.0,
+    "dose_a_ml": 1.5,
+    "dose_b_ml": 1.5,
+    "mix_after_a_ms": 600000,
+    "post_dose_mix_ms": 1200000,
+    "tds_hysteresis_ppm": 30.0,
+}
+
 
 def _apply_water_hardware_defaults(water_status):
     normalized = dict(water_status or {})
@@ -450,6 +460,19 @@ def _coerce_int(value, fallback, minimum=None, maximum=None):
     return normalized
 
 
+def _coerce_float(value, fallback, minimum=None, maximum=None):
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError):
+        normalized = fallback
+
+    if minimum is not None and normalized < minimum:
+        normalized = minimum
+    if maximum is not None and normalized > maximum:
+        normalized = maximum
+    return normalized
+
+
 def _normalize_water_duration_ms(value, default, maximum, allow_zero=False):
     normalized = _coerce_int(value, default)
     if allow_zero:
@@ -459,6 +482,56 @@ def _normalize_water_duration_ms(value, default, maximum, allow_zero=False):
 
     if normalized <= 0 or normalized > maximum:
         return default
+    return normalized
+
+
+def _normalize_automation_settings(automation, current=None):
+    current = current if isinstance(current, dict) else {}
+    automation = automation if isinstance(automation, dict) else {}
+
+    normalized = {
+        key: current.get(key, AUTOMATION_CONFIG_DEFAULTS[key])
+        for key in AUTOMATION_CONFIG_DEFAULTS
+    }
+
+    normalized["enabled"] = bool(automation.get("enabled", normalized["enabled"]))
+    normalized["target_tds"] = _coerce_float(
+        automation.get("target_tds", normalized["target_tds"]),
+        normalized["target_tds"],
+        0.0,
+        3000.0,
+    )
+    normalized["dose_a_ml"] = _coerce_float(
+        automation.get("dose_a_ml", normalized["dose_a_ml"]),
+        normalized["dose_a_ml"],
+        0.0,
+        20.0,
+    )
+    normalized["dose_b_ml"] = _coerce_float(
+        automation.get("dose_b_ml", normalized["dose_b_ml"]),
+        normalized["dose_b_ml"],
+        0.0,
+        20.0,
+    )
+    normalized["mix_after_a_ms"] = _coerce_int(
+        automation.get("mix_after_a_ms", normalized["mix_after_a_ms"]),
+        normalized["mix_after_a_ms"],
+        30000,
+        3600000,
+    )
+    normalized["post_dose_mix_ms"] = _coerce_int(
+        automation.get("post_dose_mix_ms", normalized["post_dose_mix_ms"]),
+        normalized["post_dose_mix_ms"],
+        60000,
+        21600000,
+    )
+    normalized["tds_hysteresis_ppm"] = _coerce_float(
+        automation.get("tds_hysteresis_ppm", normalized["tds_hysteresis_ppm"]),
+        normalized["tds_hysteresis_ppm"],
+        0.0,
+        300.0,
+    )
+
     return normalized
 
 
@@ -516,12 +589,38 @@ def _normalize_water_system_settings(water_system, current=None):
 
 
 def _build_water_system_payload(water_settings, manual_refill=False, clear_alarm=False):
-    normalized = _normalize_water_system_settings(water_settings)
+    normalized, manual_refill, _ = _guard_water_system_config(
+        water_settings,
+        manual_refill=manual_refill,
+    )
     return {
         **normalized,
         "manual_refill": bool(manual_refill),
         "clear_alarm": bool(clear_alarm),
     }
+
+
+def _guard_water_system_config(water_settings, manual_refill=False, water_status=None):
+    normalized = _normalize_water_system_settings(water_settings)
+    current_water = water_status if isinstance(water_status, dict) else _current_water_status()
+    warnings = []
+
+    if current_water.get("has_circulation_pump") is False and normalized["circulation_enabled"]:
+        normalized["circulation_enabled"] = False
+        warnings.append("circulation_disabled")
+
+    if current_water.get("has_refill_pump") is False:
+        if normalized["refill_enabled"]:
+            warnings.append("auto_refill_disabled")
+        if manual_refill:
+            warnings.append("manual_refill_disabled")
+        normalized["refill_enabled"] = False
+        manual_refill = False
+    elif current_water.get("has_level_sensors") is False and normalized["refill_enabled"]:
+        normalized["refill_enabled"] = False
+        warnings.append("auto_refill_disabled")
+
+    return normalized, bool(manual_refill), warnings
 
 
 def _normalize_fish_feeder_settings(fish_feeder, current=None):
@@ -573,6 +672,7 @@ def load_settings():
             "alert_cooldown_min": 15,
             "enabled": False
         },
+        "automation": dict(AUTOMATION_CONFIG_DEFAULTS),
         "display": {
             "graph_days": 3,
             "device_name": "Aquaponics System"
@@ -660,10 +760,13 @@ def load_settings():
             "reason": "Waiting for ESP32 status"
         },
         "tds_calibration": {
+            "low_temp": 25.0,
             "low_ppm": 500,
             "low_voltage": 0.0,
+            "high_temp": 25.0,
             "high_ppm": 1000,
             "high_voltage": 0.0,
+            "raw_voltage": False,
             "calibrated": False
         },
         "ph_calibration": {
@@ -694,6 +797,10 @@ def load_settings():
                     merged.get("water_system", {}),
                     default.get("water_system", {}),
                 )
+                merged["automation"] = _normalize_automation_settings(
+                    merged.get("automation", {}),
+                    default.get("automation", {}),
+                )
                 merged["fish_feeder"] = _normalize_fish_feeder_settings(
                     merged.get("fish_feeder", {}),
                     default["fish_feeder"],
@@ -704,6 +811,10 @@ def load_settings():
     default["water_system"] = _normalize_water_system_settings(
         default.get("water_system", {}),
         default.get("water_system", {}),
+    )
+    default["automation"] = _normalize_automation_settings(
+        default.get("automation", {}),
+        default.get("automation", {}),
     )
     return default
 
@@ -1475,8 +1586,10 @@ def camera_status():
 def get_settings():
     global app_settings
     settings_snapshot = copy.deepcopy(app_settings)
-    if isinstance(settings_snapshot.get('automation'), dict):
-        settings_snapshot['automation'].pop('target_ph', None)
+    settings_snapshot['automation'] = _normalize_automation_settings(
+        settings_snapshot.get('automation', {}),
+        app_settings.get('automation', AUTOMATION_CONFIG_DEFAULTS),
+    )
     settings_snapshot['water_system'] = _current_water_status()
     return jsonify(settings_snapshot)
 
@@ -1492,13 +1605,12 @@ def post_settings():
     try:
         new_settings = request.get_json()
         if new_settings:
-            if isinstance(new_settings.get("automation"), dict):
-                new_settings["automation"] = {
-                    "enabled": bool(new_settings["automation"].get("enabled", False)),
-                    "target_tds": float(new_settings["automation"].get("target_tds", 800)),
-                }
-
             current_settings = _deep_merge_dict(load_settings(), app_settings)
+            if isinstance(new_settings.get("automation"), dict):
+                new_settings["automation"] = _normalize_automation_settings(
+                    new_settings.get("automation", {}),
+                    current_settings.get("automation", {}),
+                )
             if isinstance(new_settings.get("water_system"), dict):
                 new_settings["water_system"] = _normalize_water_system_settings(
                     new_settings.get("water_system", {}),
@@ -1506,12 +1618,17 @@ def post_settings():
                 )
 
             app_settings = _deep_merge_dict(current_settings, new_settings)
-            if isinstance(app_settings.get("automation"), dict):
-                app_settings["automation"].pop("target_ph", None)
+            app_settings["automation"] = _normalize_automation_settings(
+                app_settings.get("automation", {}),
+                current_settings.get("automation", {}),
+            )
 
             app_settings["water_system"] = _normalize_water_system_settings(
                 app_settings.get("water_system", {}),
                 current_settings.get("water_system", {}),
+            )
+            app_settings["water_system"], _, water_guard_warnings = _guard_water_system_config(
+                app_settings.get("water_system", {}),
             )
             app_settings["fish_feeder"] = _normalize_fish_feeder_settings(
                 app_settings.get("fish_feeder", {}),
@@ -1530,7 +1647,7 @@ def post_settings():
 
             if "automation" in new_settings:
                 try:
-                    automation_payload = json.dumps(new_settings["automation"])
+                    automation_payload = json.dumps(app_settings["automation"])
                     if mqtt_client and mqtt_client.is_connected():
                         mqtt_client.publish("aquaponics/config/automation", automation_payload, qos=1)
                         print(f"📤 Automation Config sent to ESP32: {automation_payload}")
@@ -1584,6 +1701,8 @@ def post_settings():
                     if mqtt_client and mqtt_client.is_connected():
                         mqtt_client.publish("aquaponics/config/water_system", json.dumps(water_payload), qos=1)
                         print(f"📤 Water System Config sent to ESP32: {water_payload}")
+                    if water_guard_warnings:
+                        print(f"⚠️ Water system config clamped by server guard: {', '.join(water_guard_warnings)}")
                 except Exception as ex:
                     print(f"MQTT Publish Error: {ex}")
 
@@ -1617,6 +1736,7 @@ def post_tds_calibrate():
         high_temp = float(data.get("high_temp", 25.0))
         high_ppm = float(data.get("high_ppm", 0))
         high_voltage = float(data.get("high_voltage", 0))
+        raw_voltage = bool(data.get("raw_voltage", app_settings.get("tds_calibration", {}).get("raw_voltage", False)))
         
         # Validate
         if low_voltage <= 0 or high_voltage <= 0:
@@ -1632,6 +1752,7 @@ def post_tds_calibrate():
             "high_temp": high_temp,
             "high_ppm": high_ppm,
             "high_voltage": high_voltage,
+            "raw_voltage": raw_voltage,
             "calibrated": True
         }
         save_settings(app_settings)
@@ -1641,10 +1762,13 @@ def post_tds_calibrate():
         if mqtt_client and mqtt_client.is_connected():
             import json
             payload = json.dumps({
+                "low_temp": low_temp,
                 "low_ppm": low_ppm,
                 "low_voltage": low_voltage,
+                "high_temp": high_temp,
                 "high_ppm": high_ppm,
-                "high_voltage": high_voltage
+                "high_voltage": high_voltage,
+                "raw_voltage": raw_voltage
             })
             mqtt_client.publish("aquaponics/config/tds_cal", payload)
             print(f"📤 TDS Calibration sent to ESP32: {payload}")
@@ -1857,25 +1981,28 @@ def automation_config():
     global app_settings
     try:
         data = request.get_json()
-        enabled = data.get('enabled', False)
-        target_tds = float(data.get('target_tds', 800))
+        current_automation = app_settings.get('automation', AUTOMATION_CONFIG_DEFAULTS)
+        normalized = _normalize_automation_settings(data, current_automation)
         
         # Save to local settings file
-        app_settings['automation'] = {
-            'enabled': enabled,
-            'target_tds': target_tds
-        }
+        app_settings['automation'] = normalized
         save_settings(app_settings)
         
         # Publish to ESP32
-        payload = {
-            "enabled": enabled,
-            "target_tds": target_tds
-        }
-        if mqtt_client:
+        payload = dict(normalized)
+        if mqtt_client and mqtt_client.is_connected():
             mqtt_client.publish("aquaponics/config/automation", json.dumps(payload), qos=1)
             
-        save_log(f"⚙️ Action: Automation Target Set -> Enabled: {enabled}, Target TDS: {target_tds}")
+        save_log(
+            "⚙️ Action: Automation Config Applied -> "
+            f"Enabled: {normalized['enabled']}, "
+            f"Target TDS: {normalized['target_tds']}, "
+            f"Dose A: {normalized['dose_a_ml']} mL, "
+            f"Dose B: {normalized['dose_b_ml']} mL, "
+            f"Mix After A: {normalized['mix_after_a_ms']} ms, "
+            f"Post Mix: {normalized['post_dose_mix_ms']} ms, "
+            f"Hysteresis: {normalized['tds_hysteresis_ppm']} ppm"
+        )
         return jsonify({"status": "ok", "message": "Automation settings applied successfully"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 400
@@ -2040,6 +2167,10 @@ def water_system_config():
         normalized = _normalize_water_system_settings(data, current_water_settings)
         manual_refill = bool(data.get('manual_refill', False))
         clear_alarm = bool(data.get('clear_alarm', False))
+        normalized, manual_refill, water_guard_warnings = _guard_water_system_config(
+            normalized,
+            manual_refill=manual_refill,
+        )
 
         app_settings.setdefault('water_system', {})
         app_settings['water_system'] = normalized
@@ -2062,8 +2193,14 @@ def water_system_config():
             f"clear_alarm={clear_alarm}, max={normalized['refill_max_runtime_ms']}ms, gap={normalized['refill_min_interval_ms']}ms, "
             f"fish_int={normalized['fish_refill_interval_ms']}ms, fish_max={normalized['fish_refill_max_runtime_ms']}ms"
         )
+        if water_guard_warnings:
+            save_log(f"💧 Water system server guard -> {', '.join(water_guard_warnings)}")
         log_activity(session.get('username', '?'), 'water_system', 'Water system config updated', request.remote_addr)
-        return jsonify({'status': 'ok', 'message': 'Water system settings applied successfully'})
+        return jsonify({
+            'status': 'ok',
+            'message': 'Water system settings applied successfully',
+            'warnings': water_guard_warnings,
+        })
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 400
 
