@@ -2,6 +2,19 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-05-10] - NETPIE Cloud Unreachable Backoff
+
+### Changed
+
+- **fix: reduce repeated NETPIE reconnect warnings when the cloud path is unreachable but Local MQTT is healthy (`src/netpie.cpp`):**
+  - ตีความ `rc=-2` ให้ชัดว่าเป็นฝั่ง TCP connect ไป broker ไม่สำเร็จ ไม่ใช่ auth error แล้วเพิ่มข้อความ log ให้บอกสาเหตุอ่านง่ายขึ้น
+  - ถ้า Local MQTT ยังเชื่อมกับ Pi ได้ปกติ แต่ NETPIE ล้มเหลวแบบ `rc=-2` ซ้ำหลายครั้ง firmware จะพัก retry cloud ชั่วคราวแทนการเตือนซ้ำทุก 2 นาที
+  - ถ้า Local MQTT หลุดเมื่อไร ระบบจะยกเลิก cooldown ของ NETPIE และกลับไปลอง reconnect ทันที เพื่อไม่ให้ cloud path ถูกพักนานเกินไปในช่วงที่ local path ใช้งานไม่ได้
+
+- **docs: add a reusable repo skill for recent TDS, water-system, NETPIE, flow-doc, and pin-map regression guards (`.agent/skills/recent-aquaponics-regression-guards/SKILL.md`, `.agent/skills/water-system-and-pi-settings-decisions/SKILL.md`):**
+  - รวมบทเรียนจากงานรอบล่าสุดให้เป็น skill ที่ future agents เรียกใช้ได้เวลาแตะ TDS scale/calibration, fish-route refill safety, `rc=-2` ของ NETPIE, หรือการเขียนเอกสาร pin map
+  - อัปเดต skill เดิมของ water system ให้ตรงกับ behavior ปัจจุบัน เช่น fish refill แบบ latched, mix-tank high safety stop, และ default `fish_refill_max_runtime_ms = 30000 ms`
+
 ## [2026-05-09] - README Standardization
 
 ### Changed

@@ -143,7 +143,7 @@ Pi server ในโฟลเดอร์ `pi_server` ใช้ Flask + Flask-Soc
 
 ค่าด้านล่างอ้างอิงจาก `include/config.h` ปัจจุบัน
 
-### Sensor pins
+### Sensor and input pins
 
 | อุปกรณ์ | GPIO |
 | --- | --- |
@@ -153,6 +153,9 @@ Pi server ในโฟลเดอร์ `pi_server` ใช้ Flask + Flask-Soc
 | BH1750 SCL | 9 |
 | DS18B20 | 13 |
 | DHT22 | 15 |
+| Sump Level Low | 40 |
+| Sump Level High | 41 |
+| Fish Tank Overflow | 47 |
 | Factory Reset / BOOT | 0 |
 
 ### Output pins
@@ -165,10 +168,7 @@ Pi server ในโฟลเดอร์ `pi_server` ใช้ Flask + Flask-Soc
 | Circulation Pump | 16 |
 | Fish Feeder | 21 |
 | Route Valve | 39 |
-| Sump Level Low | 40 |
-| Sump Level High | 41 |
 | Refill Pump | 42 |
-| Fish Tank Overflow | 47 |
 | Exhaust Fan | 2 |
 
 หมายเหตุ

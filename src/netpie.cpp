@@ -31,10 +31,15 @@ static bool _lastFeedNowShadow = false;
 static const size_t NETPIE_SHADOW_JSON_CAPACITY = 2048;
 static const size_t NETPIE_MQTT_MESSAGE_BUFFER_SIZE = 2048;
 static const unsigned long NETPIE_LOCAL_PRIORITY_RETRY_INTERVAL = 120000;
+static const unsigned long NETPIE_CLOUD_UNREACHABLE_COOLDOWN_MS = 1800000;
+static const uint8_t NETPIE_CLOUD_UNREACHABLE_FAIL_THRESHOLD = 3;
 
 // Exponential backoff for reconnection
 static unsigned long _reconnectInterval = MQTT_RECONNECT_INTERVAL;  // Start at 5s
 static const unsigned long MAX_NETPIE_RECONNECT_INTERVAL = 60000;   // Max 60s
+static unsigned long _cloudRetrySuspendedUntil = 0;
+static uint8_t _cloudConnectFailStreak = 0;
+static int _lastConnectErrorState = MQTT_CONNECTED;
 
 // ============================================================================
 // PRIVATE FUNCTION PROTOTYPES
@@ -43,6 +48,8 @@ static const unsigned long MAX_NETPIE_RECONNECT_INTERVAL = 60000;   // Max 60s
 static void _mqttCallback(char* topic, byte* payload, unsigned int length);
 static bool _mqttReconnect(void);
 static void _parseShadowData(const char* json);
+static const char* _mqttStateName(int state);
+static bool _cloudRetrySuspended(unsigned long now);
 
 static void _networkTaskCheckpoint(const char* stage) {
     systemSetTaskProgress(TASK_NETWORKING, stage);
@@ -51,6 +58,37 @@ static void _networkTaskCheckpoint(const char* stage) {
     #if defined(ESP32) && WATCHDOG_ENABLED
     esp_task_wdt_reset();
     #endif
+}
+
+static const char* _mqttStateName(int state) {
+    switch (state) {
+        case MQTT_CONNECTION_TIMEOUT:
+            return "connection_timeout";
+        case MQTT_CONNECTION_LOST:
+            return "connection_lost";
+        case MQTT_CONNECT_FAILED:
+            return "tcp_connect_failed";
+        case MQTT_DISCONNECTED:
+            return "disconnected";
+        case MQTT_CONNECTED:
+            return "connected";
+        case MQTT_CONNECT_BAD_PROTOCOL:
+            return "bad_protocol";
+        case MQTT_CONNECT_BAD_CLIENT_ID:
+            return "bad_client_id";
+        case MQTT_CONNECT_UNAVAILABLE:
+            return "server_unavailable";
+        case MQTT_CONNECT_BAD_CREDENTIALS:
+            return "bad_credentials";
+        case MQTT_CONNECT_UNAUTHORIZED:
+            return "unauthorized";
+        default:
+            return "unknown";
+    }
+}
+
+static bool _cloudRetrySuspended(unsigned long now) {
+    return _cloudRetrySuspendedUntil != 0 && (long)(now - _cloudRetrySuspendedUntil) < 0;
 }
 
 // ============================================================================
@@ -265,6 +303,9 @@ static bool _mqttReconnect(void) {
     if (_mqtt.connect(NETPIE_CLIENT_ID, NETPIE_TOKEN, NETPIE_SECRET)) {
         _networkTaskCheckpoint("netpie_connected");
         LOG_INFO("MQTT connected!");
+        _cloudRetrySuspendedUntil = 0;
+        _cloudConnectFailStreak = 0;
+        _lastConnectErrorState = MQTT_CONNECTED;
         
         // Subscribe topics
         _mqtt.subscribe("@msg/#");
@@ -282,7 +323,42 @@ static bool _mqttReconnect(void) {
         return true;
     } else {
         _networkTaskCheckpoint("netpie_connect_fail");
-        LOG_WARN("MQTT connection failed, rc=%d", _mqtt.state());
+        int state = _mqtt.state();
+        bool cloudUnreachable = (state == MQTT_CONNECT_FAILED);
+
+        if (cloudUnreachable) {
+            _cloudConnectFailStreak++;
+        } else {
+            _cloudConnectFailStreak = 0;
+        }
+
+        if (state != _lastConnectErrorState || _lastConnectErrorState == MQTT_CONNECTED) {
+            LOG_WARN(
+                "MQTT connection failed, rc=%d (%s)",
+                state,
+                _mqttStateName(state)
+            );
+        } else {
+            LOG_DEBUG(
+                "MQTT connection still failing, rc=%d (%s)",
+                state,
+                _mqttStateName(state)
+            );
+        }
+
+        if (localMqttIsConnected() && cloudUnreachable &&
+            _cloudConnectFailStreak >= NETPIE_CLOUD_UNREACHABLE_FAIL_THRESHOLD) {
+            _cloudRetrySuspendedUntil = millis() + NETPIE_CLOUD_UNREACHABLE_COOLDOWN_MS;
+            _cloudConnectFailStreak = 0;
+            LOG_WARN(
+                "NETPIE cloud unreachable while Local MQTT is healthy; pause retries for %lu ms and check internet/NAT/DNS to %s:%d",
+                NETPIE_CLOUD_UNREACHABLE_COOLDOWN_MS,
+                MQTT_BROKER,
+                MQTT_PORT
+            );
+        }
+
+        _lastConnectErrorState = state;
         return false;
     }
 }
@@ -309,9 +385,25 @@ void netpieLoop(void) {
     if (!wifiIsConnected()) {
         return;  // ไม่ต่อ MQTT ถ้า WiFi ยังไม่เชื่อม
     }
+
+    unsigned long now = millis();
+
+    if (_cloudRetrySuspendedUntil != 0 && !localMqttIsConnected()) {
+        _cloudRetrySuspendedUntil = 0;
+        _cloudConnectFailStreak = 0;
+        LOG_INFO("Local MQTT unavailable; resume NETPIE reconnect attempts immediately");
+    }
+
+    if (_cloudRetrySuspended(now)) {
+        return;
+    }
+
+    if (_cloudRetrySuspendedUntil != 0) {
+        _cloudRetrySuspendedUntil = 0;
+        LOG_INFO("Retrying NETPIE after cloud-unreachable cooldown");
+    }
     
     if (!_mqtt.connected()) {
-        unsigned long now = millis();
         unsigned long effectiveReconnectInterval = _reconnectInterval;
 
         // When the local dashboard path is healthy, avoid letting cloud reconnects stall it.
