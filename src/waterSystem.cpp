@@ -284,7 +284,6 @@ static void _sanitizeConfig(void) {
 
 static void _saveConfig(void) {
     _sanitizeConfig();
-    _resetRuntimeState();
 
     _prefs.begin("waterSystem", false);
     _prefs.putBool("circEn", _config.circulationEnabled);
@@ -335,6 +334,8 @@ const char* waterSystemGetRouteString(WaterRefillRoute route) {
 }
 
 void waterSystemSetup(void) {
+    _resetRuntimeState();
+
     _prefs.begin("waterSystem", true);
     _config.circulationEnabled = _prefs.getBool("circEn", WATER_CIRCULATION_DEFAULT_ENABLED);
     _config.refillEnabled = _prefs.getBool("refillEn", WATER_REFILL_DEFAULT_ENABLED);
@@ -462,7 +463,6 @@ void waterSystemLoop(void) {
     char stateReason[96];
     stateReason[0] = '\0';
     bool waitingForInterval = false;
-    bool refillMonitoringActive = _config.manualRefill || _config.refillEnabled;
     unsigned long mixIntervalRemainingMs = _getRemainingIntervalMs(now, _lastMixRefillStopMs, _config.refillMinIntervalMs);
     unsigned long fishIntervalRemainingMs = _getFishRefillWaitRemainingMs(now);
 
@@ -561,6 +561,16 @@ void waterSystemLoop(void) {
             }
         }
 
+        if (refillDesired && desiredRoute == WATER_REFILL_ROUTE_SUMP_DIRECT) {
+            bool mixTankHighReached = _status.hasLevelSensors && _status.levelHigh;
+            if (mixTankHighReached) {
+                refillDesired = false;
+                if (_config.manualRefill) {
+                    _config.manualRefill = false;
+                }
+            }
+        }
+
         if (refillDesired && desiredRoute == WATER_REFILL_ROUTE_FISH_TANK) {
             bool fishRuntimeReached = (now - _refillStartMs) >= _config.fishRefillMaxRuntimeMs;
             bool mixTankHighReached = _status.hasLevelSensors && _status.levelHigh;
@@ -628,6 +638,8 @@ void waterSystemLoop(void) {
         _lastMixRefillStopMs = now;
         if (_lastActiveRefillRoute == WATER_REFILL_ROUTE_FISH_TANK) {
             _lastFishRefillStopMs = now;
+            _status.fishRefillReady = _isFishRefillReady(now, _status.overflowAlarm);
+            _status.fishRefillWaitRemainingMs = _getFishRefillWaitRemainingMs(now);
         }
         _refillStartMs = 0;
     }
@@ -672,10 +684,14 @@ void waterSystemLoop(void) {
                       : WATER_STATE_MIX_TANK_REFILL,
                   stateReason);
     } else if (_status.mixTankSettlingActive) {
+        const char* dilutionRouteLabel =
+            _lastDilutionRoute == WATER_REFILL_ROUTE_FISH_TANK
+                ? "เติมผ่านตู้ปลา"
+                : "เติมเข้าถังผสม";
         snprintf(stateReason,
                  sizeof(stateReason),
                  "รอให้น้ำในถังผสมนิ่งหลัง%s (%lu วินาที)",
-                 "เติมเข้าถังผสม",
+                 dilutionRouteLabel,
                  _status.dilutionHoldRemainingMs / 1000UL);
         _setState(WATER_STATE_MIX_TANK_SETTLING, stateReason);
     } else if (_status.circulationOutput) {

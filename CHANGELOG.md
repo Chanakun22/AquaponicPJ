@@ -2,9 +2,47 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-05-13] - Water Flow Safety Hardening
+
+### Changed
+
+- **fix: stop manual Direct Sump refill on mix-tank high level and preserve water runtime timing (`src/waterSystem.cpp`, `test/test_native/test_water_system_native.cpp`):**
+  - ทำให้ `Manual Refill` ที่ใช้ route `SUMP_DIRECT` หยุดทันทีเมื่อ `SUMP_LEVEL_HIGH` active แทนการรอจน timeout แล้วเข้า alarm
+  - หยุดล้าง cooldown/settling/refill runtime ทุกครั้งที่กด Apply config โดยย้าย runtime reset ไปอยู่ตอน `waterSystemSetup()` เท่านั้น เพื่อไม่ให้การ apply settings ระหว่างทำงานทำให้รอบเติมซ้ำเร็วเกิน policy
+  - อัปเดตสถานะ `fish_refill_ready` และ `fish_refill_wait_remaining_ms` ทันทีหลัง fish route หยุด เพื่อให้ dashboard เห็น cooldown จริงตั้งแต่ loop เดียวกัน
+  - ปรับข้อความ settling ให้บอก route ก่อนหน้าตามจริง และเพิ่ม native regression tests สำหรับ manual direct-sump high stop กับ config apply ที่ต้องไม่ล้าง fish cooldown
+
+## [2026-05-11] - Water Settings UX Refactor
+
+### Changed
+
+- **ui: redesign the Water System settings card around a user-first reading order (`pi_server/settings.html`, `pi_server/pwa/sw.js`):**
+  - จัดการ์ด Water System ใหม่ให้เริ่มจากภาพรวมสดของระบบก่อน เช่น state ปัจจุบัน, reason ล่าสุด, route ที่ตั้งไว้/ใช้งานจริง, alarm, fish wait, และ dilution hold เพื่อให้คนหน้างานรู้ทันทีว่าระบบกำลังทำอะไร
+  - แยก `Quick Controls`, `Safety Limits`, `Route Strategy`, และ `Diagnostics` ออกจากกันอย่างชัดเจน แทนการวาง toggle, runtime policy, live status, และ manual actions ยาวต่อเนื่องในระดับเดียวกัน
+  - เพิ่ม apply feedback ในการ์ด Water System และ bump PWA cache เป็น `aquaponics-v21` เพื่อให้ Pi/dashboard โหลดหน้า Settings โฉมใหม่และเห็นสถานะการส่งคำสั่งได้ชัดขึ้นหลัง deploy
+
+- **fix: make the Water System settings card size itself from the card width instead of the viewport (`pi_server/settings.html`, `pi_server/pwa/sw.js`):**
+  - เปลี่ยน nested grid ของ Water card ให้ใช้ `auto-fit + minmax(...)` ตามความกว้างจริงของการ์ดแต่ละใบ แทนการตัดสินจาก viewport อย่างเดียว เพื่อแก้เคสหน้า desktop กว้างแต่ card จริงแคบจาก multi-card grid แล้ว layout ข้างในยังฝืนแตก 2 คอลัมน์
+  - ลดการ wrap แบบแตกทีละตัวอักษรใน headline, reason, labels, และ chip values ของการ์ดน้ำ เพื่อไม่ให้ text ภาษาไทย/อังกฤษยาว ๆ พังเป็นแนวตั้งเมื่อช่องแคบลง
+  - bump PWA cache เป็น `aquaponics-v23` เพื่อบังคับให้ browser โหลด CSS ของหน้า Settings ชุดที่แก้ card-collapse รอบนี้แล้ว
+
+- **design: shorten the Water System card by collapsing setup-heavy sections behind compact summaries (`pi_server/settings.html`, `pi_server/pwa/sw.js`):**
+  - ย้าย `Safety Limits` และ `Route Strategy` เข้า panel แบบพับได้ `Setup & Safety` เพื่อให้ operator เห็น live state กับ quick controls ก่อน และทำให้ความสูงของ card สั้นลงมากในสถานะปกติ
+  - กระชับ spacing ของ overview chips, action buttons, และข้อความนำทางของการ์ดน้ำ โดยคง input ids, button actions, และ API bindings เดิมทั้งหมด
+  - bump PWA cache เป็น `aquaponics-v24` เพื่อให้ browser โหลด layout Water card เวอร์ชันที่ย่อความสูงรอบนี้ทันทีหลัง deploy
+
 ## [2026-05-10] - NETPIE Cloud Unreachable Backoff
 
 ### Changed
+
+- **docs: redraw the full-system flow as a vertical main-program flowchart (`forTestFlow/full-system-overview-flow.json`):**
+  - เปลี่ยนจากภาพรวมทั้งระบบแบบกว้างหลายคอลัมน์ ให้เป็นผังแนวตั้งที่อิงลำดับจริงของ `setup()` และ `loop()` ใน `src/main.cpp`
+  - แยก 3 FreeRTOS task หลักออกเป็นกล่อง runtime ที่อ่านง่ายขึ้น เพื่อให้ดู sequence ของ firmware หลักได้ทันทีว่าเริ่มจาก boot, init modules, create tasks, แล้ววนทำงานต่อเนื่องอย่างไร
+  - ปรับ layout อีกรอบให้เหลือแกนกลางเส้นเดียวและย้ายคำอธิบาย parallel ไปไว้ใน note แยก เพื่อลดเส้นชนกันและไม่ให้ card บังเส้นเวลาเปิดดูใน flow planner
+
+- **docs: add a draw.io version of the vertical main-program flow (`forTestFlow/full-system-overview-flow.drawio`):**
+  - เพิ่มไฟล์ `.drawio` สำหรับเปิดใน diagrams.net / draw.io ได้ตรง ๆ โดยยึดเนื้อหาและ layout จาก flow แนวตั้งชุดล่าสุด
+  - ใช้โครงแบบแกนกลางเส้นเดียวเหมือน JSON เวอร์ชันล่าสุด เพื่อให้แก้ต่อหรือ export เป็นรูปจาก draw.io ได้ง่ายขึ้น
 
 - **fix: reduce repeated NETPIE reconnect warnings when the cloud path is unreachable but Local MQTT is healthy (`src/netpie.cpp`):**
   - ตีความ `rc=-2` ให้ชัดว่าเป็นฝั่ง TCP connect ไป broker ไม่สำเร็จ ไม่ใช่ auth error แล้วเพิ่มข้อความ log ให้บอกสาเหตุอ่านง่ายขึ้น
@@ -14,6 +52,18 @@ All notable changes to the **Smart Aquaponics AI** project will be documented in
 - **docs: add a reusable repo skill for recent TDS, water-system, NETPIE, flow-doc, and pin-map regression guards (`.agent/skills/recent-aquaponics-regression-guards/SKILL.md`, `.agent/skills/water-system-and-pi-settings-decisions/SKILL.md`):**
   - รวมบทเรียนจากงานรอบล่าสุดให้เป็น skill ที่ future agents เรียกใช้ได้เวลาแตะ TDS scale/calibration, fish-route refill safety, `rc=-2` ของ NETPIE, หรือการเขียนเอกสาร pin map
   - อัปเดต skill เดิมของ water system ให้ตรงกับ behavior ปัจจุบัน เช่น fish refill แบบ latched, mix-tank high safety stop, และ default `fish_refill_max_runtime_ms = 30000 ms`
+
+- **feat: add date-range filtering and Excel export for the graphs page (`pi_server/app.py`, `pi_server/graphs.html`, `pi_server/setup.sh`, `pi_server/pwa/sw.js`):**
+  - เพิ่มตัวเลือก `ตั้งแต่วันที่` และ `ถึงวันที่` บนหน้า graphs เพื่อให้ดูเฉพาะช่วงวันที่ที่ต้องการได้ แทนการล็อกอยู่กับ window ย้อนหลังค่า default อย่างเดียว
+  - เพิ่ม route export เป็นไฟล์ Excel-compatible `.xls` โดยดึงจาก history query ชุดเดียวกับหน้า graphs เพื่อให้ไฟล์ที่โหลดออกตรงกับช่วงเวลาที่ผู้ใช้เลือกบนหน้าเว็บ และไม่ต้องพึ่ง package เพิ่มบน Pi
+  - bump cache version ของ PWA เพื่อให้ Pi ที่ deploy แล้วโหลดหน้า graphs เวอร์ชันใหม่ได้ตรง
+
+- **fix: add fallback DNS handling for hotspot mode when Tailscale-only resolvers break public lookups (`pi_server/start_hotspot.sh`, `pi_server/dnsmasq_ap.conf`):**
+  - ถ้า Pi ออก internet ได้ด้วย IP แต่ `resolv.conf` ถูก Tailscale เขียนให้ใช้ MagicDNS แล้ว resolve public domain ไม่ได้ ระบบ hotspot จะสลับไปใช้ public DNS fallback อัตโนมัติแทน
+  - เพิ่ม `dnsmasq` upstream DNS แบบ explicit เพื่อไม่ให้ ESP32 และอุปกรณ์หลัง AP ล้มตาม resolver ฝั่ง Pi เวลา MagicDNS หรือ tailscale DNS ใช้งานไม่ได้
+
+- **fix: clear duplicate hotspot NAT rules fully before re-adding them (`pi_server/setup_ap.sh`, `pi_server/start_hotspot.sh`):**
+  - เปลี่ยนการลบ iptables rule จากลบแค่ 1 ครั้ง เป็นลบซ้ำจนหมดก่อนเพิ่ม rule ใหม่ เพื่อไม่ให้ `MASQUERADE` และ `FORWARD` ซ้ำสะสมทุกครั้งที่ hotspot service ถูก restart
 
 ## [2026-05-09] - README Standardization
 

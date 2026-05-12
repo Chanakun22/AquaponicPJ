@@ -2,11 +2,13 @@ from flask import Flask, jsonify, send_file, send_from_directory, request, sessi
 from flask_socketio import SocketIO, emit
 import paho.mqtt.client as mqtt
 import copy
+import io
 import json
 import threading
 import psutil
 import time
 from datetime import datetime, timedelta
+from html import escape
 import os
 import re
 from functools import wraps
@@ -1385,6 +1387,136 @@ def normalize_history_value(sensor_key, value):
 
     return value
 
+
+HISTORY_THAI_OFFSET = timedelta(hours=7)
+
+
+def parse_history_date_param(value, param_name):
+    raw_value = str(value or "").strip()
+    if not raw_value:
+        return None
+
+    try:
+        return datetime.strptime(raw_value, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise ValueError(f"Invalid {param_name}. Expected YYYY-MM-DD.") from exc
+
+
+def history_timestamp_to_local_dt(timestamp_str):
+    try:
+        return datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S") + HISTORY_THAI_OFFSET
+    except Exception:
+        return None
+
+
+def build_history_range_meta(start_date, end_date, default_days):
+    if start_date and end_date:
+        label_th = f"{start_date.strftime('%d/%m/%Y')} ถึง {end_date.strftime('%d/%m/%Y')}"
+        filename_suffix = f"{start_date.isoformat()}_to_{end_date.isoformat()}"
+    elif start_date:
+        label_th = f"ตั้งแต่ {start_date.strftime('%d/%m/%Y')}"
+        filename_suffix = f"from_{start_date.isoformat()}"
+    elif end_date:
+        label_th = f"ถึง {end_date.strftime('%d/%m/%Y')}"
+        filename_suffix = f"until_{end_date.isoformat()}"
+    else:
+        label_th = f"ย้อนหลัง {default_days} วันล่าสุด"
+        filename_suffix = f"last_{default_days}_days"
+
+    return {
+        "start_date": start_date.isoformat() if start_date else None,
+        "end_date": end_date.isoformat() if end_date else None,
+        "label_th": label_th,
+        "used_default_window": not start_date and not end_date,
+        "filename_suffix": filename_suffix,
+    }
+
+
+def fetch_history_rows(start_date_raw="", end_date_raw=""):
+    global app_settings
+
+    start_date = parse_history_date_param(start_date_raw, "start_date")
+    end_date = parse_history_date_param(end_date_raw, "end_date")
+
+    if start_date and end_date and end_date < start_date:
+        raise ValueError("end_date must be on or after start_date.")
+
+    days = app_settings.get("display", {}).get("graph_days", 3)
+    range_meta = build_history_range_meta(start_date, end_date, days)
+    query = '''
+        SELECT timestamp, water_temp, air_temp, humidity, tds, ph, light
+        FROM sensors
+    '''
+    filters = []
+    params = []
+
+    if start_date:
+        start_utc = datetime.combine(start_date, datetime.min.time()) - HISTORY_THAI_OFFSET
+        filters.append("timestamp >= ?")
+        params.append(start_utc.strftime("%Y-%m-%d %H:%M:%S"))
+
+    if end_date:
+        end_utc_exclusive = datetime.combine(end_date + timedelta(days=1), datetime.min.time()) - HISTORY_THAI_OFFSET
+        filters.append("timestamp < ?")
+        params.append(end_utc_exclusive.strftime("%Y-%m-%d %H:%M:%S"))
+
+    if filters:
+        query += " WHERE " + " AND ".join(filters)
+
+    query += " ORDER BY id DESC"
+
+    if not filters:
+        limit = days * 24 * 60  # 1 record per minute
+        query += " LIMIT ?"
+        params.append(limit)
+
+    with db_lock:
+        conn = None
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+        finally:
+            if conn:
+                conn.close()
+
+    return rows, range_meta
+
+
+def build_history_payload(rows, range_meta):
+    ordered_rows = list(rows)
+    ordered_rows.reverse()
+
+    labels = []
+    data = {
+        "water_temp": [],
+        "air_temp": [],
+        "humidity": [],
+        "tds": [],
+        "ph": [],
+        "light": []
+    }
+
+    for row in ordered_rows:
+        local_dt = history_timestamp_to_local_dt(row[0])
+        labels.append(local_dt.strftime("%d/%m %H:%M") if local_dt else row[0])
+        data["water_temp"].append(normalize_history_value("water_temp", row[1]))
+        data["air_temp"].append(normalize_history_value("air_temp", row[2]))
+        data["humidity"].append(normalize_history_value("humidity", row[3]))
+        data["tds"].append(normalize_history_value("tds", row[4]))
+        data["ph"].append(normalize_history_value("ph", row[5]))
+        data["light"].append(normalize_history_value("light", row[6]))
+
+    payload_range = dict(range_meta)
+    payload_range["sample_count"] = len(ordered_rows)
+
+    return {
+        "labels": labels,
+        "datasets": data,
+        "range": payload_range,
+    }
+
 # === Start MQTT in Background Thread ===
 mqtt_client = None  # Global reference for publishing
 MQTT_RETRY_DELAY_SEC = 5
@@ -2308,70 +2440,88 @@ def clear_logs_file():
 @app.route('/api/history')
 @login_required
 def get_history():
-    global app_settings
     try:
-        with db_lock:
-            conn = None
-            try:
-                conn = sqlite3.connect(DB_FILE)
-                cursor = conn.cursor()
-                
-                # Read graph_days from settings (default 3)
-                days = app_settings.get("display", {}).get("graph_days", 3)
-                limit = days * 24 * 60  # 1 record per minute
-                
-                cursor.execute('''
-                    SELECT timestamp, water_temp, air_temp, humidity, tds, ph, light
-                    FROM sensors 
-                    ORDER BY id DESC 
-                    LIMIT ?
-                ''', (limit,))
-                rows = cursor.fetchall()
-            finally:
-                if conn:
-                    conn.close()
-        
-        # Reverse to chronological order (oldest first)
-        rows.reverse()
-        
-        # Format for Chart.js
-        labels = []
-        data = {
-            "water_temp": [],
-            "air_temp": [],
-            "humidity": [],
-            "tds": [],
-            "ph": [],
-            "light": []
-        }
-        
-        for r in rows:
-            # timestamp is r[0] e.g. "2023-10-27 10:00:00"
-            # SQLite stores as UTC. Convert directly to Thai Time (UTC+7)
-            try:
-                # Parse string to datetime
-                dt_utc = datetime.strptime(r[0], "%Y-%m-%d %H:%M:%S")
-                # Add 7 hours
-                dt_thai = dt_utc + timedelta(hours=7)
-                # Format specific for graph label (HH:MM) or include Date if needed
-                # User wants 3 days, so maybe show date if it's a new day? 
-                # For now let's just do HH:MM and maybe Date/Time if tooltip? 
-                # ChartJS labels are usually X axis.
-                # Let's use simple HH:MM first as requested.
-                t_str = dt_thai.strftime("%d/%m %H:%M") # dd/mm HH:MM is better for 3 days
-            except:
-                t_str = r[0] # Fallback
-            
-            labels.append(t_str)
-            data["water_temp"].append(normalize_history_value("water_temp", r[1]))
-            data["air_temp"].append(normalize_history_value("air_temp", r[2]))
-            data["humidity"].append(normalize_history_value("humidity", r[3]))
-            data["tds"].append(normalize_history_value("tds", r[4]))
-            data["ph"].append(normalize_history_value("ph", r[5]))
-            data["light"].append(normalize_history_value("light", r[6]))
-            
-        return jsonify({"labels": labels, "datasets": data})
+        rows, range_meta = fetch_history_rows(
+            request.args.get('start_date', ''),
+            request.args.get('end_date', '')
+        )
+        return jsonify(build_history_payload(rows, range_meta))
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
+
+@app.route('/api/history/export.xls')
+@app.route('/api/history/export.xlsx')
+@login_required
+def export_history_excel():
+    try:
+        rows, range_meta = fetch_history_rows(
+            request.args.get('start_date', ''),
+            request.args.get('end_date', '')
+        )
+        ordered_rows = list(rows)
+        ordered_rows.reverse()
+
+        def xml_cell(value, is_number=False):
+            if value is None:
+                return '<Cell/>'
+
+            if is_number:
+                return f'<Cell><Data ss:Type="Number">{value}</Data></Cell>'
+
+            return f'<Cell><Data ss:Type="String">{escape(str(value))}</Data></Cell>'
+
+        xml_rows = [
+            '<?xml version="1.0"?>',
+            '<?mso-application progid="Excel.Sheet"?>',
+            '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"',
+            ' xmlns:o="urn:schemas-microsoft-com:office:office"',
+            ' xmlns:x="urn:schemas-microsoft-com:office:excel"',
+            ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">',
+            ' <Worksheet ss:Name="Sensor History">',
+            '  <Table>',
+            '   <Row>',
+            '    <Cell><Data ss:Type="String">Timestamp (Thailand)</Data></Cell>',
+            '    <Cell><Data ss:Type="String">Water Temp (C)</Data></Cell>',
+            '    <Cell><Data ss:Type="String">Air Temp (C)</Data></Cell>',
+            '    <Cell><Data ss:Type="String">Humidity (%)</Data></Cell>',
+            '    <Cell><Data ss:Type="String">TDS (ppm)</Data></Cell>',
+            '    <Cell><Data ss:Type="String">pH</Data></Cell>',
+            '    <Cell><Data ss:Type="String">Light (lux)</Data></Cell>',
+            '   </Row>',
+        ]
+
+        for row in ordered_rows:
+            local_dt = history_timestamp_to_local_dt(row[0])
+            xml_rows.append('   <Row>')
+            xml_rows.append(xml_cell(local_dt.strftime("%Y-%m-%d %H:%M:%S") if local_dt else row[0]))
+            xml_rows.append(xml_cell(normalize_history_value("water_temp", row[1]), is_number=True))
+            xml_rows.append(xml_cell(normalize_history_value("air_temp", row[2]), is_number=True))
+            xml_rows.append(xml_cell(normalize_history_value("humidity", row[3]), is_number=True))
+            xml_rows.append(xml_cell(normalize_history_value("tds", row[4]), is_number=True))
+            xml_rows.append(xml_cell(normalize_history_value("ph", row[5]), is_number=True))
+            xml_rows.append(xml_cell(normalize_history_value("light", row[6]), is_number=True))
+            xml_rows.append('   </Row>')
+
+        xml_rows.extend([
+            '  </Table>',
+            ' </Worksheet>',
+            '</Workbook>',
+        ])
+
+        output = io.BytesIO('\n'.join(xml_rows).encode('utf-8'))
+
+        filename = f"aquaponics-history-{range_meta['filename_suffix']}.xls"
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/vnd.ms-excel'
+        )
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 

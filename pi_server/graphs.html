@@ -33,6 +33,45 @@
         .brand .subtitle { color: rgba(255,255,255,0.5); }
         .nav-link.active { background: rgba(56,189,248,0.1); color: var(--accent-color); border-color: rgba(56,189,248,0.2); }
         .header-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+        .range-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 14px;
+        }
+        .range-form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        .field-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 170px;
+        }
+        .field-group label {
+            font-size: 0.78rem;
+            color: rgba(255,255,255,0.7);
+            font-weight: 600;
+        }
+        .date-input {
+            background: rgba(255, 255, 255, 0.08);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            padding: 10px 12px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            color-scheme: dark;
+        }
+        .range-note {
+            width: 100%;
+            font-size: 0.8rem;
+            color: rgba(255,255,255,0.62);
+            margin-top: -2px;
+        }
 
         h1 { margin: 0; color: var(--accent-color); font-size: 1.4rem; }
 
@@ -199,9 +238,27 @@
             </div>
         </header>
 
-        <div class="header-actions">
-            <button onclick="resetZoom()" class="btn"><i class="fas fa-search-minus"></i> Reset Zoom</button>
-            <button onclick="loadCharts()" class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
+        <div class="range-toolbar">
+            <div class="range-form">
+                <div class="field-group">
+                    <label for="startDate">ตั้งแต่วันที่</label>
+                    <input type="date" id="startDate" class="date-input">
+                </div>
+                <div class="field-group">
+                    <label for="endDate">ถึงวันที่</label>
+                    <input type="date" id="endDate" class="date-input">
+                </div>
+                <button onclick="applyDateRange()" class="btn btn-primary"><i class="fas fa-calendar-check"></i> ดูช่วงนี้</button>
+                <button onclick="clearDateRange()" class="btn"><i class="fas fa-eraser"></i> ใช้ค่าปกติ</button>
+                <button onclick="exportExcel()" class="btn"><i class="fas fa-file-excel"></i> Export Excel</button>
+            </div>
+
+            <div class="header-actions">
+                <button onclick="resetZoom()" class="btn"><i class="fas fa-search-minus"></i> Reset Zoom</button>
+                <button onclick="loadCharts()" class="btn"><i class="fas fa-sync-alt"></i> Refresh</button>
+            </div>
+
+            <div class="range-note" id="rangeNote">ไม่เลือกวันที่ = ใช้ช่วงย้อนหลังตามค่าใน Settings ปัจจุบัน</div>
         </div>
 
         <div class="charts-grid">
@@ -242,6 +299,108 @@
     <script>
         let envChart, waterChart, lightChart;
         let chartsHaveData = false;
+
+        function getHistoryRangeInputs() {
+            return {
+                startDate: document.getElementById('startDate').value,
+                endDate: document.getElementById('endDate').value,
+            };
+        }
+
+        function updateRangeNote(range) {
+            const noteEl = document.getElementById('rangeNote');
+            if (!range) {
+                noteEl.textContent = 'ไม่เลือกวันที่ = ใช้ช่วงย้อนหลังตามค่าใน Settings ปัจจุบัน';
+                return;
+            }
+
+            const sampleText = typeof range.sample_count === 'number' ? ` (${range.sample_count} จุด)` : '';
+            noteEl.textContent = `ช่วงข้อมูลปัจจุบัน: ${range.label_th}${sampleText}`;
+        }
+
+        function validateDateRange() {
+            const { startDate, endDate } = getHistoryRangeInputs();
+            if (startDate && endDate && endDate < startDate) {
+                setChartsState(
+                    'error',
+                    'ช่วงวันที่ไม่ถูกต้อง',
+                    'วันที่สิ้นสุดต้องไม่น้อยกว่าวันที่เริ่มต้น',
+                    chartsHaveData ? document.getElementById('chartsLastUpdated').textContent : 'ยังไม่มีการโหลดสำเร็จ'
+                );
+                return false;
+            }
+            return true;
+        }
+
+        function buildHistoryUrl(path) {
+            const { startDate, endDate } = getHistoryRangeInputs();
+            const params = new URLSearchParams();
+            if (startDate) params.set('start_date', startDate);
+            if (endDate) params.set('end_date', endDate);
+            const query = params.toString();
+            return query ? `${path}?${query}` : path;
+        }
+
+        function applyDateRange() {
+            if (!validateDateRange()) {
+                return;
+            }
+            loadCharts();
+        }
+
+        function clearDateRange() {
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            updateRangeNote();
+            loadCharts();
+        }
+
+        function getDownloadFilename(response, fallbackName) {
+            const disposition = response.headers.get('Content-Disposition') || '';
+            const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+            if (utf8Match && utf8Match[1]) {
+                return decodeURIComponent(utf8Match[1]);
+            }
+
+            const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
+            if (plainMatch && plainMatch[1]) {
+                return plainMatch[1];
+            }
+
+            return fallbackName;
+        }
+
+        async function exportExcel() {
+            if (!validateDateRange()) {
+                return;
+            }
+
+            try {
+                const response = await fetch(buildHistoryUrl('/api/history/export.xls'));
+                if (!response.ok) {
+                    const errorPayload = await response.json().catch(() => null);
+                    throw new Error(errorPayload?.message || ('HTTP ' + response.status));
+                }
+
+                const blob = await response.blob();
+                const downloadUrl = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = getDownloadFilename(response, 'aquaponics-history.xls');
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(downloadUrl);
+            } catch (error) {
+                console.error(error);
+                setChartsState(
+                    'error',
+                    'ส่งออก Excel ไม่สำเร็จ',
+                    error.message || 'Pi server ไม่สามารถสร้างไฟล์ Excel ได้',
+                    chartsHaveData ? document.getElementById('chartsLastUpdated').textContent : 'ยังไม่มีการโหลดสำเร็จ'
+                );
+            }
+        }
 
         function setChartsState(state, title, detail, meta) {
             const stateEl = document.getElementById('chartsState');
@@ -298,16 +457,18 @@
             }
 
             try {
-                const res = await fetch('/api/history');
+                const res = await fetch(buildHistoryUrl('/api/history'));
                 if (!res.ok) {
-                    throw new Error('HTTP ' + res.status);
+                    const errorPayload = await res.json().catch(() => null);
+                    throw new Error(errorPayload?.message || ('HTTP ' + res.status));
                 }
                 const history = await res.json();
+                updateRangeNote(history.range);
                 
                 if (!history.labels || history.labels.length === 0) {
                     chartsHaveData = false;
                     destroyCharts();
-                    setChartsState('empty', 'No chart data yet', 'The history database is reachable, but it does not contain any samples yet. Check again after the next logging cycle.', 'No successful chart load yet');
+                    setChartsState('empty', 'ไม่พบข้อมูลในช่วงนี้', `ฐานข้อมูลพร้อมใช้งาน แต่ยังไม่มีข้อมูลในช่วง ${history.range?.label_th || 'ที่เลือก'}`, 'No successful chart load yet');
                     return;
                 }
 
@@ -315,7 +476,7 @@
                 renderWaterChart(history);
                 renderLightChart(history);
                 chartsHaveData = true;
-                setChartsState('ready', 'Charts are up to date', 'History data loaded successfully. Scroll to zoom and drag to pan through the timeline.', 'Last updated ' + new Date().toLocaleTimeString());
+                setChartsState('ready', 'Charts are up to date', `โหลดข้อมูลช่วง ${history.range?.label_th || 'ล่าสุด'} สำเร็จ`, 'Last updated ' + new Date().toLocaleTimeString());
 
             } catch(e) {
                 console.error(e);
@@ -323,8 +484,8 @@
                     'error',
                     chartsHaveData ? 'Could not refresh charts' : 'Could not load chart data',
                     chartsHaveData
-                        ? 'Keeping the previous chart data on screen. Try Refresh again or check the Pi server connection.'
-                        : 'The page could not fetch history from the Pi server. Try Refresh again or check whether the backend is running.',
+                        ? `Keeping the previous chart data on screen. ${e.message}`
+                        : `The page could not fetch history from the Pi server. ${e.message}`,
                     chartsHaveData ? document.getElementById('chartsLastUpdated').textContent : 'No successful chart load yet'
                 );
             }
@@ -399,7 +560,10 @@
             if (lightChart) lightChart.resetZoom();
         }
 
-        window.onload = loadCharts;
+        window.onload = () => {
+            updateRangeNote();
+            loadCharts();
+        };
     </script>
 
 </body>
