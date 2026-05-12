@@ -12,6 +12,16 @@ All notable changes to the **Smart Aquaponics AI** project will be documented in
   - อัปเดตสถานะ `fish_refill_ready` และ `fish_refill_wait_remaining_ms` ทันทีหลัง fish route หยุด เพื่อให้ dashboard เห็น cooldown จริงตั้งแต่ loop เดียวกัน
   - ปรับข้อความ settling ให้บอก route ก่อนหน้าตามจริง และเพิ่ม native regression tests สำหรับ manual direct-sump high stop กับ config apply ที่ต้องไม่ล้าง fish cooldown
 
+- **fix: enforce one water-route safety contract across Pi UI/backend and firmware (`pi_server/app.py`, `pi_server/settings.html`, `src/waterSystem.cpp`):**
+  - เพิ่ม server-side guard ให้ Pi backend ลด `preferred_route` ลงเป็น `SUMP_DIRECT` และปิด `allow_direct_sump_refill` อัตโนมัติเมื่อ route valve หรือ overflow sensor ไม่ครบ แม้ request จะไม่ได้มาจากหน้า Settings
+  - ปรับหน้า Settings ให้ปิด `Auto` พร้อมกับ `Fish Route` เมื่อ firmware ยังไม่พบ overflow sensor เพื่อไม่ให้หน้าเว็บเสนอ option ที่ backend จะ normalize ทิ้งอยู่แล้ว
+  - harden firmware ให้ fish route พร้อมใช้งานก็ต่อเมื่อมีทั้ง route valve และ overflow sensor เพื่อกัน stale config หรือ publisher อื่นสั่ง route ผ่านตู้ปลาใน hardware ที่ไม่ครบ safety interlock
+
+- **fix: harden water-flow state handling and control-zone telemetry (`src/waterSystem.cpp`, `test/test_native/test_water_system_native.cpp`, `pi_server/app.py`, `pi_server/index.html`, `pi_server/settings.html`, `pi_server/hardware_test.html`):**
+  - เคลียร์ `manual_refill` เมื่อ fish route หยุดเพราะ overflow, mix-tank high level, หรือครบ `fish_refill_max_runtime_ms` เพื่อไม่ให้คำสั่ง manual ค้าง armed แล้วกลับมาเริ่มเองในรอบถัดไป
+  - คงสถานะ `BLOCKED` เมื่อ circulation pump ไม่มีจริง แทนการปล่อยให้ loop หลักไหลกลับไป `IDLE` พร้อมเพิ่ม native regression tests ครอบ manual fish stop, circulation-missing, และ control-zone semantics
+  - เปลี่ยน `mix_tank_control_zone` ให้เป็น true เฉพาะตอน circulation ทำงานและโซนถังผสมไม่ได้ refill/settling/alarm/blocked พร้อมปรับ fallback ฝั่ง Pi เป็น false และเปลี่ยนข้อความ dashboard เป็น `พร้อมควบคุม/ยังไม่พร้อม`
+
 ## [2026-05-11] - Water Settings UX Refactor
 
 ### Changed

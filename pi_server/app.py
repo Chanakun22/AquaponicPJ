@@ -385,6 +385,21 @@ WATER_CONFIG_KEYS = tuple(WATER_CONFIG_DEFAULTS.keys())
 _water_runtime_status = {}
 
 
+def _get_water_route_capabilities(water_status):
+    water_status = water_status if isinstance(water_status, dict) else {}
+
+    route_strategy_supported = water_status.get("has_route_valve") is not False
+    fish_route_supported = (
+        route_strategy_supported
+        and water_status.get("has_overflow_sensor") is not False
+    )
+
+    return {
+        "route_strategy_supported": route_strategy_supported,
+        "fish_route_supported": fish_route_supported,
+    }
+
+
 def _water_config_snapshot():
     water_settings = app_settings.get("water_system", {})
     if not isinstance(water_settings, dict):
@@ -422,7 +437,7 @@ def _current_water_status():
     status.setdefault('mix_tank_refill_output', last_data.get('mix_tank_refill_output', False))
     status.setdefault('water_dilution_active', last_data.get('water_dilution_active', False))
     status.setdefault('mix_tank_settling_active', last_data.get('mix_tank_settling_active', False))
-    status.setdefault('mix_tank_control_zone', last_data.get('mix_tank_control_zone', True))
+    status.setdefault('mix_tank_control_zone', last_data.get('mix_tank_control_zone', False))
     status.setdefault('dilution_hold_remaining_ms', last_data.get('dilution_hold_remaining_ms', 0))
     status.setdefault('fish_refill_ready', last_data.get('fish_refill_ready', True))
     status.setdefault('fish_refill_wait_remaining_ms', last_data.get('fish_refill_wait_remaining_ms', 0))
@@ -605,22 +620,49 @@ def _build_water_system_payload(water_settings, manual_refill=False, clear_alarm
 def _guard_water_system_config(water_settings, manual_refill=False, water_status=None):
     normalized = _normalize_water_system_settings(water_settings)
     current_water = water_status if isinstance(water_status, dict) else _current_water_status()
+    route_capabilities = _get_water_route_capabilities(current_water)
     warnings = []
+
+    def _add_warning(code):
+        if code not in warnings:
+            warnings.append(code)
 
     if current_water.get("has_circulation_pump") is False and normalized["circulation_enabled"]:
         normalized["circulation_enabled"] = False
-        warnings.append("circulation_disabled")
+        _add_warning("circulation_disabled")
 
     if current_water.get("has_refill_pump") is False:
         if normalized["refill_enabled"]:
-            warnings.append("auto_refill_disabled")
+            _add_warning("auto_refill_disabled")
         if manual_refill:
-            warnings.append("manual_refill_disabled")
+            _add_warning("manual_refill_disabled")
         normalized["refill_enabled"] = False
         manual_refill = False
     elif current_water.get("has_level_sensors") is False and normalized["refill_enabled"]:
         normalized["refill_enabled"] = False
-        warnings.append("auto_refill_disabled")
+        _add_warning("auto_refill_disabled")
+
+    if not route_capabilities["route_strategy_supported"]:
+        if normalized["preferred_route"] != WATER_ROUTE_SUMP_DIRECT:
+            normalized["preferred_route"] = WATER_ROUTE_SUMP_DIRECT
+            _add_warning("preferred_route_requires_route_valve")
+        if normalized["allow_direct_sump_refill"]:
+            normalized["allow_direct_sump_refill"] = False
+            _add_warning("direct_sump_fallback_requires_route_valve")
+    elif (
+        not route_capabilities["fish_route_supported"]
+        and normalized["preferred_route"] in (WATER_ROUTE_AUTO, WATER_ROUTE_FISH_TANK)
+    ):
+        normalized["preferred_route"] = WATER_ROUTE_SUMP_DIRECT
+        _add_warning("preferred_route_requires_overflow_sensor")
+
+    if normalized["preferred_route"] != WATER_ROUTE_AUTO and normalized["allow_direct_sump_refill"]:
+        normalized["allow_direct_sump_refill"] = False
+        _add_warning("direct_sump_fallback_requires_auto")
+
+    if not route_capabilities["fish_route_supported"] and normalized["allow_direct_sump_refill"]:
+        normalized["allow_direct_sump_refill"] = False
+        _add_warning("direct_sump_fallback_requires_overflow_sensor")
 
     return normalized, bool(manual_refill), warnings
 
@@ -706,7 +748,7 @@ def load_settings():
             "mix_tank_refill_output": False,
             "water_dilution_active": False,
             "mix_tank_settling_active": False,
-            "mix_tank_control_zone": True,
+            "mix_tank_control_zone": False,
             "dilution_hold_remaining_ms": 0,
             "fish_refill_ready": True,
             "fish_refill_wait_remaining_ms": 0,
@@ -1272,7 +1314,7 @@ def on_message(client, userdata, msg):
                 "mix_tank_refill_output": data.get("mix_tank_refill_output", current_water.get("mix_tank_refill_output", False)),
                 "water_dilution_active": data.get("water_dilution_active", current_water.get("water_dilution_active", False)),
                 "mix_tank_settling_active": data.get("mix_tank_settling_active", current_water.get("mix_tank_settling_active", False)),
-                "mix_tank_control_zone": data.get("mix_tank_control_zone", current_water.get("mix_tank_control_zone", True)),
+                "mix_tank_control_zone": data.get("mix_tank_control_zone", current_water.get("mix_tank_control_zone", False)),
                 "dilution_hold_remaining_ms": data.get("dilution_hold_remaining_ms", current_water.get("dilution_hold_remaining_ms", 0)),
                 "fish_refill_ready": data.get("fish_refill_ready", current_water.get("fish_refill_ready", True)),
                 "fish_refill_wait_remaining_ms": data.get("fish_refill_wait_remaining_ms", current_water.get("fish_refill_wait_remaining_ms", 0)),
@@ -2555,7 +2597,7 @@ def build_dashboard_data():
         "mix_tank_refill_output": water_status.get("mix_tank_refill_output", dashboard_sensors.get("mix_tank_refill_output", False)),
         "water_dilution_active": water_status.get("water_dilution_active", dashboard_sensors.get("water_dilution_active", False)),
         "mix_tank_settling_active": water_status.get("mix_tank_settling_active", dashboard_sensors.get("mix_tank_settling_active", False)),
-        "mix_tank_control_zone": water_status.get("mix_tank_control_zone", dashboard_sensors.get("mix_tank_control_zone", True)),
+        "mix_tank_control_zone": water_status.get("mix_tank_control_zone", dashboard_sensors.get("mix_tank_control_zone", False)),
         "dilution_hold_remaining_ms": water_status.get("dilution_hold_remaining_ms", dashboard_sensors.get("dilution_hold_remaining_ms", 0)),
         "fish_refill_ready": water_status.get("fish_refill_ready", dashboard_sensors.get("fish_refill_ready", True)),
         "fish_refill_wait_remaining_ms": water_status.get("fish_refill_wait_remaining_ms", dashboard_sensors.get("fish_refill_wait_remaining_ms", 0)),

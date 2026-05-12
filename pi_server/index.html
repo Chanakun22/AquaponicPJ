@@ -1786,7 +1786,7 @@
         document.getElementById("waterZoneMixRefill").textContent = formatWaterBool(data.mix_tank_refill_output, "ทำงาน", "พัก");
         document.getElementById("waterZoneDilution").textContent = formatWaterBool(data.water_dilution_active, "กำลังทำงาน", "ไม่มี");
         document.getElementById("waterZoneSettling").textContent = formatWaterBool(data.mix_tank_settling_active, "กำลังพักนิ่ง", "นิ่งแล้ว");
-        setToneText("waterZoneControl", formatWaterBool(data.mix_tank_control_zone, "นิ่งแล้ว", "ยังไม่นิ่ง"), data.mix_tank_control_zone ? "good" : "warn");
+        setToneText("waterZoneControl", formatWaterBool(data.mix_tank_control_zone, "พร้อมควบคุม", "ยังไม่พร้อม"), data.mix_tank_control_zone ? "good" : "warn");
         document.getElementById("waterZoneHold").textContent = formatHoldMs(data.dilution_hold_remaining_ms);
         document.getElementById("waterZoneReason").textContent = data.water_reason || "กำลังรอสถานะระบบน้ำ";
       }

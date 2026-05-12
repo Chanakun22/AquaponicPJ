@@ -2352,7 +2352,7 @@
             if (routeSelect.disabled) {
                 hint.textContent = 'Route strategy ถูกล็อกเป็น Direct Sump เพราะ firmware ยังไม่พบ route valve ในระบบนี้';
             } else if (!fishRouteSupported) {
-                hint.textContent = 'Fish Route ใช้ไม่ได้ในตอนนี้ เพราะ firmware ยังไม่พบ overflow sensor ที่ต้องใช้กับ route นี้';
+                hint.textContent = 'Auto และ Fish Route ใช้ไม่ได้ในตอนนี้ เพราะ firmware ยังไม่พบ overflow sensor ที่ต้องใช้กับเส้นทางผ่านตู้ปลา';
             } else {
                 hint.textContent = isAuto
                     ? 'ใช้ตอนเลือก `Auto` เท่านั้น ถ้าเปิดไว้ระบบจะยอม fallback ไปทาง Direct Sump เมื่อ Fish Route หยุดแล้วแต่ mix tank ยังไม่พอ'
@@ -2366,6 +2366,7 @@
             const refillToggle = document.getElementById('water_refill_enabled');
             const routeSelect = document.getElementById('water_preferred_route');
             const capabilityHint = document.getElementById('water_capability_hint');
+            const autoRouteOption = routeSelect?.querySelector('option[value="AUTO"]');
             const fishRouteOption = routeSelect?.querySelector('option[value="FISH_TANK"]');
             if (!circulationToggle || !refillToggle || !routeSelect || !capabilityHint) {
                 return;
@@ -2406,6 +2407,9 @@
 
             routeSelect.disabled = !routeStrategySupported;
             routeSelect.dataset.fishRouteSupported = fishRouteSupported ? 'true' : 'false';
+            if (autoRouteOption) {
+                autoRouteOption.disabled = !fishRouteSupported;
+            }
             if (fishRouteOption) {
                 fishRouteOption.disabled = !fishRouteSupported;
             }
@@ -2413,12 +2417,12 @@
             if (!routeStrategySupported) {
                 routeSelect.value = WATER_CONFIG_DEFAULTS.preferred_route;
                 capabilityMessages.push('Route strategy ถูกลดเหลือ Direct Sump เพราะ firmware ยังไม่พบ route valve');
-            } else if (!fishRouteSupported && routeSelect.value === 'FISH_TANK') {
+            } else if (!fishRouteSupported && (routeSelect.value === 'FISH_TANK' || routeSelect.value === 'AUTO')) {
                 routeSelect.value = WATER_CONFIG_DEFAULTS.preferred_route;
             }
 
             if (routeStrategySupported && hasOverflowSensor === false) {
-                capabilityMessages.push('Fish Route ถูกปิดไว้ เพราะ firmware ยังไม่พบ overflow sensor');
+                capabilityMessages.push('Auto และ Fish Route ถูกปิดไว้ เพราะ firmware ยังไม่พบ overflow sensor');
             }
 
             capabilityHint.textContent = capabilityMessages.length > 0
@@ -2616,7 +2620,7 @@
             document.getElementById('water_dilution_text').textContent = formatWaterBool(settings.water_system?.water_dilution_active ?? false);
             document.getElementById('water_settling_text').textContent = formatWaterBool(settings.water_system?.mix_tank_settling_active ?? false);
             document.getElementById('water_mix_refill_text').textContent = formatWaterBool(settings.water_system?.mix_tank_refill_output ?? false);
-            document.getElementById('water_mix_zone_text').textContent = formatWaterBool(settings.water_system?.mix_tank_control_zone ?? true);
+            document.getElementById('water_mix_zone_text').textContent = formatWaterBool(settings.water_system?.mix_tank_control_zone ?? false);
             document.getElementById('water_dilution_hold_text').textContent = formatHoldMs(settings.water_system?.dilution_hold_remaining_ms ?? 0);
             document.getElementById('water_fish_ready_text').textContent = formatWaterBool(settings.water_system?.fish_refill_ready ?? true);
             document.getElementById('water_fish_wait_text').textContent = formatHoldMs(settings.water_system?.fish_refill_wait_remaining_ms ?? 0);

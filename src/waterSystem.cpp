@@ -60,6 +60,20 @@ static WaterRefillRoute _lastDilutionRoute = WATER_REFILL_ROUTE_NONE;
 static bool _refillWasActive = false;
 static WaterRefillRoute _lastActiveRefillRoute = WATER_REFILL_ROUTE_NONE;
 
+#ifdef WATER_SYSTEM_TEST_OVERRIDES
+static bool _testOverrideHasCirculationPumpSet = false;
+static bool _testOverrideHasCirculationPump = false;
+
+static void waterSystemTestSetCirculationPumpPresent(bool present) {
+    _testOverrideHasCirculationPumpSet = true;
+    _testOverrideHasCirculationPump = present;
+}
+
+static void waterSystemTestResetOverrides(void) {
+    _testOverrideHasCirculationPumpSet = false;
+}
+#endif
+
 static const unsigned long WATER_MIX_SETTLING_MS = 120000UL;
 
 static bool _fishRefillCycleActive(void) {
@@ -81,7 +95,7 @@ static void _resetRuntimeState(void) {
     memset(&_status, 0, sizeof(_status));
     _status.state = WATER_STATE_IDLE;
     _status.activeRoute = WATER_REFILL_ROUTE_NONE;
-    _status.mixTankControlZone = true;
+    _status.mixTankControlZone = false;
     _status.fishRefillReady = true;
     snprintf(_status.reason, sizeof(_status.reason), "%s", "Water system not initialized");
 }
@@ -103,6 +117,11 @@ static bool _hasMixTankRefillSolenoid(void) {
 }
 
 static bool _hasCirculationPump(void) {
+#ifdef WATER_SYSTEM_TEST_OVERRIDES
+    if (_testOverrideHasCirculationPumpSet) {
+        return _testOverrideHasCirculationPump;
+    }
+#endif
 #if PUMP_CIRCULATION_PIN >= 0
     return true;
 #else
@@ -181,7 +200,7 @@ static bool _routeFeedsMixTank(WaterRefillRoute route) {
 static bool _routeAvailable(WaterRefillRoute route) {
     switch (route) {
         case WATER_REFILL_ROUTE_FISH_TANK:
-            return _hasFishTankRefillPump();
+            return _hasFishTankRefillPump() && _hasRouteValve();
         case WATER_REFILL_ROUTE_SUMP_DIRECT:
             return _hasMixTankRefillSolenoid();
         default:
@@ -214,6 +233,7 @@ static unsigned long _getFishRefillWaitRemainingMs(unsigned long now) {
 
 static bool _isFishRefillReady(unsigned long now, bool overflowActive) {
     return _routeAvailable(WATER_REFILL_ROUTE_FISH_TANK)
+    && _hasOverflowSensor()
         && !overflowActive
         && _getFishRefillWaitRemainingMs(now) == 0;
 }
@@ -254,9 +274,15 @@ static void _updateDerivedStatus(unsigned long now) {
     }
 
     _status.circulationPumpOutput = _status.circulationOutput;
+    bool dilutionActive = _status.refillOutput || settlingActive;
+    bool controlZoneReady = _status.circulationPumpOutput
+        && !dilutionActive
+        && !_status.alarmActive
+        && !_status.routeBlocked;
+
     _status.mixTankSettlingActive = settlingActive;
-    _status.waterDilutionActive = _status.refillOutput || settlingActive;
-    _status.mixTankControlZone = true;
+    _status.waterDilutionActive = dilutionActive;
+    _status.mixTankControlZone = controlZoneReady;
     _status.dilutionHoldRemainingMs = dilutionHoldRemainingMs;
 }
 
@@ -482,7 +508,7 @@ void waterSystemLoop(void) {
     _status.mixTankRefillOutput = false;
     _status.waterDilutionActive = false;
     _status.mixTankSettlingActive = false;
-    _status.mixTankControlZone = true;
+    _status.mixTankControlZone = false;
     _status.dilutionHoldRemainingMs = 0;
     _status.fishRefillReady = _isFishRefillReady(now, _status.overflowAlarm);
     _status.fishRefillWaitRemainingMs = fishIntervalRemainingMs;
@@ -492,7 +518,12 @@ void waterSystemLoop(void) {
     bool blocked = false;
     WaterRefillRoute desiredRoute = WATER_REFILL_ROUTE_NONE;
 
-    if (_config.manualRefill) {
+    if (!_status.hasCirculationPump) {
+        circulationDesired = false;
+        _refillStartMs = 0;
+        blocked = true;
+        _setState(WATER_STATE_BLOCKED, "ยังไม่กำหนดขาปั๊มหมุนน้ำหลัก");
+    } else if (_config.manualRefill) {
         if (!_status.hasRefillPump) {
             blocked = true;
             _setState(WATER_STATE_BLOCKED, "สั่งเติมด้วยมือแต่ยังไม่กำหนด actuator เติมน้ำ");
@@ -543,6 +574,11 @@ void waterSystemLoop(void) {
                     && (_config.preferredRoute == WATER_REFILL_ROUTE_FISH_TANK
                         || _config.preferredRoute == WATER_REFILL_ROUTE_AUTO)
                     && (fishIntervalRemainingMs > 0 || _status.overflowAlarm)) {
+                if (_config.manualRefill
+                        && _refillWasActive
+                        && _lastActiveRefillRoute == WATER_REFILL_ROUTE_FISH_TANK) {
+                    _config.manualRefill = false;
+                }
                 waitingForInterval = true;
                 if (_status.overflowAlarm) {
                     snprintf(stateReason,
@@ -594,6 +630,9 @@ void waterSystemLoop(void) {
                     _refillStartMs = now;
                 } else {
                     refillDesired = false;
+                    if (_config.manualRefill) {
+                        _config.manualRefill = false;
+                    }
                 }
             }
         }

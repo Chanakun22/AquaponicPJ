@@ -1518,7 +1518,7 @@
             const mixTankRefill = status.mix_tank_refill_output ?? liveWater.mix_tank_refill_output;
             const waterDilution = status.water_dilution_active ?? liveWater.water_dilution_active;
             const mixTankSettling = status.mix_tank_settling_active ?? liveWater.mix_tank_settling_active;
-            const mixTankControlZone = status.mix_tank_control_zone ?? liveWater.mix_tank_control_zone ?? true;
+            const mixTankControlZone = status.mix_tank_control_zone ?? liveWater.mix_tank_control_zone ?? false;
             const dilutionHold = status.dilution_hold_remaining_ms ?? liveWater.dilution_hold_remaining_ms ?? 0;
             const sumpLow = hasDedicatedStatus ? (status.sump_low ?? liveWater.sump_low) : (liveWater.sump_low ?? null);
             const sumpHigh = hasDedicatedStatus ? (status.sump_high ?? liveWater.sump_high) : (liveWater.sump_high ?? null);
