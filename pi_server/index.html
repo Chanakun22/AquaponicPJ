@@ -1111,6 +1111,11 @@
             <div class="step-icon"><i class="fa-solid fa-flask-vial"></i></div>
             <div class="step-label">สารอาหาร A</div>
           </div>
+
+          <div class="step-node" id="step-id-mix-a">
+            <div class="step-icon"><i class="fa-solid fa-arrows-rotate"></i></div>
+            <div class="step-label">กวนน้ำหลัง A</div>
+          </div>
           
           <!-- Step 3: Dosing B -->
           <div class="step-node" id="step-id-dose-b">
@@ -1452,6 +1457,7 @@
           IDLE: "พักรอ / เฝ้าดูค่า",
           EVALUATING: "กำลังประเมินค่า",
           DOSING_A: "กำลังจ่ายสารอาหาร A",
+          MIXING_AFTER_A: "กำลังกวนน้ำหลังจ่าย A",
           DOSING_B: "กำลังจ่ายสารอาหาร B",
           WATER_FILL: "กำลังเติมน้ำ",
           COOLDOWN: "พักรอรอบถัดไป",
@@ -1499,11 +1505,25 @@
       }
 
       function formatHoldMs(ms) {
-        const totalSeconds = Math.max(0, Math.round((ms || 0) / 1000));
-        if (totalSeconds < 60) return `${totalSeconds} วินาที`;
-        const minutes = Math.floor(totalSeconds / 60);
+        if (ms === null || ms === undefined || Number.isNaN(Number(ms))) {
+          return '--';
+        }
+
+        const totalSeconds = Math.max(0, Math.round(Number(ms) / 1000));
+        if (totalSeconds <= 0) return '0 วินาที';
+
+        const days = Math.floor(totalSeconds / 86400);
+        const hours = Math.floor((totalSeconds % 86400) / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
         const seconds = totalSeconds % 60;
-        return seconds > 0 ? `${minutes} นาที ${seconds} วินาที` : `${minutes} นาที`;
+        const parts = [];
+
+        if (days > 0) parts.push(`${days} วัน`);
+        if (hours > 0 && parts.length < 2) parts.push(`${hours} ชั่วโมง`);
+        if (minutes > 0 && parts.length < 2) parts.push(`${minutes} นาที`);
+        if (seconds > 0 && parts.length < 2) parts.push(`${seconds} วินาที`);
+
+        return parts.length > 0 ? parts.join(' ') : '0 วินาที';
       }
 
       function addLog(type, message) {
@@ -1827,12 +1847,13 @@
           IDLE: "step-id-idle",
           EVALUATING: "step-id-eval",
           DOSING_A: "step-id-dose-a",
+          MIXING_AFTER_A: "step-id-mix-a",
           DOSING_B: "step-id-dose-b",
           WATER_FILL: "step-id-water",
           COOLDOWN: "step-id-cooldown"
         };
 
-        const allSteps = ["step-id-idle", "step-id-eval", "step-id-dose-a", "step-id-dose-b", "step-id-water", "step-id-cooldown"];
+        const allSteps = ["step-id-idle", "step-id-eval", "step-id-dose-a", "step-id-mix-a", "step-id-dose-b", "step-id-water", "step-id-cooldown"];
         allSteps.forEach(id => {
           const node = document.getElementById(id);
           if (node) node.className = "step-node";
@@ -1909,6 +1930,22 @@
           return;
         }
 
+        if (state === "DISABLED") {
+          setAutomationHero("neutral", "กำลังเริ่มระบบ", reason || "ตัวควบคุมเปิดใช้งานแล้วและกำลังเข้าสู่รอบเฝ้าดูค่าครั้งแรก");
+          badge.className = "workflow-status-badge ws-idle";
+          badge.textContent = "กำลังเริ่ม";
+          markSteps([], null);
+          setSummary(
+            "กำลังเริ่มระบบ",
+            "ตัวควบคุมเพิ่งถูกเปิดใช้งานและกำลังเปลี่ยนไปโหมดเฝ้าดูค่า",
+            prettifyWorkflowState(nextState),
+            "ขั้นถัดไปคือเข้าสู่โหมดพักรอ / เฝ้าดูค่าตามปกติ",
+            "--",
+            "รอ loop ถัดไปของตัวควบคุม"
+          );
+          return;
+        }
+
         if (state === "IDLE") {
           setAutomationHero("good", "กำลังเฝ้าดู", `ถัดไป: ${prettifyWorkflowState(nextState)}${timeLeft > 0 ? ` ในอีก ${formatEta(timeLeft)}` : ""}`);
           badge.className = "workflow-status-badge ws-idle";
@@ -1953,19 +1990,31 @@
               "กำลังจ่ายสารอาหาร A",
               "Pump A กำลังทำงานเพื่อดันค่า TDS เข้าใกล้เป้าหมาย",
               prettifyWorkflowState(nextState),
-              "หลังสารอาหาร A จบ ระบบจะทำต่อด้วยสารอาหาร B",
+              "หลังสารอาหาร A จบ ระบบจะเข้าสู่ช่วงกวนน้ำก่อนจ่ายสารอาหาร B",
+              formatEta(timeLeft),
+              "เวลาคงเหลือก่อนเปลี่ยนไปช่วงกวนน้ำหลัง A"
+            );
+            break;
+
+          case "MIXING_AFTER_A":
+            markSteps([stepMap.IDLE, stepMap.EVALUATING, stepMap.DOSING_A], stepMap.MIXING_AFTER_A);
+            setSummary(
+              "กำลังกวนน้ำหลังจ่าย A",
+              "ระบบกำลังรอให้สารอาหาร A กระจายตัวก่อนเริ่มสารอาหาร B",
+              prettifyWorkflowState(nextState),
+              "เมื่อช่วงกวนน้ำจบ ระบบจะเริ่มจ่ายสารอาหาร B",
               formatEta(timeLeft),
               "เวลาคงเหลือก่อนเปลี่ยนไปจ่ายสารอาหาร B"
             );
             break;
 
           case "DOSING_B":
-            markSteps([stepMap.IDLE, stepMap.EVALUATING, stepMap.DOSING_A], stepMap.DOSING_B);
+            markSteps([stepMap.IDLE, stepMap.EVALUATING, stepMap.DOSING_A, stepMap.MIXING_AFTER_A], stepMap.DOSING_B);
             setSummary(
               "กำลังจ่ายสารอาหาร B",
               "Pump B กำลังทำงานเพื่อจบรอบการจ่ายสารอาหาร",
               prettifyWorkflowState(nextState),
-              "หลังจบรอบนี้ระบบจะรอให้สารอาหารกระจายตัว",
+              "หลังจบรอบนี้ระบบจะเข้าสู่ช่วงพักรอรอบถัดไป",
               formatEta(timeLeft),
               "เวลาคงเหลือก่อนเข้าสู่ช่วงพักรอ"
             );
@@ -1984,14 +2033,14 @@
             break;
 
           case "COOLDOWN":
-            markSteps([stepMap.IDLE, stepMap.EVALUATING, stepMap.DOSING_A, stepMap.DOSING_B], stepMap.COOLDOWN);
+            markSteps([stepMap.IDLE, stepMap.EVALUATING, stepMap.DOSING_A, stepMap.MIXING_AFTER_A, stepMap.DOSING_B], stepMap.COOLDOWN);
             setSummary(
               "พักรอรอบถัดไป",
               "กำลังรอให้สารอาหารกระจายตัวก่อนประเมินรอบถัดไป",
               prettifyWorkflowState(nextState),
-              "เมื่อช่วงพักรอจบ ตัวควบคุมจะกลับไปเฝ้าดูค่าตามปกติ",
+              "เมื่อช่วงพักรอจบ ตัวควบคุมจะกลับไปประเมินค่าอีกครั้ง",
               formatEta(timeLeft),
-              "เวลาคงเหลือก่อนกลับไปเฝ้าดูค่าต่อ"
+              "เวลาคงเหลือก่อนกลับไปประเมินค่าอีกครั้ง"
             );
             document.getElementById("wfCooldownTime").textContent = formatEta(timeLeft);
             break;

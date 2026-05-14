@@ -1246,6 +1246,14 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
     if (_localMqtt.publish(LOCAL_MQTT_TOPIC_SENSORS, _sensorPublishPayload)) {
         _networkTaskCheckpoint("local_sensor_publish_ok");
         LOG_DEBUG("Local MQTT Publish: %s", _sensorPublishPayload);
+
+        // Keep the dedicated water status topic warm whenever sensor packets are flowing.
+        // This closes the gap where aquaponics/sensors stays fresh but aquaponics/status/water_system lags.
+        unsigned long now = millis();
+        if (now - _lastWaterStatusPublishTime >= LOCAL_PUBLISH_INTERVAL) {
+            _lastWaterStatusPublishTime = now;
+            _queueStatusPublish(LOCAL_STATUS_PUBLISH_WATER);
+        }
     } else {
         _networkTaskCheckpoint("local_sensor_publish_fail");
         LOG_ERROR("Local MQTT Publish Failed (len=%u, state=%d)",
@@ -1349,8 +1357,14 @@ static void _publishWaterSystemStatus(void) {
     }
 
     char buffer[1536];
-    serializeJson(doc, buffer, sizeof(buffer));
-    _localMqtt.publish(LOCAL_MQTT_TOPIC_STATUS_WATER_SYSTEM, buffer);
+    size_t serializedLen = serializeJson(doc, buffer, sizeof(buffer));
+
+    _networkTaskCheckpoint("local_status_water_publish");
+    if (!_localMqtt.publish(LOCAL_MQTT_TOPIC_STATUS_WATER_SYSTEM, buffer)) {
+        LOG_ERROR("Local MQTT water status publish failed (len=%u, state=%d)",
+                  (unsigned int)serializedLen,
+                  _localMqtt.state());
+    }
 }
 
 static void _publishFanStatus(void) {

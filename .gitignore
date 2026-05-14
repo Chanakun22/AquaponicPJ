@@ -26,3 +26,4 @@ forTestFlow
 report.md
 test
 pi_server/settings.json
+pi_server/aquaponics.db

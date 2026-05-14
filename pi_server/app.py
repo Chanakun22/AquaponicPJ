@@ -412,6 +412,91 @@ def _water_config_snapshot():
     }
 
 
+WATER_STATUS_LIVE_WINDOW_SEC = 15
+
+
+def _safe_age_seconds(timestamp):
+    try:
+        if timestamp is None:
+            return None
+        return max(0, int(time.time() - float(timestamp)))
+    except (TypeError, ValueError):
+        return None
+
+
+def _missing_water_status_diagnostic(status_updated_at):
+    esp_heartbeat_age_sec = _safe_age_seconds(last_esp_update)
+    water_status_age_sec = _safe_age_seconds(status_updated_at)
+    esp_is_fresh = bool(
+        esp_online and esp_heartbeat_age_sec is not None and esp_heartbeat_age_sec <= WATER_STATUS_LIVE_WINDOW_SEC
+    )
+
+    if esp_is_fresh:
+        if water_status_age_sec is None:
+            return {
+                'diagnostic_code': 'WATER_STATUS_TOPIC_MISSING',
+                'status_expected_but_missing': True,
+                'state_label_th': 'ESP ออนไลน์ แต่ Pi ยังไม่เห็นสถานะระบบน้ำ',
+                'reason': 'ESP online, but aquaponics/status/water_system has not arrived',
+                'esp_heartbeat_age_sec': esp_heartbeat_age_sec,
+                'water_status_age_sec': None,
+            }
+
+        return {
+            'diagnostic_code': 'WATER_STATUS_TOPIC_STALE',
+            'status_expected_but_missing': True,
+            'state_label_th': 'ESP ออนไลน์ แต่สถานะระบบน้ำค้าง',
+            'reason': f'ESP online, but aquaponics/status/water_system is stale ({water_status_age_sec}s old)',
+            'esp_heartbeat_age_sec': esp_heartbeat_age_sec,
+            'water_status_age_sec': water_status_age_sec,
+        }
+
+    return {
+        'diagnostic_code': 'WAITING_FOR_ESP32',
+        'status_expected_but_missing': False,
+        'state_label_th': 'กำลังรอสถานะระบบน้ำ',
+        'reason': 'Waiting for ESP32 status',
+        'esp_heartbeat_age_sec': esp_heartbeat_age_sec,
+        'water_status_age_sec': water_status_age_sec,
+    }
+
+
+def _water_runtime_fallback_snapshot():
+    runtime_status = _apply_water_hardware_defaults(_water_runtime_status)
+    runtime_fallback_updated_at = runtime_status.get('runtime_fallback_updated_at')
+    runtime_fallback_age_sec = _safe_age_seconds(runtime_fallback_updated_at)
+
+    if runtime_fallback_age_sec is None or runtime_fallback_age_sec > WATER_STATUS_LIVE_WINDOW_SEC:
+        return None, None
+
+    fallback = {
+        key: runtime_status[key]
+        for key in (
+            'state',
+            'state_label_th',
+            'active_route',
+            'circulation_output',
+            'refill_output',
+            'circulation_pump_output',
+            'fish_tank_refill_output',
+            'mix_tank_refill_output',
+            'route_blocked',
+            'alarm_active',
+            'sump_low',
+            'sump_high',
+            'overflow_alarm',
+            'has_level_sensors',
+            'has_overflow_sensor',
+        )
+        if key in runtime_status
+    }
+
+    if not fallback:
+        return None, runtime_fallback_age_sec
+
+    return fallback, runtime_fallback_age_sec
+
+
 def _current_water_status():
     status = dict(_apply_water_hardware_defaults(_water_runtime_status))
     status.update(_water_config_snapshot())
@@ -447,6 +532,62 @@ def _current_water_status():
     status.setdefault('overflow_alarm', last_data.get('fish_overflow', False))
     status.setdefault('has_overflow_sensor', last_data.get('has_overflow_sensor'))
     status.setdefault('status_updated_at', None)
+
+    status_updated_at = status.get('status_updated_at')
+    status_age_sec = _safe_age_seconds(status_updated_at)
+    esp_heartbeat_age_sec = _safe_age_seconds(last_esp_update)
+    runtime_fallback, runtime_fallback_age_sec = _water_runtime_fallback_snapshot()
+    has_runtime_fallback = runtime_fallback is not None
+    has_live_detail = bool(status.get('status_seen'))
+    if has_live_detail:
+        has_live_detail = status_age_sec is not None and status_age_sec <= WATER_STATUS_LIVE_WINDOW_SEC
+
+    status.update({
+        'diagnostic_code': 'OK' if has_live_detail else status.get('diagnostic_code'),
+        'status_expected_but_missing': False,
+        'status_source': 'dedicated_water_status' if has_live_detail else ('sensor_payload_fallback' if has_runtime_fallback else 'none'),
+        'esp_online': bool(esp_online),
+        'esp_heartbeat_age_sec': esp_heartbeat_age_sec,
+        'runtime_fallback_active': has_runtime_fallback and not has_live_detail,
+        'runtime_fallback_age_sec': runtime_fallback_age_sec if has_runtime_fallback else None,
+        'water_status_age_sec': status_age_sec,
+    })
+
+    if not has_live_detail:
+        diagnostic = _missing_water_status_diagnostic(status_updated_at)
+        status.update({
+            'status_seen': False,
+            'state': runtime_fallback.get('state', 'UNKNOWN') if has_runtime_fallback else 'UNKNOWN',
+            'state_label_th': diagnostic['state_label_th'],
+            'reason': diagnostic['reason'],
+            'active_route': runtime_fallback.get('active_route', 'NONE') if has_runtime_fallback else 'NONE',
+            'alarm_active': runtime_fallback.get('alarm_active') if has_runtime_fallback else False,
+            'route_blocked': runtime_fallback.get('route_blocked') if has_runtime_fallback else False,
+            'route_valve_output': None,
+            'circulation_output': runtime_fallback.get('circulation_output') if has_runtime_fallback else None,
+            'refill_output': runtime_fallback.get('refill_output') if has_runtime_fallback else None,
+            'circulation_pump_output': runtime_fallback.get('circulation_pump_output') if has_runtime_fallback else None,
+            'fish_tank_refill_output': runtime_fallback.get('fish_tank_refill_output') if has_runtime_fallback else None,
+            'mix_tank_refill_output': runtime_fallback.get('mix_tank_refill_output') if has_runtime_fallback else None,
+            'water_dilution_active': None,
+            'mix_tank_settling_active': None,
+            'mix_tank_control_zone': None,
+            'dilution_hold_remaining_ms': None,
+            'fish_refill_ready': None,
+            'fish_refill_wait_remaining_ms': None,
+            'sump_low': runtime_fallback.get('sump_low') if has_runtime_fallback else None,
+            'sump_high': runtime_fallback.get('sump_high') if has_runtime_fallback else None,
+            'overflow_alarm': runtime_fallback.get('overflow_alarm') if has_runtime_fallback else None,
+            'status_updated_at': None,
+            'diagnostic_code': diagnostic['diagnostic_code'],
+            'status_expected_but_missing': diagnostic['status_expected_but_missing'],
+            'status_source': 'sensor_payload_fallback' if has_runtime_fallback else 'none',
+            'esp_online': bool(esp_online),
+            'esp_heartbeat_age_sec': diagnostic['esp_heartbeat_age_sec'],
+            'runtime_fallback_active': has_runtime_fallback,
+            'runtime_fallback_age_sec': runtime_fallback_age_sec if has_runtime_fallback else None,
+            'water_status_age_sec': diagnostic['water_status_age_sec'],
+        })
 
     return status
 
@@ -1289,41 +1430,51 @@ def on_message(client, userdata, msg):
             last_data[key] = data[key]
 
         if any(key in data for key in [
-            "water_status_seen", "water_state", "water_reason", "sump_low", "sump_high",
-            "has_level_sensors", "fish_overflow", "has_overflow_sensor", "active_route"
+            "water_status_seen", "water_state", "sump_low", "sump_high",
+            "has_level_sensors", "fish_overflow", "has_overflow_sensor", "active_route",
+            "circulation_output", "refill_output", "circulation_pump_output",
+            "fish_tank_refill_output", "mix_tank_refill_output", "route_blocked", "water_alarm"
         ]):
+            previous_water = _current_water_status()
+            sensor_fallback = {
+                "runtime_fallback_updated_at": int(time.time()),
+            }
+
+            if "water_state" in data:
+                sensor_fallback["state"] = data["water_state"]
+            if "water_state_label_th" in data:
+                sensor_fallback["state_label_th"] = data["water_state_label_th"]
+            if "active_route" in data:
+                sensor_fallback["active_route"] = data["active_route"]
+            if "circulation_output" in data:
+                sensor_fallback["circulation_output"] = data["circulation_output"]
+            if "refill_output" in data:
+                sensor_fallback["refill_output"] = data["refill_output"]
+            if "circulation_pump_output" in data:
+                sensor_fallback["circulation_pump_output"] = data["circulation_pump_output"]
+            if "fish_tank_refill_output" in data:
+                sensor_fallback["fish_tank_refill_output"] = data["fish_tank_refill_output"]
+            if "mix_tank_refill_output" in data:
+                sensor_fallback["mix_tank_refill_output"] = data["mix_tank_refill_output"]
+            if "route_blocked" in data:
+                sensor_fallback["route_blocked"] = data["route_blocked"]
+            if "water_alarm" in data:
+                sensor_fallback["alarm_active"] = data["water_alarm"]
+            if "sump_low" in data:
+                sensor_fallback["sump_low"] = data["sump_low"]
+            if "sump_high" in data:
+                sensor_fallback["sump_high"] = data["sump_high"]
+            if "fish_overflow" in data:
+                sensor_fallback["overflow_alarm"] = data["fish_overflow"]
+            if "has_level_sensors" in data:
+                sensor_fallback["has_level_sensors"] = data["has_level_sensors"]
+            if "has_overflow_sensor" in data:
+                sensor_fallback["has_overflow_sensor"] = data["has_overflow_sensor"]
+
+            _water_runtime_status.update(_apply_water_hardware_defaults(sensor_fallback))
             current_water = _current_water_status()
-            _water_runtime_status.update(_apply_water_hardware_defaults({
-                "status_seen": bool(data.get("water_status_seen", current_water.get("status_seen", False))),
-                "status_updated_at": int(time.time()),
-                "state": data.get("water_state", current_water.get("state", "IDLE")),
-                "state_label_th": data.get("water_state_label_th", current_water.get("state_label_th", "พร้อมทำงาน")),
-                "reason": data.get("water_reason", current_water.get("reason", "Waiting for ESP32 status")),
-                "preferred_route": data.get("preferred_route", current_water.get("preferred_route", WATER_CONFIG_DEFAULTS["preferred_route"])),
-                "active_route": data.get("active_route", current_water.get("active_route", "NONE")),
-                "allow_direct_sump_refill": data.get("allow_direct_sump_refill", current_water.get("allow_direct_sump_refill", False)),
-                "manual_refill": data.get("manual_refill", current_water.get("manual_refill", False)),
-                "alarm_active": data.get("water_alarm", current_water.get("alarm_active", False)),
-                "route_blocked": data.get("route_blocked", current_water.get("route_blocked", False)),
-                "route_valve_output": data.get("route_valve_output", current_water.get("route_valve_output", False)),
-                "has_route_valve": data.get("has_route_valve", current_water.get("has_route_valve", False)),
-                "circulation_output": data.get("circulation_output", current_water.get("circulation_output", False)),
-                "refill_output": data.get("refill_output", current_water.get("refill_output", False)),
-                "circulation_pump_output": data.get("circulation_pump_output", current_water.get("circulation_pump_output", False)),
-                "fish_tank_refill_output": data.get("fish_tank_refill_output", current_water.get("fish_tank_refill_output", False)),
-                "mix_tank_refill_output": data.get("mix_tank_refill_output", current_water.get("mix_tank_refill_output", False)),
-                "water_dilution_active": data.get("water_dilution_active", current_water.get("water_dilution_active", False)),
-                "mix_tank_settling_active": data.get("mix_tank_settling_active", current_water.get("mix_tank_settling_active", False)),
-                "mix_tank_control_zone": data.get("mix_tank_control_zone", current_water.get("mix_tank_control_zone", False)),
-                "dilution_hold_remaining_ms": data.get("dilution_hold_remaining_ms", current_water.get("dilution_hold_remaining_ms", 0)),
-                "fish_refill_ready": data.get("fish_refill_ready", current_water.get("fish_refill_ready", True)),
-                "fish_refill_wait_remaining_ms": data.get("fish_refill_wait_remaining_ms", current_water.get("fish_refill_wait_remaining_ms", 0)),
-                "sump_low": data.get("sump_low", current_water.get("sump_low", False)),
-                "sump_high": data.get("sump_high", current_water.get("sump_high", False)),
-                "has_level_sensors": data.get("has_level_sensors", current_water.get("has_level_sensors")),
-                "overflow_alarm": data.get("fish_overflow", current_water.get("overflow_alarm", False)),
-                "has_overflow_sensor": data.get("has_overflow_sensor", current_water.get("has_overflow_sensor")),
-            }))
+            if current_water != previous_water:
+                socketio.emit('water_status_update', current_water)
             
         # Check for automation state change (for LINE notify)
         new_auto_state = data.get("auto_state")

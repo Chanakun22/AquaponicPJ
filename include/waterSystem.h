@@ -62,7 +62,7 @@ typedef struct {
     bool hasRouteValve;
     bool routeBlocked;
     bool alarmActive;
-    char reason[96];
+    char reason[256];
 } WaterSystemStatus;
 
 void waterSystemSetup(void);

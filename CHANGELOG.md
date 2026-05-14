@@ -22,6 +22,65 @@ All notable changes to the **Smart Aquaponics AI** project will be documented in
   - คงสถานะ `BLOCKED` เมื่อ circulation pump ไม่มีจริง แทนการปล่อยให้ loop หลักไหลกลับไป `IDLE` พร้อมเพิ่ม native regression tests ครอบ manual fish stop, circulation-missing, และ control-zone semantics
   - เปลี่ยน `mix_tank_control_zone` ให้เป็น true เฉพาะตอน circulation ทำงานและโซนถังผสมไม่ได้ refill/settling/alarm/blocked พร้อมปรับ fallback ฝั่ง Pi เป็น false และเปลี่ยนข้อความ dashboard เป็น `พร้อมควบคุม/ยังไม่พร้อม`
 
+- **fix: reduce noisy water interval logs and align dashboard automation workflow with the current state machine (`src/waterSystem.cpp`, `pi_server/index.html`, `pi_server/pwa/sw.js`):**
+  - หยุดเขียน reason log ซ้ำทุกวินาทีในสถานะ `WAIT_REFILL_INTERVAL` และ `MIX_TANK_SETTLING` แม้ข้อความบน dashboard ยังอัปเดตตามเวลาคงเหลือปกติ
+  - เพิ่ม state `MIXING_AFTER_A` และ transitional `DISABLED` handling กลับเข้า workflow card ของหน้า dashboard พร้อมปรับข้อความ `ตอนนี้`, `ถัดไป`, และ step progression ให้ตรงกับ automator code ปัจจุบัน
+  - bump PWA cache เป็น `aquaponics-v25` เพื่อให้หน้า dashboard โหลดเวอร์ชันใหม่ทันทีหลัง deploy
+
+- **fix: persist water cooldown timers across reboot and format wait durations for humans (`src/waterSystem.cpp`, `test/test_native/test_water_system_native.cpp`, `pi_server/index.html`, `pi_server/settings.html`, `pi_server/hardware_test.html`, `pi_server/pwa/sw.js`):**
+  - บันทึกช่วงรอของ `WAIT_REFILL_INTERVAL`, `fish route cooldown`, และ `dilution hold` ลง NVS เพื่อให้ระบบน้ำกู้เวลาคงเหลือหลัง ESP32 รีบูตได้ โดยยังไม่ resume ปั๊มหรือ manual refill เอง
+  - เปลี่ยน reason ของระบบน้ำให้พูดช่วงเวลารอเป็นรูปแบบอ่านง่าย เช่น `14 วัน 1 ชั่วโมง` แทนตัวเลขวินาทีดิบ
+  - ปรับ formatter ของหน้า dashboard, settings, และ hardware test ให้แสดง hold/wait duration เป็นวัน/ชั่วโมง/นาที พร้อม bump PWA cache เป็น `aquaponics-v26`
+
+- **fix: stop showing fake `0 วินาที` water timers before full ESP32 water status arrives (`pi_server/app.py`, `pi_server/settings.html`, `pi_server/index.html`, `pi_server/hardware_test.html`, `pi_server/pwa/sw.js`):**
+  - แยก `sensor` payload ชุดย่อออกจาก `water status` payload แบบเต็ม เพื่อไม่ให้หน้า Pi เอา state บางส่วนมาแสดงร่วมกับ reason/timer default แล้วเกิดการ์ดขัดกันเอง
+  - ถ้ายังไม่ได้รับ water status แบบเต็มหรือข้อมูลชุดล่าสุดเก่าเกิน threshold จะ fallback เป็นสถานะ `Waiting for ESP32 status` และแสดง `--` แทนเวลารอ/flag runtime ที่ยังไม่รู้จริง
+  - bump PWA cache เป็น `aquaponics-v27` เพื่อให้หน้าเว็บหยิบ logic แสดงผลสถานะน้ำชุดล่าสุดทันทีหลัง deploy
+
+- **fix: smooth noisy water level inputs and log full water-status publish failures (`src/waterSystem.cpp`, `src/localMqtt.cpp`, `test/test_native/test_water_system_native.cpp`):**
+  - เพิ่ม debounce ให้ low-level sensor และใช้ immediate-trip + delayed-clear กับ high/overflow เพื่อกัน state ระบบน้ำแกว่ง `WAIT_REFILL_INTERVAL`/`IDLE` จาก float switch เด้ง แต่ยังหยุดตาม safety input ได้ทันที
+  - เพิ่ม regression test สำหรับ low sensor bounce ระหว่าง cooldown เพื่อกันปัญหา state เด้งกลับมาอีก
+  - เพิ่ม error log เมื่อ publish `aquaponics/status/water_system` ไม่สำเร็จ เพื่อให้แยกได้ทันทีว่า Pi รอ status เพราะบอร์ดส่งไม่ออกหรือเพราะ MQTT path มีปัญหา
+
+- **fix: make settings page water card subscribe to live water status updates (`pi_server/settings.html`, `pi_server/pwa/sw.js`):**
+  - เพิ่ม `socket.io` ให้หน้า settings และฟัง event `water_status_update` จาก backend โดยตรง
+  - แยก renderer ของ water runtime/status card ออกจากการ populate ฟอร์ม เพื่อให้การ์ดน้ำอัปเดตสดได้โดยไม่ทับค่าฟอร์มที่ผู้ใช้กำลังแก้อยู่
+  - bump PWA cache เป็น `aquaponics-v28` เพื่อให้หน้า settings ดึง JS logic ใหม่ทันทีหลัง deploy
+
+- **fix: stop settings page from failing hard when the WebSocket client script is unavailable (`pi_server/settings.html`, `pi_server/pwa/sw.js`):**
+  - เปลี่ยนหน้า settings ให้ใช้ `socket.io.min.js` ตัวเดียวกับ dashboard/hardware test แทน path แยก เพื่อไม่ให้การโหลดหน้าแตกต่างจากหน้าที่ใช้งานได้อยู่แล้ว
+  - guard `io()` ไว้ไม่ให้ JavaScript ตายทั้งหน้า ถ้า WebSocket client ยังไม่พร้อม หน้า settings จะยังโหลดค่าผ่าน `/api/settings` ได้ตามปกติ
+  - bump PWA cache เป็น `aquaponics-v29` เพื่อให้ browser หยิบ script path และ fallback logic ล่าสุด
+
+- **fix: distinguish missing water-status topic from a fully offline ESP on Pi pages (`pi_server/app.py`, `pi_server/settings.html`, `pi_server/pwa/sw.js`):**
+  - เปลี่ยน backend ให้แยกกรณี `ESP offline` ออกจากกรณี `ESP ยัง online แต่ Pi ไม่เคยเห็น/เห็นไม่สดของ aquaponics/status/water_system` พร้อมใส่ diagnostic fields additive ใน `water_system` status API เดิม
+  - ปรับหน้า Settings ให้เลิกทับ `reason` ด้วย fallback ตายตัวเมื่อ `status_seen=false` และใช้ overview summary คนละข้อความสำหรับ `topic missing` กับ `topic stale`
+  - bump PWA cache เป็น `aquaponics-v30` เพื่อให้ browser โหลด diagnostic water-card ชุดใหม่ทันทีหลัง deploy
+
+- **fix: keep water runtime state visible when the dedicated water-status topic is missing but sensor packets still arrive (`pi_server/app.py`, `pi_server/settings.html`, `pi_server/hardware_test.html`, `pi_server/pwa/sw.js`):**
+  - ให้ Pi backend ใช้เฉพาะ water runtime subset ที่มากับ `aquaponics/sensors` เป็น fallback แบบลดรูปเมื่อ `aquaponics/status/water_system` หายไป โดยยังคง `status_seen=false` และ `reason` เชิงวินิจฉัยเดิมไว้
+  - ปรับหน้า Settings ให้แสดง state, route, output, และ low/high/overflow จาก fallback นี้ได้ โดย field ที่ sensor payload ไม่ได้ส่งจะยังเป็น `--` แทนการเดาเป็น `NO`
+  - ปรับหน้า HW Test ให้แยก data source เป็น `Water status topic` กับ `Sensor payload fallback` ให้ตรงกับแหล่งข้อมูลจริง และ bump PWA cache เป็น `aquaponics-v31`
+
+- **fix: relabel fallback water diagnostics on Settings so the card stops implying the Pi-generated warning came from the ESP (`pi_server/settings.html`, `pi_server/pwa/sw.js`):**
+  - เปลี่ยนหัวข้อ `State` เป็น `Fallback State` เมื่อการ์ดน้ำกำลังใช้ runtime subset จาก `aquaponics/sensors` แทน topic เต็ม
+  - เปลี่ยนหัวข้อ `Last reason from device` เป็น `Live diagnostic from Pi` เมื่อข้อความที่แสดงเป็น warning จาก backend เช่น `topic stale` หรือ `topic missing`
+  - bump PWA cache เป็น `aquaponics-v32` เพื่อให้ browser โหลด label ชุดใหม่ทันทีหลัง deploy
+
+- **fix: soften the Settings hero when fresh sensor fallback is available so the main card no longer shouts `STALE` while runtime state is still updating (`pi_server/settings.html`, `pi_server/pwa/sw.js`):**
+  - ถ้า Pi ยังได้ water runtime subset สดจาก `aquaponics/sensors` อยู่ หน้า Settings จะใช้ badge `Fallback` และ headline ที่บอกชัดว่าเป็นสถานะชั่วคราวจาก sensor packet แทนการขึ้น `STALE` เป็นข้อความหลักของการ์ด
+  - เปลี่ยนข้อความใน reason box เป็น note ว่า dedicated water status หายไปนานเท่าไร โดยไม่อ้างว่าเป็น `reason from device` ตรง ๆ ในโหมด fallback
+  - bump PWA cache เป็น `aquaponics-v33` เพื่อให้ browser โหลด wording ของ fallback hero ชุดล่าสุด
+
+- **fix: queue dedicated water-status refreshes after successful sensor publishes so `aquaponics/status/water_system` cannot lag behind a healthy sensor stream (`src/localMqtt.cpp`):**
+  - ถ้า `aquaponics/sensors` publish สำเร็จ firmware จะ queue `aquaponics/status/water_system` เพิ่มอีกชั้นผ่าน pending-status path เดิม โดยใช้ cadence เดียวกับ sensor publish แทนการพึ่ง scheduler แยกเส้นเดียว
+  - ช่วยปิดช่องที่ Pi ยังเห็น sensor packet สดอยู่แต่ dedicated water-status topic กลับหายหรือค้าง ทั้งที่ MQTT connection ยังใช้งานได้
+
+- **fix: stop truncating water-system reasons mid-UTF-8 sequence before publishing dedicated water status (`include/waterSystem.h`, `src/waterSystem.cpp`):**
+  - ขยาย `WaterSystemStatus.reason` และ `stateReason` buffer ให้พอรองรับข้อความ reason ภาษาไทยจริงที่ใช้ใน state machine ซึ่งหลายข้อความยาวเกิน 96 bytes อยู่แล้ว
+  - เพิ่มตัว copy แบบ UTF-8 safe ตอนเขียน `_status.reason` เพื่อกันการตัดกลาง multibyte sequence ถ้ามีข้อความยาวเข้าใกล้ขอบ buffer ในอนาคต
+  - แก้ต้นเหตุที่ทำให้ `aquaponics/status/water_system` สามารถปล่อย JSON ที่ decode ไม่ได้บน Pi ขณะที่ `aquaponics/sensors` ยังมาปกติ เพราะ dedicated topic มี field `reason` ภาษาไทยแต่ sensor payload ชุดย่อไม่มี
+
 ## [2026-05-11] - Water Settings UX Refactor
 
 ### Changed

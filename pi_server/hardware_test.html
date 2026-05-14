@@ -1335,8 +1335,25 @@
         }
 
         function formatHoldMs(value) {
-            const seconds = Math.max(0, Math.round((value || 0) / 1000));
-            return `${seconds}s`;
+            if (value === null || value === undefined || Number.isNaN(Number(value))) {
+                return '--';
+            }
+
+            const totalSeconds = Math.max(0, Math.round(Number(value) / 1000));
+            if (totalSeconds <= 0) return '0 วินาที';
+
+            const days = Math.floor(totalSeconds / 86400);
+            const hours = Math.floor((totalSeconds % 86400) / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            const parts = [];
+
+            if (days > 0) parts.push(`${days} วัน`);
+            if (hours > 0 && parts.length < 2) parts.push(`${hours} ชั่วโมง`);
+            if (minutes > 0 && parts.length < 2) parts.push(`${minutes} นาที`);
+            if (seconds > 0 && parts.length < 2) parts.push(`${seconds} วินาที`);
+
+            return parts.length > 0 ? parts.join(' ') : '0 วินาที';
         }
 
         function formatRelativeAge(timestampMs) {
@@ -1504,7 +1521,10 @@
         function renderWaterStatus() {
             const liveWater = getLiveWaterState();
             const status = waterStatus || {};
-            const hasDedicatedStatus = waterStatusReceivedAt > 0;
+            const statusSource = status.status_source || (status.status_seen ? 'dedicated_water_status' : (status.runtime_fallback_active ? 'sensor_payload_fallback' : 'none'));
+            const hasDedicatedStatus = statusSource === 'dedicated_water_status';
+            const hasSensorFallback = statusSource === 'sensor_payload_fallback';
+            const formatWaterDiagBool = (value) => (value === null || value === undefined ? '--' : formatBool(Boolean(value)));
 
             const stateText = formatWaterState(status.state ?? liveWater.state ?? 'UNKNOWN');
             const activeRoute = formatWaterRoute(status.active_route ?? liveWater.active_route ?? 'NONE');
@@ -1516,69 +1536,78 @@
             const refillOutput = status.refill_output ?? liveWater.refill_output ?? liveWater.refill_running;
             const fishTankRefill = status.fish_tank_refill_output ?? liveWater.fish_tank_refill_output;
             const mixTankRefill = status.mix_tank_refill_output ?? liveWater.mix_tank_refill_output;
-            const waterDilution = status.water_dilution_active ?? liveWater.water_dilution_active;
-            const mixTankSettling = status.mix_tank_settling_active ?? liveWater.mix_tank_settling_active;
-            const mixTankControlZone = status.mix_tank_control_zone ?? liveWater.mix_tank_control_zone ?? false;
-            const dilutionHold = status.dilution_hold_remaining_ms ?? liveWater.dilution_hold_remaining_ms ?? 0;
-            const sumpLow = hasDedicatedStatus ? (status.sump_low ?? liveWater.sump_low) : (liveWater.sump_low ?? null);
-            const sumpHigh = hasDedicatedStatus ? (status.sump_high ?? liveWater.sump_high) : (liveWater.sump_high ?? null);
-            const overflowAlarm = hasDedicatedStatus ? (status.overflow_alarm ?? liveWater.fish_overflow) : (liveWater.fish_overflow ?? null);
+            const waterDilution = status.water_dilution_active ?? liveWater.water_dilution_active ?? null;
+            const mixTankSettling = status.mix_tank_settling_active ?? liveWater.mix_tank_settling_active ?? null;
+            const mixTankControlZone = status.mix_tank_control_zone ?? liveWater.mix_tank_control_zone ?? null;
+            const dilutionHold = status.dilution_hold_remaining_ms ?? liveWater.dilution_hold_remaining_ms ?? null;
+            const useWaterStatusSlice = hasDedicatedStatus || hasSensorFallback;
+            const sumpLow = useWaterStatusSlice ? (status.sump_low ?? liveWater.sump_low ?? null) : (liveWater.sump_low ?? null);
+            const sumpHigh = useWaterStatusSlice ? (status.sump_high ?? liveWater.sump_high ?? null) : (liveWater.sump_high ?? null);
+            const overflowAlarm = useWaterStatusSlice ? (status.overflow_alarm ?? liveWater.fish_overflow ?? null) : (liveWater.fish_overflow ?? null);
             const waterStatusSeen = status.status_seen ?? liveWater.status_seen ?? hasDedicatedStatus;
-            const hasLevelSensors = hasDedicatedStatus
+            const hasLevelSensors = useWaterStatusSlice
                 ? (status.has_level_sensors ?? liveWater.has_level_sensors ?? null)
                 : (liveWater.has_level_sensors ?? null);
-            const hasOverflowSensor = hasDedicatedStatus
+            const hasOverflowSensor = useWaterStatusSlice
                 ? (status.has_overflow_sensor ?? liveWater.has_overflow_sensor ?? null)
                 : (liveWater.has_overflow_sensor ?? null);
             const reasonText = status.reason ?? liveWater.reason ?? 'Waiting for water status';
             const sourceLabel = hasDedicatedStatus
                 ? 'Water status topic'
-                : (dashboardReceivedAt > 0 ? 'Dashboard snapshot' : 'Waiting for data');
+                : (hasSensorFallback ? 'Sensor payload fallback' : (dashboardReceivedAt > 0 ? 'Dashboard snapshot' : 'Waiting for data'));
             const sourceSub = hasDedicatedStatus
                 ? 'ใช้ค่า `aquaponics/status/water_system` เป็นหลัก'
-                : (dashboardReceivedAt > 0 ? 'ยังไม่มี Water Status topic โดยตรง จึง fallback จาก dashboard' : 'ยังไม่มี payload จาก ESP32');
-            const hasLiveSensorState = Boolean(hasDedicatedStatus || liveWater.status_seen);
+                : (hasSensorFallback
+                    ? 'ยังไม่มี water status topic เต็ม จึงใช้ water runtime subset จาก `aquaponics/sensors` ชั่วคราว'
+                    : (dashboardReceivedAt > 0 ? 'ยังไม่มี Water Status topic โดยตรง จึง fallback จาก dashboard' : 'ยังไม่มี payload จาก ESP32'));
+            const hasLiveSensorState = Boolean(hasDedicatedStatus || hasSensorFallback || liveWater.status_seen);
+            const routeValveInstalled = status.has_route_valve ?? liveWater.has_route_valve;
+            const routeValveOutput = status.route_valve_output ?? liveWater.route_valve_output;
 
             document.getElementById('waterState').textContent = stateText;
             document.getElementById('waterRoute').textContent = activeRoute;
-            document.getElementById('waterAlarm').textContent = formatBool(Boolean(alarmActive));
-            document.getElementById('waterBlocked').textContent = formatBool(Boolean(routeBlocked));
-            document.getElementById('waterCircOutput').textContent = formatBool(Boolean(circOutput));
-            document.getElementById('waterRefillOutput').textContent = formatBool(Boolean(refillOutput));
-            document.getElementById('waterFishRefill').textContent = formatBool(Boolean(fishTankRefill));
-            document.getElementById('waterMixRefill').textContent = formatBool(Boolean(mixTankRefill));
-            document.getElementById('waterDilution').textContent = formatBool(Boolean(waterDilution));
-            document.getElementById('waterSettling').textContent = formatBool(Boolean(mixTankSettling));
-            document.getElementById('waterMixZone').textContent = formatBool(Boolean(mixTankControlZone));
-            document.getElementById('waterDilutionHold').textContent = formatHoldMs(dilutionHold);
+            document.getElementById('waterAlarm').textContent = formatWaterDiagBool(alarmActive);
+            document.getElementById('waterBlocked').textContent = formatWaterDiagBool(routeBlocked);
+            document.getElementById('waterCircOutput').textContent = formatWaterDiagBool(circOutput);
+            document.getElementById('waterRefillOutput').textContent = formatWaterDiagBool(refillOutput);
+            document.getElementById('waterFishRefill').textContent = formatWaterDiagBool(fishTankRefill);
+            document.getElementById('waterMixRefill').textContent = formatWaterDiagBool(mixTankRefill);
+            document.getElementById('waterDilution').textContent = formatWaterDiagBool(waterDilution);
+            document.getElementById('waterSettling').textContent = formatWaterDiagBool(mixTankSettling);
+            document.getElementById('waterMixZone').textContent = formatWaterDiagBool(mixTankControlZone);
+            document.getElementById('waterDilutionHold').textContent = dilutionHold === null || dilutionHold === undefined ? '--' : formatHoldMs(dilutionHold);
             document.getElementById('waterLow').textContent = formatActiveLowSensorState(Boolean(sumpLow), hasLiveSensorState);
             document.getElementById('waterHigh').textContent = formatActiveLowSensorState(Boolean(sumpHigh), hasLiveSensorState);
             document.getElementById('waterOverflow').textContent = formatActiveLowSensorState(Boolean(overflowAlarm), hasLiveSensorState);
             document.getElementById('waterLowSub').textContent = formatSensorNote('Active LOW: LOW = Low level triggered', hasLiveSensorState, hasLevelSensors);
             document.getElementById('waterHighSub').textContent = formatSensorNote('Active LOW: LOW = High level triggered', hasLiveSensorState, hasLevelSensors);
             document.getElementById('waterOverflowSub').textContent = formatSensorNote('Active LOW: LOW = overflow trigger', hasLiveSensorState, hasOverflowSensor);
-            document.getElementById('waterValve').textContent = (status.has_route_valve ?? liveWater.has_route_valve)
-                ? ((status.route_valve_output ?? liveWater.route_valve_output) ? 'Direct Sump' : 'Fish Route')
+            document.getElementById('waterValve').textContent = routeValveInstalled
+                ? ((routeValveOutput === null || routeValveOutput === undefined) && hasSensorFallback ? 'Unknown' : (routeValveOutput ? 'Direct Sump' : 'Fish Route'))
                 : 'No route valve';
             document.getElementById('waterReason').textContent = reasonText;
             document.getElementById('waterRouteSub').textContent = `Preferred: ${preferredRoute} | Direct Sump Fallback: ${directFallback ? 'ON' : 'OFF'}`;
-            document.getElementById('waterBlockedSub').textContent = routeBlocked ? 'Route is currently blocked by a condition' : 'No route block condition in the latest status';
+            document.getElementById('waterBlockedSub').textContent = routeBlocked === null || routeBlocked === undefined
+                ? 'ยังไม่มี route-block detail ใน source ปัจจุบัน'
+                : (routeBlocked ? 'Route is currently blocked by a condition' : 'No route block condition in the latest status');
 
             document.getElementById('waterDataSource').textContent = sourceLabel;
             document.getElementById('waterDataSourceSub').textContent = sourceSub;
-            document.getElementById('waterStatusAge').textContent = formatRelativeAge(hasDedicatedStatus ? waterStatusReceivedAt : dashboardReceivedAt);
+            document.getElementById('waterStatusAge').textContent = formatRelativeAge(useWaterStatusSlice ? waterStatusReceivedAt : dashboardReceivedAt);
             document.getElementById('waterDiagSourceNote').textContent = sourceSub;
-            document.getElementById('waterStatusSeenFlag').textContent = waterStatusSeen ? 'Seen' : 'Not seen';
-            document.getElementById('waterStatusSeenSub').textContent = waterStatusSeen
+            document.getElementById('waterStatusSeenFlag').textContent = hasDedicatedStatus ? 'Seen' : (hasSensorFallback ? 'Fallback' : (waterStatusSeen ? 'Seen' : 'Not seen'));
+            document.getElementById('waterStatusSeenSub').textContent = hasDedicatedStatus
                 ? 'หน้านี้ได้รับสัญญาณว่า Water System เคย publish status แล้ว'
-                : 'ถ้ายังขึ้นแบบนี้อยู่ แปลว่า ESP ยังไม่ส่ง water status เฉพาะเข้ามา';
+                : (hasSensorFallback
+                    ? 'Pi ยังไม่เห็น water status topic เต็ม แต่มี runtime subset จาก sensor payload อยู่'
+                    : 'ถ้ายังขึ้นแบบนี้อยู่ แปลว่า ESP ยังไม่ส่ง water status เฉพาะเข้ามา');
             document.getElementById('waterInstallFlags').textContent = `level=${formatRawFlag(hasLevelSensors)} | overflow=${formatRawFlag(hasOverflowSensor)}`;
             document.getElementById('waterFallbackState').textContent = `${preferredRoute} | fallback ${directFallback ? 'ON' : 'OFF'}`;
 
             document.getElementById('sumWaterState').textContent = stateText;
             document.getElementById('sumWaterSub').textContent = reasonText;
             document.getElementById('sumRouteState').textContent = activeRoute;
-            document.getElementById('sumRouteSub').textContent = `Preferred: ${preferredRoute} | Direct Sump Fallback: ${directFallback ? 'ON' : 'OFF'} | Water Dilution: ${waterDilution ? 'YES' : 'NO'}`;
+            document.getElementById('sumRouteSub').textContent = `Preferred: ${preferredRoute} | Direct Sump Fallback: ${directFallback ? 'ON' : 'OFF'} | Water Dilution: ${waterDilution === null || waterDilution === undefined ? '--' : (waterDilution ? 'YES' : 'NO')}`;
         }
 
         async function getLatestWaterSettings() {

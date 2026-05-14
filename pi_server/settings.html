@@ -15,6 +15,7 @@
     <link href="/static/fonts/fonts.css" rel="stylesheet">
     <link href="/static/fa/css/all.min.css" rel="stylesheet">
     <link href="/base.css" rel="stylesheet">
+    <script src="/static/js/socket.io.min.js"></script>
     <script src="/header.js"></script>
     <style>
         /* === Page-specific brand colors === */
@@ -1380,12 +1381,12 @@
                             </div>
                             <div class="water-state-pill">
                                 <span class="water-state-badge neutral" id="water_state_badge">Unknown</span>
-                                <div class="water-state-code">State: <strong id="water_state_text">UNKNOWN</strong></div>
+                                <div class="water-state-code"><span id="water_state_code_label">State</span>: <strong id="water_state_text">UNKNOWN</strong></div>
                             </div>
                         </div>
 
                         <div class="water-reason-box">
-                            <span class="water-reason-label">Last reason from device</span>
+                            <span class="water-reason-label" id="water_reason_label">Last reason from device</span>
                             <strong id="water_reason_text">-</strong>
                         </div>
 
@@ -2107,6 +2108,7 @@
 
     <script>
         let settings = {};
+        const socket = window.io ? io() : null;
         const WATER_CONFIG_DEFAULTS = {
             circulation_enabled: true,
             refill_enabled: false,
@@ -2212,14 +2214,58 @@
         }
 
         function formatHoldMs(ms) {
-            const totalSeconds = Math.max(0, Math.round((ms || 0) / 1000));
-            return `${totalSeconds}s`;
+            if (ms === null || ms === undefined || Number.isNaN(Number(ms))) {
+                return '--';
+            }
+
+            const totalSeconds = Math.max(0, Math.round(Number(ms) / 1000));
+            if (totalSeconds <= 0) return '0 วินาที';
+
+            const days = Math.floor(totalSeconds / 86400);
+            const hours = Math.floor((totalSeconds % 86400) / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            const parts = [];
+
+            if (days > 0) parts.push(`${days} วัน`);
+            if (hours > 0 && parts.length < 2) parts.push(`${hours} ชั่วโมง`);
+            if (minutes > 0 && parts.length < 2) parts.push(`${minutes} นาที`);
+            if (seconds > 0 && parts.length < 2) parts.push(`${seconds} วินาที`);
+
+            return parts.length > 0 ? parts.join(' ') : '0 วินาที';
         }
 
         function getWaterOverviewMeta(water = {}) {
             const state = String(water.state || 'UNKNOWN');
 
             if (!water || water.status_seen === false) {
+                if (water.status_source === 'sensor_payload_fallback' || water.runtime_fallback_active === true) {
+                    return {
+                        tone: 'info',
+                        badge: 'Fallback',
+                        headline: 'กำลังใช้สถานะน้ำจาก sensor packet ชั่วคราว',
+                        nextStep: 'route, level, และ output ยังอัปเดตสดได้ แต่ wait/hold detail ต้องรอ topic aquaponics/status/water_system กลับมา'
+                    };
+                }
+
+                if (water.diagnostic_code === 'WATER_STATUS_TOPIC_MISSING') {
+                    return {
+                        tone: 'warn',
+                        badge: 'Topic Gap',
+                        headline: water.state_label_th || 'ESP ออนไลน์ แต่ Pi ยังไม่เห็นสถานะระบบน้ำ',
+                        nextStep: 'ESP ยังส่ง heartbeat อยู่ แต่ Pi ยังไม่เห็น aquaponics/status/water_system; เช็ก firmware บนบอร์ดและเส้น publish topic นี้ต่อ'
+                    };
+                }
+
+                if (water.diagnostic_code === 'WATER_STATUS_TOPIC_STALE') {
+                    return {
+                        tone: 'warn',
+                        badge: 'Stale',
+                        headline: water.state_label_th || 'ESP ออนไลน์ แต่สถานะระบบน้ำค้าง',
+                        nextStep: 'Pi เคยเห็นสถานะน้ำแล้วแต่ไม่สด ให้เช็ก MQTT reconnect และ path publish ของ aquaponics/status/water_system'
+                    };
+                }
+
                 return {
                     tone: 'neutral',
                     badge: 'Waiting',
@@ -2332,6 +2378,79 @@
             if (nextStep) {
                 nextStep.textContent = meta.nextStep;
             }
+        }
+
+        function renderWaterSystemStatus() {
+            const water = settings.water_system || {};
+            const waterStatusSeen = water.status_seen === true;
+            const waterHasRuntime = waterStatusSeen || water.runtime_fallback_active === true;
+            const statusSource = water.status_source || (waterStatusSeen ? 'dedicated_water_status' : (water.runtime_fallback_active ? 'sensor_payload_fallback' : 'none'));
+            const waterStatusAgeSec = Number.isFinite(Number(water.water_status_age_sec)) ? Number(water.water_status_age_sec) : null;
+            const formatWaterRuntimeBool = (value) => {
+                if (!waterHasRuntime || value === null || value === undefined) {
+                    return '--';
+                }
+                return formatWaterBool(Boolean(value));
+            };
+            const formatWaterLevelBool = (value) => {
+                if (!waterHasRuntime || value === null || value === undefined) {
+                    return '--';
+                }
+                return formatWaterBool(Boolean(value));
+            };
+
+            const stateLabel = document.getElementById('water_state_code_label');
+            const reasonLabel = document.getElementById('water_reason_label');
+
+            if (stateLabel) {
+                stateLabel.textContent = statusSource === 'sensor_payload_fallback' ? 'Fallback State' : 'State';
+            }
+
+            if (reasonLabel) {
+                reasonLabel.textContent = statusSource === 'dedicated_water_status'
+                    ? 'Last reason from device'
+                    : (statusSource === 'sensor_payload_fallback' ? 'Fallback note from Pi' : 'Live diagnostic from Pi');
+            }
+
+            let reasonText = water.reason ?? 'Waiting for ESP32 status';
+            if (statusSource === 'sensor_payload_fallback') {
+                reasonText = waterStatusAgeSec === null
+                    ? 'Using live runtime fallback from aquaponics/sensors while the dedicated water status topic is unavailable'
+                    : `Using live runtime fallback from aquaponics/sensors; dedicated water status last seen ${waterStatusAgeSec}s ago`;
+            }
+
+            document.getElementById('water_state_text').textContent = waterHasRuntime
+                ? formatWaterState(water.state ?? 'UNKNOWN')
+                : 'UNKNOWN';
+            document.getElementById('water_preferred_route_text').textContent = formatWaterRoute(water.preferred_route ?? WATER_CONFIG_DEFAULTS.preferred_route);
+            document.getElementById('water_active_route_text').textContent = waterHasRuntime
+                ? formatWaterRoute(water.active_route ?? 'NONE')
+                : '--';
+            document.getElementById('water_circulation_output_text').textContent = formatWaterRuntimeBool(water.circulation_pump_output);
+            document.getElementById('water_fish_refill_text').textContent = formatWaterRuntimeBool(water.fish_tank_refill_output);
+            document.getElementById('water_route_blocked_text').textContent = formatWaterRuntimeBool(water.route_blocked);
+            document.getElementById('water_dilution_text').textContent = formatWaterRuntimeBool(water.water_dilution_active);
+            document.getElementById('water_settling_text').textContent = formatWaterRuntimeBool(water.mix_tank_settling_active);
+            document.getElementById('water_mix_refill_text').textContent = formatWaterRuntimeBool(water.mix_tank_refill_output);
+            document.getElementById('water_mix_zone_text').textContent = formatWaterRuntimeBool(water.mix_tank_control_zone);
+            document.getElementById('water_dilution_hold_text').textContent = formatHoldMs(waterStatusSeen ? water.dilution_hold_remaining_ms : null);
+            document.getElementById('water_fish_ready_text').textContent = waterStatusSeen
+                ? formatWaterBool(Boolean(water.fish_refill_ready))
+                : '--';
+            document.getElementById('water_fish_wait_text').textContent = formatHoldMs(waterStatusSeen ? water.fish_refill_wait_remaining_ms : null);
+            document.getElementById('water_level_text').textContent = waterHasRuntime
+                ? `${formatWaterLevelBool(water.sump_low)} / ${formatWaterLevelBool(water.sump_high)}`
+                : '-- / --';
+            document.getElementById('water_overflow_text').textContent = waterHasRuntime
+                ? formatWaterLevelBool(water.overflow_alarm)
+                : '--';
+            document.getElementById('water_alarm_text').textContent = waterHasRuntime
+                ? formatWaterLevelBool(water.alarm_active)
+                : '--';
+            document.getElementById('water_reason_text').textContent = reasonText;
+
+            updateWaterCapabilityControls();
+            updateWaterOverviewSummary();
         }
 
         function updateWaterRouteControls() {
@@ -2611,25 +2730,7 @@
             setWaterTimeFieldValue('water_fish_refill_interval_sec', settings.water_system?.fish_refill_interval_ms ?? WATER_CONFIG_DEFAULTS.fish_refill_interval_ms);
             document.getElementById('water_preferred_route').value = settings.water_system?.preferred_route ?? WATER_CONFIG_DEFAULTS.preferred_route;
             document.getElementById('water_allow_direct_sump_refill').checked = settings.water_system?.allow_direct_sump_refill ?? WATER_CONFIG_DEFAULTS.allow_direct_sump_refill;
-            document.getElementById('water_state_text').textContent = formatWaterState(settings.water_system?.state ?? 'UNKNOWN');
-            document.getElementById('water_preferred_route_text').textContent = formatWaterRoute(settings.water_system?.preferred_route ?? WATER_CONFIG_DEFAULTS.preferred_route);
-            document.getElementById('water_active_route_text').textContent = formatWaterRoute(settings.water_system?.active_route ?? 'NONE');
-            document.getElementById('water_circulation_output_text').textContent = formatWaterBool(settings.water_system?.circulation_pump_output ?? false);
-            document.getElementById('water_fish_refill_text').textContent = formatWaterBool(settings.water_system?.fish_tank_refill_output ?? false);
-            document.getElementById('water_route_blocked_text').textContent = formatWaterBool(settings.water_system?.route_blocked ?? false);
-            document.getElementById('water_dilution_text').textContent = formatWaterBool(settings.water_system?.water_dilution_active ?? false);
-            document.getElementById('water_settling_text').textContent = formatWaterBool(settings.water_system?.mix_tank_settling_active ?? false);
-            document.getElementById('water_mix_refill_text').textContent = formatWaterBool(settings.water_system?.mix_tank_refill_output ?? false);
-            document.getElementById('water_mix_zone_text').textContent = formatWaterBool(settings.water_system?.mix_tank_control_zone ?? false);
-            document.getElementById('water_dilution_hold_text').textContent = formatHoldMs(settings.water_system?.dilution_hold_remaining_ms ?? 0);
-            document.getElementById('water_fish_ready_text').textContent = formatWaterBool(settings.water_system?.fish_refill_ready ?? true);
-            document.getElementById('water_fish_wait_text').textContent = formatHoldMs(settings.water_system?.fish_refill_wait_remaining_ms ?? 0);
-            document.getElementById('water_level_text').textContent = `${formatWaterBool(settings.water_system?.sump_low ?? false)} / ${formatWaterBool(settings.water_system?.sump_high ?? false)}`;
-            document.getElementById('water_overflow_text').textContent = formatWaterBool(settings.water_system?.overflow_alarm ?? false);
-            document.getElementById('water_alarm_text').textContent = formatWaterBool(settings.water_system?.alarm_active ?? false);
-            document.getElementById('water_reason_text').textContent = settings.water_system?.reason ?? '-';
-            updateWaterCapabilityControls();
-            updateWaterOverviewSummary();
+            renderWaterSystemStatus();
 
             // Thresholds
             document.getElementById('ph_min').value = settings.thresholds?.ph_min ?? 6.0;
@@ -3202,6 +3303,22 @@
             document.getElementById('notify_status').textContent = enabled ? 'ON' : 'OFF';
         }
 
+
+        if (socket) {
+            socket.on('connect', function() {
+                console.log('🔌 Settings WebSocket connected');
+            });
+
+            socket.on('water_status_update', function(waterStatus) {
+                settings.water_system = {
+                    ...(settings.water_system || {}),
+                    ...(waterStatus || {})
+                };
+                renderWaterSystemStatus();
+            });
+        } else {
+            console.warn('Settings WebSocket client is unavailable; falling back to fetch-only settings load');
+        }
 
         document.getElementById('notify_enabled').addEventListener('change', updateNotifyStatus);
         document.getElementById('light_command_source').addEventListener('change', updateSourceDrivenActions);
