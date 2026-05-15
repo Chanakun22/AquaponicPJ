@@ -14,7 +14,6 @@ AGENTS.md
 pi_server/*.sh
 pi_server/*.conf
 pi_server/auth_config.json
-.agent/skills
 webex
 HARDWARE_TO_BUY.md
 PROJECT_REFERENCE.md
@@ -24,6 +23,6 @@ docs/vault/.DS_Store
 docs
 forTestFlow
 report.md
-test
 pi_server/settings.json
 pi_server/aquaponics.db
+__pycache__/
