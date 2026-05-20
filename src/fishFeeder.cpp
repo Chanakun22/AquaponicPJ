@@ -66,6 +66,7 @@ static void _loadConfig(void) {
     _feedHour = _feederPrefs.getInt("hour", FEEDER_DEFAULT_FEED_HOUR);
     _feedMinute = _feederPrefs.getInt("minute", FEEDER_DEFAULT_FEED_MINUTE);
     _durationMs = _feederPrefs.getULong("duration", FEEDER_DEFAULT_DURATION_MS);
+    _lastTriggeredWeekMinute = _feederPrefs.getInt("lastTrig", -1);
     _feederPrefs.end();
 }
 
@@ -124,7 +125,7 @@ bool fishFeederStartManualFeed(const char* reason) {
     _feedPending = true;
     _feedPendingMs = millis();
     _status.state = FEEDER_STATE_FEEDING;
-    _setReason("Feed request accepted, waiting 500 ms before trigger");
+    _setReason("Feed request accepted, waiting 100 ms before trigger");
     return true;
 }
 
@@ -198,6 +199,9 @@ void fishFeederLoop(void) {
     int currentWeekMinute = _toWeekMinute(timeinfo.tm_wday, timeinfo.tm_hour, timeinfo.tm_min);
     if (_timeMatchesSchedule(&timeinfo) && _lastTriggeredWeekMinute != currentWeekMinute) {
         _lastTriggeredWeekMinute = currentWeekMinute;
+        _feederPrefs.begin("fishFeed", false);
+        _feederPrefs.putInt("lastTrig", _lastTriggeredWeekMinute);
+        _feederPrefs.end();
         if (fishFeederStartManualFeed("Scheduled feed started")) {
             _markLastFeedTime(&timeinfo);
         }

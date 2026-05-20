@@ -232,7 +232,6 @@ const char* automatorGetStateString(AutomatorState state) {
         case AUTO_STATE_DOSING_A: return "DOSING_A";
         case AUTO_STATE_MIXING_AFTER_A: return "MIXING_AFTER_A";
         case AUTO_STATE_DOSING_B: return "DOSING_B";
-        case AUTO_STATE_WATER_FILL: return "WATER_FILL";
         case AUTO_STATE_COOLDOWN: return "COOLDOWN";
         default: return "UNKNOWN";
     }
@@ -287,9 +286,6 @@ const char* automatorGetNextStateString(void) {
         case AUTO_STATE_DOSING_B:
             return "COOLDOWN";
 
-        case AUTO_STATE_WATER_FILL:
-            return "IDLE";
-
         case AUTO_STATE_COOLDOWN:
             return "EVALUATING";
 
@@ -301,27 +297,24 @@ const char* automatorGetNextStateString(void) {
 int automatorGetTimeRemainingSec(void) {
     unsigned long now = millis();
     unsigned long elapsed = now - _stateStartTime;
+    unsigned long duration = 0;
     
     switch(_currentState) {
         case AUTO_STATE_DOSING_A:
-            if (elapsed < AUTOMATOR_DOSE_A_MS) {
-                return (AUTOMATOR_DOSE_A_MS - elapsed) / 1000;
-            }
+            duration = _doseMsForVolume(_config.doseAVolumeMl);
+            if (elapsed < duration) return (duration - elapsed) / 1000;
             break;
         case AUTO_STATE_MIXING_AFTER_A:
-            if (elapsed < AUTOMATOR_MIX_AFTER_A_MS) {
-                return (AUTOMATOR_MIX_AFTER_A_MS - elapsed) / 1000;
-            }
+            duration = _config.mixAfterAMs;
+            if (elapsed < duration) return (duration - elapsed) / 1000;
             break;
         case AUTO_STATE_DOSING_B:
-            if (elapsed < AUTOMATOR_DOSE_B_MS) {
-                return (AUTOMATOR_DOSE_B_MS - elapsed) / 1000;
-            }
+            duration = _doseMsForVolume(_config.doseBVolumeMl);
+            if (elapsed < duration) return (duration - elapsed) / 1000;
             break;
         case AUTO_STATE_COOLDOWN:
-            if (elapsed < AUTOMATOR_POST_DOSE_MIX_MS) {
-                return (AUTOMATOR_POST_DOSE_MIX_MS - elapsed) / 1000;
-            }
+            duration = _config.postDoseMixMs;
+            if (elapsed < duration) return (duration - elapsed) / 1000;
             break;
         case AUTO_STATE_IDLE:
             if (now - _lastCheckTime < AUTOMATOR_CHECK_INTERVAL) {

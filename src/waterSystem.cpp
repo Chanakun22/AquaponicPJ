@@ -699,7 +699,7 @@ static void _sanitizeConfig(void) {
         _config.refillMinIntervalMs = WATER_FISH_REFILL_INTERVAL_MS;
     }
 
-    if (_config.preferredRoute > WATER_REFILL_ROUTE_NONE) {
+    if ((uint8_t)_config.preferredRoute > (uint8_t)WATER_REFILL_ROUTE_NONE) {
         _config.preferredRoute = (WaterRefillRoute)WATER_REFILL_ROUTE_DEFAULT;
     }
 

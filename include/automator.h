@@ -18,7 +18,6 @@ enum AutomatorState {
     AUTO_STATE_DOSING_A,    // กำลังจ่ายปุ๋ย A
     AUTO_STATE_MIXING_AFTER_A, // รอให้สาร A กระจายตัวก่อนจ่ายสาร B
     AUTO_STATE_DOSING_B,    // กำลังจ่ายปุ๋ย B
-    AUTO_STATE_WATER_FILL,  // กำลังเติมน้ำ
     AUTO_STATE_COOLDOWN     // รอให้สาร A+B เข้ากันก่อนวัดใหม่
 };
 

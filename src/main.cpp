@@ -403,7 +403,7 @@ void setup() {
     );
     
     xTaskCreatePinnedToCore(
-        TaskControl,      "Control",      6144,  NULL,  2,  &hCtrl,  1 // Core 1, priority 2 (higher than Sensors)
+        TaskControl,      "Control",      8192,  NULL,  2,  &hCtrl,  1 // Core 1, priority 2 (higher than Sensors)
     );
     
     // Register task handles for stack monitoring

@@ -650,7 +650,7 @@ static void _processDeferredAction(const LocalDeferredAction* action) {
  */
 static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
     // Parse JSON payload
-    StaticJsonDocument<256> doc;
+    StaticJsonDocument<512> doc;
     DeserializationError err = deserializeJson(doc, payload, length);
     
     if (err) {
@@ -981,10 +981,13 @@ static bool _reconnect() {
     snprintf(clientId, sizeof(clientId), "ESP32-Aquaponics-%04x", (unsigned int)random(0xffff));
 
     _networkTaskCheckpoint("local_mqtt_connect");
-    if (_localMqtt.connect(clientId)) {
+    if (_localMqtt.connect(clientId, NULL, NULL, "aquaponics/status/online", 1, true, "offline")) {
         _networkTaskCheckpoint("local_mqtt_connected");
         LOG_INFO("✅ Connected to Local MQTT!");
         _connectionFailCount = 0; // Reset counter on success
+        
+        // Publish online status (retained)
+        _localMqtt.publish("aquaponics/status/online", "online", true);
         
         // Subscribe to calibration and sensor config topics with QoS 1
         _localMqtt.subscribe("aquaponics/config/tds_cal", 1);

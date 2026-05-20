@@ -32,6 +32,7 @@ static bool _hasCalib401 = false;
 static bool _hasCalib686 = false;
 static bool _hasCalib918 = false;
 static uint8_t _invalidReadStreak = 0;
+static bool _resetEmaRequested = false;
 
 // Temperature for compensation
 static float _waterTemperature = 25.0; // Default 25°C
@@ -366,6 +367,13 @@ void phLoop(void) {
       static float _voltageMovingAverage = -1.0f;
       static float _displayVoltageMovingAverage = -1.0f;
 
+      if (_resetEmaRequested) {
+          _phMovingAverage = -1.0f;
+          _voltageMovingAverage = -1.0f;
+          _displayVoltageMovingAverage = -1.0f;
+          _resetEmaRequested = false;
+      }
+
       if (!_isAdcReadingValid(medianValue)) {
         _invalidReadStreak++;
         if (_invalidReadStreak >= PH_INVALID_STREAK_LIMIT) {
@@ -456,6 +464,7 @@ static void _calibratePoint(float targetPh, int* storage, bool* hasCalibration,
   LOG_INFO("Temperature: %.1f °C", _waterTemperature);
 
   _saveCalibrationToNVS();
+  _resetEmaRequested = true;
   LOG_INFO("================================");
 }
 
@@ -492,5 +501,6 @@ void phClearCalibration(void) {
   _hasCalib401 = false;
   _hasCalib686 = false;
   _hasCalib918 = false;
+  _resetEmaRequested = true;
   LOG_INFO("pH calibration cleared from NVS");
 }

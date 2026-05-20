@@ -434,6 +434,10 @@ void tdsSetCalibration(float lowPpm,
         _isCalibrated = true;
         _saveCalibrationToNVS();
         
+        // Reset EMA state so readings converge immediately to new calibration
+        _tdsMovingAverage = -1.0f;
+        _tdsVoltageMovingAverage = -1.0f;
+        
         LOG_INFO("TDS Calibration set (Hybrid Mode):");
         LOG_INFO("  K: %.4f, Offset: %.4f, LowTemp: %.1fC, HighTemp: %.1fC, mode=%s", _kValue, _offset, _calLowTemperature, _calHighTemperature, _calibrationUsesRawVoltage ? "raw" : "compensated");
     } else {
