@@ -2,6 +2,21 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-05-20] - Code Review Fixes (HIGH/MEDIUM)
+
+### Fixed
+
+- **automator:** `automatorGetTimeRemainingSec()` ใช้ runtime config (`_config.doseAVolumeMl`, `mixAfterAMs`, `doseBVolumeMl`, `postDoseMixMs`) แทน compile-time constants ที่ไม่ตรงกับค่าจริง
+- **automator:** ลบ dead state `AUTO_STATE_WATER_FILL` ออกจาก enum และ switch cases
+- **localMqtt:** เพิ่ม `StaticJsonDocument` ใน `_onMqttMessage` callback จาก 256 → 512 bytes กัน overflow เมื่อ payload ใหญ่
+- **localMqtt:** เพิ่ม MQTT Last Will and Testament (`aquaponics/status/online` → "offline") และ publish "online" retained เมื่อ connect สำเร็จ
+- **main:** เพิ่ม TaskControl stack จาก 6144 → 8192 bytes กัน stack overflow
+- **TdsSensor:** reset EMA state (`_tdsMovingAverage`, `_tdsVoltageMovingAverage`) หลัง recalibration สำเร็จ เพื่อให้ค่า converge ทันที
+- **phSensor:** เพิ่ม `_resetEmaRequested` flag สำหรับ reset EMA หลัง calibration/clear เพื่อให้ค่า converge ทันที
+- **waterSystem:** ใช้ explicit `(uint8_t)` cast ใน `_sanitizeConfig` enum range check กัน signed comparison issue
+- **fishFeeder:** persist `_lastTriggeredWeekMinute` ใน NVS กัน double-feed on reboot
+- **fishFeeder:** แก้ reason string จาก "500 ms" เป็น "100 ms" ให้ตรงกับ `FEEDER_ACTIVE_LOW_DELAY_MS`
+
 ## [2026-05-13] - Water Flow Safety Hardening
 
 ### Changed
