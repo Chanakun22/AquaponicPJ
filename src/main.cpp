@@ -24,6 +24,7 @@
 #include "commandHandler.h"
 #include "automator.h"
 #include "waterSystem.h"
+#include "gpioOut.h"
 
 
 #if defined(ESP32) && WATCHDOG_ENABLED
@@ -355,6 +356,12 @@ void setup() {
     
     pinMode(STATUS_LED_PIN, OUTPUT);
     digitalWrite(STATUS_LED_PIN, LOW);
+    
+    // Initialize all output pins ASAP so relays default OFF (active-low: HIGH = OFF).
+    // Routes to ESP32 GPIO or MCP23017 per OUT_USE_MCP_* flags in config.h.
+    if (!gpioOutSetup()) {
+        LOG_ERROR("gpioOutSetup() failed (MCP23017 not responding); using ESP32 GPIO fallback only");
+    }
     
     // เริ่มต้น WiFi (Non-Blocking)
     wifiSetup();

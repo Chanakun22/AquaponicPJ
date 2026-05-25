@@ -6,6 +6,7 @@
 #include "fishFeeder.h"
 #include "config.h"
 #include "logger.h"
+#include "gpioOut.h"
 #include <Preferences.h>
 #include <time.h>
 #include <string.h>
@@ -84,7 +85,7 @@ static void _sanitizeConfig(void) {
 
 static void _writeOutput(bool enabled) {
 #if FISH_FEEDER_PIN >= 0
-    digitalWrite(FISH_FEEDER_PIN, enabled ? PUMP_ON : PUMP_OFF);
+    gpioOutWrite(GPIO_OUT_FISH_FEEDER, enabled);
 #else
     (void)enabled;
 #endif
@@ -134,8 +135,8 @@ void fishFeederSetup(void) {
     _sanitizeConfig();
 
 #if FISH_FEEDER_PIN >= 0
-    pinMode(FISH_FEEDER_PIN, OUTPUT);
-    digitalWrite(FISH_FEEDER_PIN, PUMP_OFF);
+    // Output initialized by gpioOutSetup() in main.cpp; ensure stopped state.
+    gpioOutWrite(GPIO_OUT_FISH_FEEDER, false);
 #endif
 
     _status.hasOutput = _hasOutput();

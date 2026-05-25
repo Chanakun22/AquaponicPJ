@@ -4,8 +4,10 @@
  */
 
 #include "lightController.h"
+#include "config.h"
 #include "logger.h"
 #include "wifiConn.h"
+#include "gpioOut.h"
 #include <time.h>
 #include <Preferences.h>
 #include <string.h>
@@ -195,9 +197,8 @@ static bool _isInSchedule(int currentDay, int currentHour, int currentMinute) {
 void lightCtrlSetup(void) {
     LOG_INFO("Initializing light controller...");
     
-    // ตั้งค่า Light Relay
-    pinMode(LIGHT_RELAY_PIN, OUTPUT);
-    digitalWrite(LIGHT_RELAY_PIN, HIGH);  // OFF (Active LOW)
+    // ตั้งค่า Light Relay (output initialized by gpioOutSetup() in main.cpp)
+    gpioOutWrite(GPIO_OUT_LIGHT_RELAY, false);  // OFF
     _currentState = false;
     _status.hasOutput = true;
     
@@ -294,9 +295,9 @@ void lightCtrlSetState(bool state) {
     
     // Relay control (Active LOW: LOW = ON, HIGH = OFF)
     if (state) {
-        digitalWrite(LIGHT_RELAY_PIN, LOW);   // ON
+        gpioOutWrite(GPIO_OUT_LIGHT_RELAY, true);   // ON
     } else {
-        digitalWrite(LIGHT_RELAY_PIN, HIGH);  // OFF
+        gpioOutWrite(GPIO_OUT_LIGHT_RELAY, false);  // OFF
     }
     
     LOG_DEBUG("Light Relay (GPIO %d): %s", LIGHT_RELAY_PIN, state ? "ON" : "OFF");

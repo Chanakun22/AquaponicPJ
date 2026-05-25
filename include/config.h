@@ -40,6 +40,49 @@
 #define I2C_SDA_PIN         8       // ขา SDA สำหรับ I2C
 #define I2C_SCL_PIN         9       // ขา SCL สำหรับ I2C
 
+// MCP23017 I/O Expander (output relay control)
+// ใช้ I2C bus เดียวกับ BH1750 (default address 0x20)
+#define MCP23017_I2C_ADDR   0x20    // A0=A1=A2=GND
+#define MCP23017_RESET_PIN  4       // ESP32 GPIO ที่ control RESET pin ของ MCP
+
+// MCP23017 logical pin assignments (GPA0-7 = pins 0-7, GPB0-7 = pins 8-15)
+#define MCP_PIN_PUMP_NUTRIENT_A   0   // GPA0
+#define MCP_PIN_PUMP_NUTRIENT_B   1   // GPA1
+#define MCP_PIN_LIGHT_RELAY       2   // GPA2
+#define MCP_PIN_PUMP_CIRCULATION  3   // GPA3
+#define MCP_PIN_FISH_FEEDER       4   // GPA4
+#define MCP_PIN_REFILL_ROUTE_VALVE 5  // GPA5
+#define MCP_PIN_PUMP_REFILL       6   // GPA6
+#define MCP_PIN_EXHAUST_FAN       7   // GPA7
+
+// Per-output routing flag: ถ้า 1 = ใช้ MCP23017, ถ้า 0 = ใช้ ESP32 GPIO เดิม
+// เริ่มต้น default ทุกตัว = 0 (ESP32 GPIO) เพื่อให้ behavior เหมือนเดิม
+// flip ทีละตัวเป็น 1 หลัง wire MCP23017 และทดสอบทีละโมดูล
+#ifndef OUT_USE_MCP_PUMP_NUTRIENT_A
+#define OUT_USE_MCP_PUMP_NUTRIENT_A   0
+#endif
+#ifndef OUT_USE_MCP_PUMP_NUTRIENT_B
+#define OUT_USE_MCP_PUMP_NUTRIENT_B   0
+#endif
+#ifndef OUT_USE_MCP_LIGHT_RELAY
+#define OUT_USE_MCP_LIGHT_RELAY       0
+#endif
+#ifndef OUT_USE_MCP_PUMP_CIRCULATION
+#define OUT_USE_MCP_PUMP_CIRCULATION  0
+#endif
+#ifndef OUT_USE_MCP_FISH_FEEDER
+#define OUT_USE_MCP_FISH_FEEDER       0
+#endif
+#ifndef OUT_USE_MCP_REFILL_ROUTE_VALVE
+#define OUT_USE_MCP_REFILL_ROUTE_VALVE 0
+#endif
+#ifndef OUT_USE_MCP_PUMP_REFILL
+#define OUT_USE_MCP_PUMP_REFILL       0
+#endif
+#ifndef OUT_USE_MCP_EXHAUST_FAN
+#define OUT_USE_MCP_EXHAUST_FAN       0
+#endif
+
 // Relay/Light Control
 #define LIGHT_RELAY_PIN     12       // ขา Relay ควบคุมไฟ NeoPixel
 

@@ -7,6 +7,7 @@
 #include "config.h"
 #include "logger.h"
 #include "dhtSensor.h"
+#include "gpioOut.h"
 #include <Preferences.h>
 #include <math.h>
 #include <string.h>
@@ -44,7 +45,7 @@ static bool _hasOutput(void) {
 
 static void _writeOutput(bool enabled) {
 #if EXHAUST_FAN_PIN >= 0
-    digitalWrite(EXHAUST_FAN_PIN, enabled ? PUMP_ON : PUMP_OFF);
+    gpioOutWrite(GPIO_OUT_EXHAUST_FAN, enabled);
 #else
     (void)enabled;
 #endif
@@ -182,8 +183,8 @@ void fanCtrlSetup(void) {
     _sanitizeConfig();
 
 #if EXHAUST_FAN_PIN >= 0
-    pinMode(EXHAUST_FAN_PIN, OUTPUT);
-    digitalWrite(EXHAUST_FAN_PIN, PUMP_OFF);
+    // Output initialized by gpioOutSetup() in main.cpp; ensure stopped state.
+    gpioOutWrite(GPIO_OUT_EXHAUST_FAN, false);
 #endif
 
     _evaluateController();

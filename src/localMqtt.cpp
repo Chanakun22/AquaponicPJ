@@ -8,6 +8,7 @@
 #include "logger.h"
 #include "system.h"
 #include "wifiConn.h"
+#include "gpioOut.h"
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <ESPmDNS.h>
@@ -306,8 +307,8 @@ static void _armHwTestPumpAutoOff(uint8_t pin, unsigned long durationMs, const c
 }
 
 static void _stopHwTestPumpOutputs(bool resumeAutomator) {
-    digitalWrite(PUMP_NUTRIENT_A_PIN, PUMP_OFF);
-    digitalWrite(PUMP_NUTRIENT_B_PIN, PUMP_OFF);
+    gpioOutWrite(GPIO_OUT_PUMP_NUTRIENT_A, false);
+    gpioOutWrite(GPIO_OUT_PUMP_NUTRIENT_B, false);
 
     _hwTestPumpActive = false;
     _hwTestPumpPin = -1;
@@ -850,7 +851,7 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
         
         if (strcmp(cmd, "pump_a") == 0) {
             _stopHwTestPumpOutputs(false);
-            digitalWrite(PUMP_NUTRIENT_A_PIN, PUMP_ON);
+            gpioOutWrite(GPIO_OUT_PUMP_NUTRIENT_A, true);
             result["status"] = "running";
             result["duration_ms"] = duration;
             result["gpio"] = PUMP_NUTRIENT_A_PIN;
@@ -858,7 +859,7 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
         }
         else if (strcmp(cmd, "pump_b") == 0) {
             _stopHwTestPumpOutputs(false);
-            digitalWrite(PUMP_NUTRIENT_B_PIN, PUMP_ON);
+            gpioOutWrite(GPIO_OUT_PUMP_NUTRIENT_B, true);
             result["status"] = "running";
             result["duration_ms"] = duration;
             result["gpio"] = PUMP_NUTRIENT_B_PIN;

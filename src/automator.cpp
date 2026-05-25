@@ -6,6 +6,7 @@
 #include "automator.h"
 #include "config.h"
 #include "logger.h"
+#include "gpioOut.h"
 #include <Preferences.h>
 #include "TdsSensor.h"
 #include "tempSensor.h"
@@ -58,8 +59,8 @@ static void _sanitizeConfig(void) {
 }
 
 static void _stopAutomatorOutputs(void) {
-    digitalWrite(PUMP_NUTRIENT_A_PIN, PUMP_OFF);
-    digitalWrite(PUMP_NUTRIENT_B_PIN, PUMP_OFF);
+    gpioOutWrite(GPIO_OUT_PUMP_NUTRIENT_A, false);
+    gpioOutWrite(GPIO_OUT_PUMP_NUTRIENT_B, false);
 }
 
 static bool _tdsNeedsDose(float tds) {
@@ -144,11 +145,8 @@ static void _changeState(AutomatorState newState, const char* reason) {
 void automatorSetup(void) {
     LOG_INFO("Initializing Automator...");
     
-    pinMode(PUMP_NUTRIENT_A_PIN, OUTPUT);
-    digitalWrite(PUMP_NUTRIENT_A_PIN, PUMP_OFF);
-    
-    pinMode(PUMP_NUTRIENT_B_PIN, OUTPUT);
-    digitalWrite(PUMP_NUTRIENT_B_PIN, PUMP_OFF);
+    // Outputs initialized by gpioOutSetup() in main.cpp; ensure stopped state here.
+    _stopAutomatorOutputs();
     
 
     
@@ -418,7 +416,7 @@ void automatorLoop(void) {
                          _config.targetTds,
                          _config.tdsHysteresisPpm);
                 _changeState(AUTO_STATE_DOSING_A, reason);
-                digitalWrite(PUMP_NUTRIENT_A_PIN, PUMP_ON);
+                gpioOutWrite(GPIO_OUT_PUMP_NUTRIENT_A, true);
             } 
             else {
                 _changeState(AUTO_STATE_IDLE, "Mix tank parameters normal");
@@ -428,7 +426,7 @@ void automatorLoop(void) {
 
         case AUTO_STATE_DOSING_A:
             if (elapsed < _doseMsForVolume(_config.doseAVolumeMl)) {
-                digitalWrite(PUMP_NUTRIENT_A_PIN, PUMP_ON);
+                gpioOutWrite(GPIO_OUT_PUMP_NUTRIENT_A, true);
             } else {
                 _changeState(AUTO_STATE_MIXING_AFTER_A, "Nutrient A dosed. Mixing before Pump B");
             }
@@ -437,13 +435,13 @@ void automatorLoop(void) {
         case AUTO_STATE_MIXING_AFTER_A:
             if (elapsed >= _config.mixAfterAMs) {
                 _changeState(AUTO_STATE_DOSING_B, "Pumping B after Nutrient A mix");
-                digitalWrite(PUMP_NUTRIENT_B_PIN, PUMP_ON);
+                gpioOutWrite(GPIO_OUT_PUMP_NUTRIENT_B, true);
             }
             break;
 
         case AUTO_STATE_DOSING_B:
             if (elapsed < _doseMsForVolume(_config.doseBVolumeMl)) {
-                digitalWrite(PUMP_NUTRIENT_B_PIN, PUMP_ON);
+                gpioOutWrite(GPIO_OUT_PUMP_NUTRIENT_B, true);
             } else {
                 _changeState(AUTO_STATE_COOLDOWN, "Allowing A+B nutrients to mix before TDS recheck");
             }

@@ -6,6 +6,7 @@
 
 #include "commandHandler.h"
 #include "config.h"
+#include "gpioOut.h"
 #include "logger.h"
 #include "system.h"
 #include "wifiConn.h"
@@ -27,7 +28,7 @@
 
 // Pump test state (non-blocking auto-off)
 static unsigned long _pumpTestStartMs = 0;
-static uint8_t       _pumpTestPin     = 0;
+static GpioLogicalOutput _pumpTestOutput = GPIO_OUT_PUMP_NUTRIENT_A;
 static bool          _pumpTestActive  = false;
 #define PUMP_TEST_DURATION_MS HW_TEST_PUMP_DURATION_MS
 
@@ -804,10 +805,10 @@ void commandProcess(char* cmd, CommandOutput_t output) {
     }
     // === Pump Test Commands ===
     else if (strcmp(cleanCmd, "pump a") == 0) {
-        _pumpTestPin = PUMP_NUTRIENT_A_PIN;
+        _pumpTestOutput = GPIO_OUT_PUMP_NUTRIENT_A;
         _pumpTestStartMs = millis();
         _pumpTestActive = true;
-        digitalWrite(PUMP_NUTRIENT_A_PIN, PUMP_ON);
+        gpioOutWrite(GPIO_OUT_PUMP_NUTRIENT_A, true);
         commandPrintf(output, "[PUMP] Testing Nutrient A (GPIO %d) for %.1f seconds (~%.1f mL)...\r\n",
                   PUMP_NUTRIENT_A_PIN,
                   PUMP_TEST_DURATION_MS / 1000.0f,
@@ -815,10 +816,10 @@ void commandProcess(char* cmd, CommandOutput_t output) {
         LOG_INFO("[PUMP TEST] Nutrient A ON (GPIO %d)", PUMP_NUTRIENT_A_PIN);
     }
     else if (strcmp(cleanCmd, "pump b") == 0) {
-        _pumpTestPin = PUMP_NUTRIENT_B_PIN;
+        _pumpTestOutput = GPIO_OUT_PUMP_NUTRIENT_B;
         _pumpTestStartMs = millis();
         _pumpTestActive = true;
-        digitalWrite(PUMP_NUTRIENT_B_PIN, PUMP_ON);
+        gpioOutWrite(GPIO_OUT_PUMP_NUTRIENT_B, true);
         commandPrintf(output, "[PUMP] Testing Nutrient B (GPIO %d) for %.1f seconds (~%.1f mL)...\r\n",
                   PUMP_NUTRIENT_B_PIN,
                   PUMP_TEST_DURATION_MS / 1000.0f,
@@ -826,8 +827,8 @@ void commandProcess(char* cmd, CommandOutput_t output) {
         LOG_INFO("[PUMP TEST] Nutrient B ON (GPIO %d)", PUMP_NUTRIENT_B_PIN);
     }
     else if (strcmp(cleanCmd, "pump stop") == 0) {
-        digitalWrite(PUMP_NUTRIENT_A_PIN, PUMP_OFF);
-        digitalWrite(PUMP_NUTRIENT_B_PIN, PUMP_OFF);
+        gpioOutWrite(GPIO_OUT_PUMP_NUTRIENT_A, false);
+        gpioOutWrite(GPIO_OUT_PUMP_NUTRIENT_B, false);
         _pumpTestActive = false;
         commandPrintf(output, "[PUMP] All pumps STOPPED\r\n");
         LOG_INFO("[PUMP TEST] All pumps OFF (manual stop)");
@@ -879,8 +880,8 @@ void commandCheckSerial(void) {
 
 void commandPumpTestTick(void) {
     if (_pumpTestActive && (millis() - _pumpTestStartMs >= PUMP_TEST_DURATION_MS)) {
-        digitalWrite(_pumpTestPin, PUMP_OFF);
+        gpioOutWrite(_pumpTestOutput, false);
         _pumpTestActive = false;
-        LOG_INFO("[PUMP TEST] Auto-off (GPIO %d) after %d ms", _pumpTestPin, PUMP_TEST_DURATION_MS);
+        LOG_INFO("[PUMP TEST] Auto-off after %d ms", PUMP_TEST_DURATION_MS);
     }
 }

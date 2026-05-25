@@ -2,6 +2,48 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-05-24] - MCP23017 Output Abstraction Layer
+
+### Added
+
+- **gpioOut abstraction layer** (`include/gpioOut.h`, `src/gpioOut.cpp`):
+  - รองรับ dual-mode output routing per logical output: ESP32 GPIO เดิม หรือ MCP23017 I/O expander
+  - 8 logical outputs: PUMP_NUTRIENT_A/B, LIGHT_RELAY, PUMP_CIRCULATION, FISH_FEEDER, REFILL_ROUTE_VALVE, PUMP_REFILL, EXHAUST_FAN
+  - Active-low semantics: `gpioOutWrite(out, true)` = ON, `gpioOutWrite(out, false)` = OFF
+  - Boot-safe: ทุก output เริ่มที่ OFF state ก่อน controllers init (กัน relay click ตอน boot)
+  - Health check (`gpioOutMcpHealthy()`) + recovery (`gpioOutMcpReinit()`) สำหรับ I2C bus hang
+- **MCP23017 config** ใน `config.h`:
+  - `MCP23017_I2C_ADDR = 0x20` (default, ไม่ชน BH1750 ที่ 0x23)
+  - `MCP23017_RESET_PIN = 4` (ESP32 GPIO 4)
+  - `MCP_PIN_*` mapping for all 8 outputs (GPA0-7)
+  - Per-output flag `OUT_USE_MCP_*` (default = 0 → ใช้ ESP32 GPIO เดิม) — flip ทีละโมดูลตอน migrate
+- Library `Adafruit MCP23017 Arduino Library@^2.3.2`
+
+### Changed
+
+- **Refactor caller ทุกที่** ให้ใช้ `gpioOutWrite()` แทน `digitalWrite()` ของ output pins (35 จุดใน 7 ไฟล์):
+  - `automator.cpp`, `waterSystem.cpp`, `lightController.cpp`, `fishFeeder.cpp`, `fanController.cpp`, `localMqtt.cpp`, `commandHandler.cpp`
+- **ลบ `pinMode()` + initial `digitalWrite()`** ของ output pins ออกจาก controllers — `gpioOutSetup()` ใน `main.cpp` ทำให้แล้ว (เริ่มเร็วที่สุดหลัง STATUS_LED init เพื่อกัน relay floating)
+- `_writePumpOutput()` ใน waterSystem.cpp รับ `GpioLogicalOutput` แทน `int pin`
+- `commandHandler` track `GpioLogicalOutput _pumpTestOutput` แทน `uint8_t _pumpTestPin`
+
+### Notes
+
+- **Behavior identical** กับเวอร์ชันเดิม เพราะทุก `OUT_USE_MCP_*` flag default = 0 → route ไป ESP32 GPIO เหมือนเดิม
+- **Native test mock** เพิ่มใน `test/test_water_system_native/test_main.cpp` — map `gpioOutWrite` → `digitalWrite` ผ่าน pin number ของ ESP32 GPIO เพื่อให้ existing pin-state assertions ผ่านต่อไป
+- **Migration plan:** หลัง wire MCP23017 จริง → flip `OUT_USE_MCP_*` ทีละ define เป็น 1 → flash → ทดสอบทีละโมดูล → repeat (Light → Fan → Feeder → Route Valve → Circulation → Refill → Pump A/B)
+
+## [2026-05-23] - Manual Fish Refill Bypasses Cooldown
+
+### Fixed
+
+- **waterSystem:** Manual fish refill ถูก gate ด้วย `fishRefillIntervalMs` cooldown เหมือน auto refill ทำให้ user กด "Manual Refill On" ในหน้า Hardware Test แล้วระบบเข้า `WAIT_REFILL_INTERVAL` แทนที่จะเริ่มเติมทันที ดูเหมือนปุ่มไม่ทำงาน
+  - แก้ `_resolveRefillRouteForNow()` รับ `manualOverride` flag เพิ่ม
+  - เพิ่ม `_isFishRouteHardwareReady()` ที่เช็ค hardware safety (route valve, overflow sensor, overflow not active) โดยไม่เช็ค cooldown
+  - เมื่อ `manualRefill = true` และ hardware พร้อม → bypass cooldown และเริ่มเติมทันที
+  - เมื่อ auto refill (`refillEnabled`, ไม่ใช่ manual) → cooldown ยังทำงานปกติ (`_isFishRefillReady` เดิม)
+  - Hardware safety ทุกตัวยังครบ: ถ้า overflow active หรือ hardware ขาด → ยังคง block
+
 ## [2026-05-20] - Code Review Fixes (HIGH/MEDIUM)
 
 ### Fixed

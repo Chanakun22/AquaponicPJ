@@ -6,6 +6,7 @@
 #include "waterSystem.h"
 #include "config.h"
 #include "logger.h"
+#include "gpioOut.h"
 #include <Preferences.h>
 #include <time.h>
 #include <string.h>
@@ -306,19 +307,15 @@ static void _setState(WaterSystemState state, const char* reason) {
     _setReason(reason);
 }
 
-static void _writePumpOutput(int pin, bool enabled) {
-    if (pin < 0) {
-        return;
-    }
-    digitalWrite(pin, enabled ? PUMP_ON : PUMP_OFF);
+static void _writePumpOutput(GpioLogicalOutput out, bool enabled) {
+    gpioOutWrite(out, enabled);
 }
 
 static void _writeRouteValve(WaterRefillRoute route) {
 #if REFILL_ROUTE_VALVE_PIN >= 0
-    digitalWrite(REFILL_ROUTE_VALVE_PIN,
-                 route == WATER_REFILL_ROUTE_SUMP_DIRECT
-                     ? REFILL_ROUTE_TO_SUMP_STATE
-                     : REFILL_ROUTE_TO_FISH_STATE);
+    // SUMP_DIRECT = drive valve LOW (active-low ON), FISH = drive HIGH (OFF)
+    gpioOutWrite(GPIO_OUT_REFILL_ROUTE_VALVE,
+                 route == WATER_REFILL_ROUTE_SUMP_DIRECT);
 #else
     (void)route;
 #endif
@@ -642,15 +639,31 @@ static bool _isFishRefillReady(unsigned long now, bool overflowActive) {
         && _getFishRefillWaitRemainingMs(now) == 0;
 }
 
-static WaterRefillRoute _resolveRefillRouteForNow(unsigned long now, bool overflowActive) {
+static bool _isFishRouteHardwareReady(bool overflowActive) {
+    return _routeAvailable(WATER_REFILL_ROUTE_FISH_TANK)
+        && _hasOverflowSensor()
+        && !overflowActive;
+}
+
+static WaterRefillRoute _resolveRefillRouteForNow(unsigned long now, bool overflowActive, bool manualOverride) {
     switch (_config.preferredRoute) {
         case WATER_REFILL_ROUTE_FISH_TANK:
+            // Manual refill bypasses fish cooldown — user is explicitly requesting it.
+            // All hardware safety checks (route valve, overflow sensor, overflow not active) still apply.
+            if (manualOverride) {
+                return _isFishRouteHardwareReady(overflowActive)
+                    ? WATER_REFILL_ROUTE_FISH_TANK
+                    : WATER_REFILL_ROUTE_NONE;
+            }
             return _isFishRefillReady(now, overflowActive) ? WATER_REFILL_ROUTE_FISH_TANK : WATER_REFILL_ROUTE_NONE;
 
         case WATER_REFILL_ROUTE_SUMP_DIRECT:
             return _routeAvailable(WATER_REFILL_ROUTE_SUMP_DIRECT) ? WATER_REFILL_ROUTE_SUMP_DIRECT : WATER_REFILL_ROUTE_NONE;
 
         case WATER_REFILL_ROUTE_AUTO:
+            if (manualOverride && _isFishRouteHardwareReady(overflowActive)) {
+                return WATER_REFILL_ROUTE_FISH_TANK;
+            }
             if (_isFishRefillReady(now, overflowActive)) {
                 return WATER_REFILL_ROUTE_FISH_TANK;
             }
@@ -780,18 +793,17 @@ void waterSystemSetup(void) {
     _loadRuntimePersistence();
 
 #if PUMP_CIRCULATION_PIN >= 0
-    pinMode(PUMP_CIRCULATION_PIN, OUTPUT);
-    digitalWrite(PUMP_CIRCULATION_PIN, PUMP_OFF);
+    // Output initialized by gpioOutSetup(); ensure stopped state.
+    gpioOutWrite(GPIO_OUT_PUMP_CIRCULATION, false);
 #endif
 
 #if PUMP_REFILL_PIN >= 0
-    pinMode(PUMP_REFILL_PIN, OUTPUT);
-    digitalWrite(PUMP_REFILL_PIN, PUMP_OFF);
+    gpioOutWrite(GPIO_OUT_PUMP_REFILL, false);
 #endif
 
 #if REFILL_ROUTE_VALVE_PIN >= 0
-    pinMode(REFILL_ROUTE_VALVE_PIN, OUTPUT);
-    digitalWrite(REFILL_ROUTE_VALVE_PIN, REFILL_ROUTE_TO_FISH_STATE);
+    // Default valve state = route to FISH (HIGH = active-low OFF on solenoid)
+    gpioOutWrite(GPIO_OUT_REFILL_ROUTE_VALVE, false);
 #endif
 
 #if SUMP_LEVEL_LOW_PIN >= 0
@@ -993,7 +1005,7 @@ void waterSystemLoop(void) {
             _refillStartMs = now;
         }
 
-        desiredRoute = _resolveRefillRouteForNow(now, _status.overflowAlarm);
+        desiredRoute = _resolveRefillRouteForNow(now, _status.overflowAlarm, _config.manualRefill);
 
         if (desiredRoute == WATER_REFILL_ROUTE_NONE) {
             refillDesired = false;
@@ -1099,8 +1111,8 @@ void waterSystemLoop(void) {
     _updateDerivedStatus(now);
 
     _writeRouteValve(_status.activeRoute);
-    _writePumpOutput(PUMP_CIRCULATION_PIN, _status.circulationOutput);
-    _writePumpOutput(PUMP_REFILL_PIN, _status.fishTankRefillOutput);
+    _writePumpOutput(GPIO_OUT_PUMP_CIRCULATION, _status.circulationOutput);
+    _writePumpOutput(GPIO_OUT_PUMP_REFILL, _status.fishTankRefillOutput);
 
     if (_refillWasActive && !_status.refillOutput) {
         _lastMixRefillStopMs = now;
