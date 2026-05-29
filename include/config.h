@@ -39,6 +39,7 @@
 // I2C Bus (สำหรับ BH1750)
 #define I2C_SDA_PIN         8       // ขา SDA สำหรับ I2C
 #define I2C_SCL_PIN         9       // ขา SCL สำหรับ I2C
+#define I2C_CLOCK_HZ        100000  // 100kHz เพื่อความเสถียรเมื่อแชร์ BH1750 + MCP23017
 
 // MCP23017 I/O Expander (output relay control)
 // ใช้ I2C bus เดียวกับ BH1750 (default address 0x20)
@@ -59,28 +60,28 @@
 // เริ่มต้น default ทุกตัว = 0 (ESP32 GPIO) เพื่อให้ behavior เหมือนเดิม
 // flip ทีละตัวเป็น 1 หลัง wire MCP23017 และทดสอบทีละโมดูล
 #ifndef OUT_USE_MCP_PUMP_NUTRIENT_A
-#define OUT_USE_MCP_PUMP_NUTRIENT_A   0
+#define OUT_USE_MCP_PUMP_NUTRIENT_A   1
 #endif
 #ifndef OUT_USE_MCP_PUMP_NUTRIENT_B
-#define OUT_USE_MCP_PUMP_NUTRIENT_B   0
+#define OUT_USE_MCP_PUMP_NUTRIENT_B   1
 #endif
 #ifndef OUT_USE_MCP_LIGHT_RELAY
-#define OUT_USE_MCP_LIGHT_RELAY       0
+#define OUT_USE_MCP_LIGHT_RELAY       1
 #endif
 #ifndef OUT_USE_MCP_PUMP_CIRCULATION
-#define OUT_USE_MCP_PUMP_CIRCULATION  0
+#define OUT_USE_MCP_PUMP_CIRCULATION  1
 #endif
 #ifndef OUT_USE_MCP_FISH_FEEDER
 #define OUT_USE_MCP_FISH_FEEDER       0
 #endif
 #ifndef OUT_USE_MCP_REFILL_ROUTE_VALVE
-#define OUT_USE_MCP_REFILL_ROUTE_VALVE 0
+#define OUT_USE_MCP_REFILL_ROUTE_VALVE 1
 #endif
 #ifndef OUT_USE_MCP_PUMP_REFILL
-#define OUT_USE_MCP_PUMP_REFILL       0
+#define OUT_USE_MCP_PUMP_REFILL       1
 #endif
 #ifndef OUT_USE_MCP_EXHAUST_FAN
-#define OUT_USE_MCP_EXHAUST_FAN       0
+#define OUT_USE_MCP_EXHAUST_FAN       1
 #endif
 
 // Relay/Light Control

@@ -4,8 +4,8 @@
  */
 
 #include "lightSensor.h"
+#include "i2cBus.h"
 #include "logger.h"
-#include <Wire.h>
 #include <BH1750.h>
 
 // ============================================================================
@@ -17,6 +17,30 @@ static unsigned long _lightLastReadTime = 0;
 static float _lastLux = -1;
 static bool _sensorReady = false;
 
+static void _readLightHardware(void) {
+    if (!_sensorReady) {
+        return;
+    }
+
+    if (!i2cBusLock()) {
+        LOG_WARN("BH1750 I2C bus busy");
+        return;
+    }
+
+    if (_lightMeter.measurementReady()) {
+        float lux = _lightMeter.readLightLevel();
+
+        // Keep the last good cache on transient I2C/read errors.
+        if (lux < 0) {
+            LOG_WARN("BH1750 read error");
+        } else {
+            _lastLux = lux;
+        }
+    }
+
+    i2cBusUnlock();
+}
+
 // ============================================================================
 // PUBLIC FUNCTIONS
 // ============================================================================
@@ -24,12 +48,18 @@ static bool _sensorReady = false;
 void lightSetup(void) {
     Serial.println(F("[LIGHT] Initializing BH1750..."));
     
-    // เริ่มต้น I2C ด้วย pins ที่กำหนด
-    Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+    i2cBusSetup();
     
     // เริ่มต้น BH1750
-    if (_lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, BH1750_ADDRESS)) {
+    bool beginOk = false;
+    if (i2cBusLock()) {
+        beginOk = _lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, BH1750_ADDRESS);
+        i2cBusUnlock();
+    }
+
+    if (beginOk) {
         _sensorReady = true;
+        _lightLastReadTime = millis() - LIGHT_READ_INTERVAL; // force first task loop read
         LOG_INFO("BH1750 initialized successfully");
     } else {
         _sensorReady = false;
@@ -41,17 +71,7 @@ float lightRead(void) {
     if (!_sensorReady) {
         return -1.0f;
     }
-    
-    if (_lightMeter.measurementReady()) {
-        _lastLux = _lightMeter.readLightLevel();
-        
-        // ตรวจสอบค่าผิดปกติ
-        if (_lastLux < 0) {
-            LOG_WARN("BH1750 read error");
-            return -1.0f;
-        }
-    }
-    
+
     return _lastLux;
 }
 
@@ -60,11 +80,11 @@ void lightLoop(void) {
     if (millis() - _lightLastReadTime >= LIGHT_READ_INTERVAL) {
         _lightLastReadTime = millis();
         
-        float lux = lightRead();
+        _readLightHardware();
         
-        if (_sensorReady && lux >= 0) {
+        if (_sensorReady && _lastLux >= 0) {
             // Serial.print(F("[LIGHT] Illuminance: "));
-            // Serial.print(lux, 1);
+            // Serial.print(_lastLux, 1);
             // Serial.println(F(" lux"));
         }
     }

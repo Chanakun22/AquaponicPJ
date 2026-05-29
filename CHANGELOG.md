@@ -2,6 +2,20 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-05-29] - Shared I2C Bus Guard
+
+### Changed
+
+- **fix:** เพิ่ม `i2cBus` helper สำหรับ setup/lock I2C bus ร่วมระหว่าง BH1750 และ MCP23017 พร้อมตั้ง clock เป็น 100kHz เพื่อเพิ่มเสถียรภาพบน bus ที่มีหลายอุปกรณ์
+- **fix:** ปรับ `lightRead()` ให้คืนค่า cache เท่านั้น และให้ `lightLoop()` เป็นจุดเดียวที่อ่าน BH1750 hardware เพื่อลด `BH1750 read error` จากการอ่านซ้ำหลาย task
+- **fix:** ครอบ MCP23017 I2C access และ I2C scan command ด้วย shared mutex เดียวกัน
+
+## [2026-05-28] - Cursor Project Workflow Skill
+
+### Added
+
+- **docs:** เพิ่ม Cursor project skill `aquaponics-project-workflows` สำหรับ auto-invoke เมื่องานเกี่ยวกับ MCP23017, PlatformIO build/upload/monitor, firmware ESP32, MQTT, Pi Dashboard, และ changelog workflow
+
 ## [2026-05-24] - MCP23017 Output Abstraction Layer
 
 ### Added

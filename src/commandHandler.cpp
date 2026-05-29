@@ -7,6 +7,7 @@
 #include "commandHandler.h"
 #include "config.h"
 #include "gpioOut.h"
+#include "i2cBus.h"
 #include "logger.h"
 #include "system.h"
 #include "wifiConn.h"
@@ -468,23 +469,32 @@ static void _runSystemTest(CommandOutput_t out) {
     commandPrintf(out, "\r\n─── 3. I2C BUS SCAN ───────────────────────\r\n");
     {
         int i2cDevices = 0;
-        Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
-        for (uint8_t addr = 1; addr < 127; addr++) {
-            Wire.beginTransmission(addr);
-            if (Wire.endTransmission() == 0) {
-                const char* devName = "Unknown";
-                if (addr == 0x23 || addr == 0x5C) devName = "BH1750 (Light)";
-                else if (addr >= 0x48 && addr <= 0x4F) devName = "ADS1115/PCF8591";
-                else if (addr == 0x27 || addr == 0x3F) devName = "LCD (I2C)";
-                else if (addr == 0x3C || addr == 0x3D) devName = "OLED (SSD1306)";
-                commandPrintf(out, "  0x%02X : %s ✅\r\n", addr, devName);
-                i2cDevices++;
+        bool scanCompleted = false;
+        i2cBusSetup();
+        if (i2cBusLock(500)) {
+            for (uint8_t addr = 1; addr < 127; addr++) {
+                Wire.beginTransmission(addr);
+                if (Wire.endTransmission() == 0) {
+                    const char* devName = "Unknown";
+                    if (addr == 0x20) devName = "MCP23017";
+                    else if (addr == 0x23 || addr == 0x5C) devName = "BH1750 (Light)";
+                    else if (addr >= 0x48 && addr <= 0x4F) devName = "ADS1115/PCF8591";
+                    else if (addr == 0x27 || addr == 0x3F) devName = "LCD (I2C)";
+                    else if (addr == 0x3C || addr == 0x3D) devName = "OLED (SSD1306)";
+                    commandPrintf(out, "  0x%02X : %s ✅\r\n", addr, devName);
+                    i2cDevices++;
+                }
             }
+            i2cBusUnlock();
+            scanCompleted = true;
+        } else {
+            commandPrintf(out, "  I2C bus busy\r\n");
+            fail++;
         }
-        if (i2cDevices == 0) {
+        if (scanCompleted && i2cDevices == 0) {
             commandPrintf(out, "  (No I2C devices found)\r\n");
             if (systemGetSensorEnabled(SENSOR_LIGHT)) { fail++; }
-        } else {
+        } else if (scanCompleted) {
             commandPrintf(out, "  Total: %d device(s) found\r\n", i2cDevices);
             pass++;
         }

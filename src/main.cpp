@@ -227,10 +227,10 @@ void TaskSensors(void *pvParameters) {
         // Light
         if (systemGetSensorEnabled(SENSOR_LIGHT)) {
             taskCheckpoint(TASK_SENSORS, "light");
+            lightLoop();
             if (lightIsReady()) {
                 currentLight = validateLight(lightRead());
             }
-            lightLoop();
         } else {
             currentLight = -1;
         }

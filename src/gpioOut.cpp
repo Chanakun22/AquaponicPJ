@@ -5,6 +5,7 @@
 
 #include "gpioOut.h"
 #include "config.h"
+#include "i2cBus.h"
 #include "logger.h"
 
 #ifndef NATIVE_TEST
@@ -64,6 +65,8 @@ static bool _anyOutputUsesMcp(void) {
 
 #ifndef NATIVE_TEST
 static bool _initMcp(void) {
+    i2cBusSetup();
+
     // Hold RESET LOW briefly, then release HIGH
     pinMode(MCP23017_RESET_PIN, OUTPUT);
     digitalWrite(MCP23017_RESET_PIN, LOW);
@@ -71,7 +74,13 @@ static bool _initMcp(void) {
     digitalWrite(MCP23017_RESET_PIN, HIGH);
     delayMicroseconds(500);  // wait for MCP power-up after reset
 
+    if (!i2cBusLock(100)) {
+        LOG_ERROR("[GPIO_OUT] MCP23017 I2C bus busy during init");
+        return false;
+    }
+
     if (!_mcp.begin_I2C(MCP23017_I2C_ADDR)) {
+        i2cBusUnlock();
         LOG_ERROR("[GPIO_OUT] MCP23017 not responding at 0x%02X", MCP23017_I2C_ADDR);
         return false;
     }
@@ -84,6 +93,7 @@ static bool _initMcp(void) {
         }
     }
 
+    i2cBusUnlock();
     LOG_INFO("[GPIO_OUT] MCP23017 initialized at 0x%02X", MCP23017_I2C_ADDR);
     return true;
 }
@@ -133,7 +143,10 @@ void gpioOutWrite(GpioLogicalOutput out, bool on) {
     if (desc->useMcp) {
 #ifndef NATIVE_TEST
         if (_mcpInitialized && desc->mcpPin >= 0) {
-            _mcp.digitalWrite(desc->mcpPin, level);
+            if (i2cBusLock()) {
+                _mcp.digitalWrite(desc->mcpPin, level);
+                i2cBusUnlock();
+            }
         }
 #endif
     } else {
@@ -159,8 +172,13 @@ bool gpioOutMcpHealthy(void) {
         return false;
     }
     // ping by reading IODIRA register (read-back smoke test)
+    if (!i2cBusLock()) {
+        return false;
+    }
     Wire.beginTransmission(MCP23017_I2C_ADDR);
-    return (Wire.endTransmission() == 0);
+    bool ok = (Wire.endTransmission() == 0);
+    i2cBusUnlock();
+    return ok;
 #else
     return _mcpInitialized;
 #endif
@@ -174,11 +192,16 @@ bool gpioOutMcpReinit(void) {
     _mcpInitialized = _initMcp();
     if (_mcpInitialized) {
         // Re-apply last known states (in case MCP was reset)
-        for (int i = 0; i < GPIO_OUT_COUNT; i++) {
-            if (_outputs[i].useMcp && _outputs[i].mcpPin >= 0) {
-                _mcp.digitalWrite(_outputs[i].mcpPin,
-                                  _outputs[i].lastState ? PUMP_ON : PUMP_OFF);
+        if (i2cBusLock(100)) {
+            for (int i = 0; i < GPIO_OUT_COUNT; i++) {
+                if (_outputs[i].useMcp && _outputs[i].mcpPin >= 0) {
+                    _mcp.digitalWrite(_outputs[i].mcpPin,
+                                      _outputs[i].lastState ? PUMP_ON : PUMP_OFF);
+                }
             }
+            i2cBusUnlock();
+        } else {
+            _mcpInitialized = false;
         }
     }
     return _mcpInitialized;
