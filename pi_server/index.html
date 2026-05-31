@@ -550,6 +550,33 @@
         min-height: 2.2em;
       }
 
+      .compare-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .compare-tile {
+        padding: 12px;
+        border-radius: 14px;
+        background: rgba(255,255,255,0.035);
+        border: 1px solid rgba(255,255,255,0.07);
+      }
+
+      .compare-label {
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+      }
+
+      .compare-value {
+        font-size: 1.1rem;
+        font-weight: 700;
+      }
+
       /* Specific Card Colors */
       .card.water .val-main { color: var(--secondary); text-shadow: 0 0 30px rgba(0, 200, 255, 0.2); }
       .card.air .val-main { color: var(--warning); text-shadow: 0 0 30px rgba(255, 191, 0, 0.2); }
@@ -1164,6 +1191,16 @@
             <div class="range-chip">ช่วงแนะนำ 18-32°C</div>
             <div class="range-chip" id="waterRangeState" data-tone="neutral">กำลังตรวจสอบ...</div>
           </div>
+          <div class="compare-grid">
+            <div class="compare-tile">
+              <div class="compare-label">Mix Tank</div>
+              <div class="compare-value" id="waterTempMix">--</div>
+            </div>
+            <div class="compare-tile">
+              <div class="compare-label">Fish Tank</div>
+              <div class="compare-value" id="waterTempFish">--</div>
+            </div>
+          </div>
           <div class="sensor-hint" id="waterHint" data-tone="neutral">คำแนะนำเรื่องอุณหภูมิน้ำจะแสดงที่นี่</div>
         </div>
 
@@ -1198,6 +1235,16 @@
           <div class="range-row">
             <div class="range-chip">ช่วงแนะนำ 200-1500 ppm</div>
             <div class="range-chip" id="tdsRangeState" data-tone="neutral">กำลังตรวจสอบ...</div>
+          </div>
+          <div class="compare-grid">
+            <div class="compare-tile">
+              <div class="compare-label">Mix Tank</div>
+              <div class="compare-value" id="tdsMix">--</div>
+            </div>
+            <div class="compare-tile">
+              <div class="compare-label">Fish Tank</div>
+              <div class="compare-value" id="tdsFish">--</div>
+            </div>
           </div>
           <div class="sensor-hint" id="tdsQuality" data-tone="neutral">กำลังวิเคราะห์...</div>
         </div>
@@ -1758,16 +1805,25 @@
       }
 
       function updateSensors(data) {
-        document.getElementById("waterTemp").innerText = data.water_temp != null ? data.water_temp.toFixed(1) : "--";
+        const waterMix = data.water_temp_mix ?? data.water_temp;
+        const waterFish = data.water_temp_fish;
+        const tdsMix = data.tds_mix ?? data.tds;
+        const tdsFish = data.tds_fish;
+
+        document.getElementById("waterTemp").innerText = waterMix != null ? waterMix.toFixed(1) : "--";
+        document.getElementById("waterTempMix").innerText = waterMix != null ? waterMix.toFixed(1) + " °C" : "--";
+        document.getElementById("waterTempFish").innerText = waterFish != null ? waterFish.toFixed(1) + " °C" : "--";
         document.getElementById("airTemp").innerText = data.air_temp != null ? data.air_temp.toFixed(1) : "--";
         document.getElementById("humidity").innerText = data.humidity != null ? data.humidity.toFixed(1) : "--";
-        document.getElementById("tds").innerText = data.tds != null ? data.tds.toFixed(0) : "--";
+        document.getElementById("tds").innerText = tdsMix != null ? tdsMix.toFixed(0) : "--";
+        document.getElementById("tdsMix").innerText = tdsMix != null ? tdsMix.toFixed(0) + " ppm" : "--";
+        document.getElementById("tdsFish").innerText = tdsFish != null ? tdsFish.toFixed(0) + " ppm" : "--";
         document.getElementById("ph").innerText = data.ph != null ? data.ph.toFixed(2) : "--";
         document.getElementById("light").innerText = data.light != null ? data.light.toFixed(0) + " lux" : "--";
 
-        const waterEval = evaluateThreshold("water_temp", data.water_temp);
+        const waterEval = evaluateThreshold("water_temp", waterMix);
         const airEval = evaluateThreshold("air_temp", data.air_temp);
-        const tdsEval = evaluateThreshold("tds", data.tds);
+        const tdsEval = evaluateThreshold("tds", tdsMix);
         const phEval = evaluateThreshold("ph", data.ph);
 
         setToneText("waterRangeState", waterEval.short, waterEval.tone);
@@ -1775,7 +1831,8 @@
         setToneText("airRangeState", airEval.short, airEval.tone);
         setToneText("airHint", `${airEval.detail} · ความชื้น ${data.humidity != null ? data.humidity.toFixed(1) + "%" : "--"}`, airEval.tone);
         setToneText("tdsRangeState", tdsEval.short, tdsEval.tone);
-        setToneText("tdsQuality", `${getTdsQuality(data.tds)} · ${tdsEval.detail}`, tdsEval.tone);
+        const fishText = tdsFish != null ? ` · Fish ${tdsFish.toFixed(0)} ppm` : "";
+        setToneText("tdsQuality", `${getTdsQuality(tdsMix)} · ${tdsEval.detail}${fishText}`, tdsEval.tone);
         setToneText("phState", phEval.short, phEval.tone);
         setToneText("lightState", data.light == null ? "กำลังรอข้อมูล" : (data.light_state ? "โหมดกลางวัน" : "โหมดกลางคืน"), data.light == null ? "neutral" : "good");
         setToneText("phHint", `${phEval.detail} · โหมดแสง: ${data.light_state ? "กลางวัน" : "กลางคืน"}`, phEval.tone);

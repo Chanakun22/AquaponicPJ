@@ -14,6 +14,12 @@
 // PUBLIC FUNCTION PROTOTYPES
 // ============================================================================
 
+typedef enum {
+    TDS_CHANNEL_MIX = 0,
+    TDS_CHANNEL_FISH,
+    TDS_CHANNEL_COUNT
+} TdsChannel;
+
 /**
  * @brief เริ่มต้นการทำงานของ TDS Sensor
  * @note เรียกใช้ใน setup()
@@ -33,6 +39,7 @@ float tdsRead(float temperature);
  * @note ใช้ non-blocking delay อ่านค่าทุก TDS_READ_INTERVAL ms
  */
 void tdsLoop(float temperature);
+void tdsLoopChannels(float mixTemperature, float fishTemperature);
 
 /**
  * @brief ตรวจสอบว่าเก็บ sample ครบแล้วหรือยัง
@@ -45,6 +52,7 @@ bool tdsIsReady(void);
  * @return voltage ในหน่วย V
  */
 float tdsGetVoltage(void);
+float tdsGetVoltageForChannel(TdsChannel channel);
 
 /**
  * @brief ตั้งค่า 2-Point Calibration
@@ -68,11 +76,13 @@ void tdsSetCalibration(float lowPpm,
  * @return true ถ้า calibrated
  */
 bool tdsIsCalibrated(void);
+bool tdsIsCalibratedForChannel(TdsChannel channel);
 
 /**
  * @brief ดึงค่า TDS ล่าสุดที่คำนวณแล้วจาก tdsLoop() โดยไม่ทำ analogRead ซ้ำ
  * @return ค่า TDS ในหน่วย ppm หรือ -1 ถ้ายังไม่พร้อม
  */
 float tdsGetLastValue(void);
+float tdsGetLastValueForChannel(TdsChannel channel);
 
 #endif // TDS_SENSOR_H

@@ -433,7 +433,14 @@ bool netpieIsConnected(void) {
     return _mqtt.connected();
 }
 
-void netpiePublishData(float waterTemp, float airTemp, float humidity, float tds, float light, float ph) {
+void netpiePublishData(float waterTemp,
+                       float waterTempFish,
+                       float airTemp,
+                       float humidity,
+                       float tds,
+                       float tdsFish,
+                       float light,
+                       float ph) {
     if (millis() - _lastPublishTime < NETPIE_PUBLISH_INTERVAL) {
         return;
     }
@@ -450,11 +457,15 @@ void netpiePublishData(float waterTemp, float airTemp, float humidity, float tds
         return;
     }
     
-    StaticJsonDocument<512> doc;
+    StaticJsonDocument<768> doc;
     JsonObject data = doc.createNestedObject("data");
     
     if (!isnan(waterTemp)) {
         data["water_temp"] = round(waterTemp * 10) / 10.0;
+        data["water_temp_mix"] = round(waterTemp * 10) / 10.0;
+    }
+    if (!isnan(waterTempFish)) {
+        data["water_temp_fish"] = round(waterTempFish * 10) / 10.0;
     }
     if (!isnan(airTemp)) {
         data["air_temp"] = round(airTemp * 10) / 10.0;
@@ -464,6 +475,10 @@ void netpiePublishData(float waterTemp, float airTemp, float humidity, float tds
     }
     if (tds >= 0) {
         data["tds"] = round(tds * 10) / 10.0;
+        data["tds_mix"] = round(tds * 10) / 10.0;
+    }
+    if (tdsFish >= 0) {
+        data["tds_fish"] = round(tdsFish * 10) / 10.0;
     }
     if (light >= 0) {
         data["light"] = round(light * 10) / 10.0;
@@ -485,7 +500,7 @@ void netpiePublishData(float waterTemp, float airTemp, float humidity, float tds
     data["feeder_state"] = fishFeederGetStateString(feederStatus.state);
     data["feeder_source"] = commandSourceToString(feederCfg.commandSource);
     
-    char payload[512];
+    char payload[768];
     serializeJson(doc, payload);
     
     _networkTaskCheckpoint("netpie_publish");

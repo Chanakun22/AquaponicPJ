@@ -35,10 +35,12 @@
 // GLOBAL VARIABLES
 // ============================================================================
 
-static float currentWaterTemp = NAN;  // อุณหภูมิน้ำปัจจุบัน (°C)
+static float currentWaterTemp = NAN;      // legacy/mix tank water temp (°C)
+static float currentWaterTempFish = NAN;  // fish tank water temp (°C)
 static float currentAirTemp = NAN;    // อุณหภูมิอากาศ (°C)
 static float currentHumidity = NAN;   // ความชื้น (%)
-static float currentTds = -1;         // ค่า TDS (ppm)
+static float currentTds = -1;         // legacy/mix tank TDS (ppm)
+static float currentTdsFish = -1;     // fish tank TDS (ppm)
 static float currentLight = -1;       // ความเข้มแสง (lux)
 static float currentPh = -1;          // ค่า pH
 
@@ -152,7 +154,10 @@ void TaskNetworking(void *pvParameters) {
             lastPublish = millis();
             if (wifiIsConnected()) {
                 taskCheckpoint(TASK_NETWORKING, "local_publish");
-                localMqttPublishData(currentWaterTemp, currentAirTemp, currentHumidity, currentTds, currentLight, currentPh);
+                localMqttPublishData(currentWaterTemp, currentWaterTempFish,
+                                     currentAirTemp, currentHumidity,
+                                     currentTds, currentTdsFish,
+                                     currentLight, currentPh);
 
                 // Yield between publish calls — each publish may block up to 5s on TCP timeout
                 taskCheckpoint(TASK_NETWORKING, "yield_between_publish");
@@ -160,7 +165,10 @@ void TaskNetworking(void *pvParameters) {
 
                 if (netpieIsConnected()) {
                     taskCheckpoint(TASK_NETWORKING, "netpie_publish");
-                    netpiePublishData(currentWaterTemp, currentAirTemp, currentHumidity, currentTds, currentLight, currentPh);
+                    netpiePublishData(currentWaterTemp, currentWaterTempFish,
+                                      currentAirTemp, currentHumidity,
+                                      currentTds, currentTdsFish,
+                                      currentLight, currentPh);
                 }
                 taskCheckpoint(TASK_NETWORKING, "post_publish");
             }
@@ -186,21 +194,25 @@ void TaskSensors(void *pvParameters) {
         // Water Temp (OneWire is slow, blocking)
         if (systemGetSensorEnabled(SENSOR_WATER_TEMP)) {
             taskCheckpoint(TASK_SENSORS, "water_temp");
-            float rawWaterTemp = tempRead();
-            currentWaterTemp = validateTemperature(rawWaterTemp);
             tempLoop(); // Maintains sensor state if needed
+            float rawWaterTemp = tempGetTemperature(TEMP_CHANNEL_MIX);
+            float rawWaterTempFish = tempGetTemperature(TEMP_CHANNEL_FISH);
+            currentWaterTemp = validateTemperature(rawWaterTemp);
+            currentWaterTempFish = validateTemperature(rawWaterTempFish);
         } else {
             currentWaterTemp = NAN; // Reset if disabled
+            currentWaterTempFish = NAN;
         }
         
         // Air Temp & Humidity
         if (systemGetSensorEnabled(SENSOR_AIR_TEMP)) {
+            taskCheckpoint(TASK_SENSORS, "dht_loop");
+            dhtLoop();
             taskCheckpoint(TASK_SENSORS, "air_temp_humidity");
             float rawAirTemp = dhtReadTemperature();
             float rawHumidity = dhtReadHumidity();
             currentAirTemp = validateTemperature(rawAirTemp);
             currentHumidity = validateHumidity(rawHumidity);
-            dhtLoop();
         } else {
             currentAirTemp = NAN;
             currentHumidity = NAN;
@@ -216,12 +228,14 @@ void TaskSensors(void *pvParameters) {
         // เพื่อไม่ให้ค่า pH ดูค้างจากการข้ามรอบอ่านของ pH เอง
         if (runTdsThisPass) {
             taskCheckpoint(TASK_SENSORS, "tds");
-            tdsLoop(currentWaterTemp);
+            tdsLoopChannels(currentWaterTemp, currentWaterTempFish);
             if (tdsIsReady()) {
                 currentTds = validateTds(tdsGetLastValue());
+                currentTdsFish = validateTds(tdsGetLastValueForChannel(TDS_CHANNEL_FISH));
             }
         } else if (!tdsEnabled) {
             currentTds = -1;
+            currentTdsFish = -1;
         }
         
         // Light

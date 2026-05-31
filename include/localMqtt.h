@@ -30,7 +30,14 @@ void localMqttLoop(void);
  * @param light Light Intensity (lux)
  * @param ph pH Value (0-14)
  */
-void localMqttPublishData(float waterTemp, float airTemp, float humidity,  float tds, float light, float ph);
+void localMqttPublishData(float waterTemp,
+                          float waterTempFish,
+                          float airTemp,
+                          float humidity,
+                          float tds,
+                          float tdsFish,
+                          float light,
+                          float ph);
 
 /**
  * @brief Check if connected to Local MQTT

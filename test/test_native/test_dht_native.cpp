@@ -81,6 +81,7 @@ void test_dht_initial_values_valid() {
     DHT::setMockTemperature(25.0f);
     DHT::setMockHumidity(60.0f);
     dhtSetup();
+    dhtLoop();
 
     float t = dhtReadTemperature();
     float h = dhtReadHumidity();

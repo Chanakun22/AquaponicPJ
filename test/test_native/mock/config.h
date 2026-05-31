@@ -61,6 +61,9 @@
 // ==================== DHT ====================
 #define DHT_TYPE            DHT22
 #define DHT_READ_INTERVAL   2000
+#define DHT_SLOW_READ_WARN_MS 250
+#define DHT_MAX_CONSECUTIVE_FAILURES 3
+#define DHT_FAIL_BACKOFF_MS 10000
 
 // ==================== DS18B20 ====================
 #define TEMP_READ_INTERVAL  2000

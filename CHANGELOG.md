@@ -2,6 +2,15 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-05-31] - Fish Tank Water Temp and TDS Phase 1
+
+### Added
+
+- **feat:** เพิ่ม firmware support สำหรับ fish tank DS18B20 และ TDS channel โดยคง legacy `water_temp` / `tds` เป็นค่า mix tank สำหรับ automation เดิม
+- **feat:** เพิ่ม MQTT/NETPIE keys `water_temp_mix`, `water_temp_fish`, `tds_mix`, `tds_fish` และ `tds_fish_voltage`
+- **feat:** เพิ่ม Pi dashboard/history support สำหรับแสดงและเก็บค่า mix vs fish รวมถึง graph series ใหม่ และ bump PWA cache เป็น `aquaponics-v34`
+- **feat:** เพิ่ม CLI `temp scan`, `temp swap`, และ `temp bind mix|fish <index>` สำหรับจัดการ DS18B20 address binding
+
 ## [2026-05-29] - Shared I2C Bus Guard
 
 ### Changed
@@ -9,6 +18,9 @@ All notable changes to the **Smart Aquaponics AI** project will be documented in
 - **fix:** เพิ่ม `i2cBus` helper สำหรับ setup/lock I2C bus ร่วมระหว่าง BH1750 และ MCP23017 พร้อมตั้ง clock เป็น 100kHz เพื่อเพิ่มเสถียรภาพบน bus ที่มีหลายอุปกรณ์
 - **fix:** ปรับ `lightRead()` ให้คืนค่า cache เท่านั้น และให้ `lightLoop()` เป็นจุดเดียวที่อ่าน BH1750 hardware เพื่อลด `BH1750 read error` จากการอ่านซ้ำหลาย task
 - **fix:** ครอบ MCP23017 I2C access และ I2C scan command ด้วย shared mutex เดียวกัน
+- **fix:** harden DHT22 read path โดยย้าย initial read ออกจาก `dhtSetup()`, เพิ่ม slow-read warning, consecutive-failure backoff, และแยก TaskSensors checkpoint เป็น `dht_loop` ก่อนอ่าน cache
+- **fix:** เพิ่ม auto-disable สำหรับ DHT22 air sensor เมื่อ boot หลัง WDT ที่ค้างใน `dht_loop` / `air_temp_humidity` เพื่อหยุด crash loop และให้ re-enable หลังตรวจ wiring/pull-up
+- **test:** อัปเดต DHT native test/mock config ให้ครอบคลุม DHT backoff constants และแก้ test harness linkage ให้รันผ่านบน native environment
 
 ## [2026-05-28] - Cursor Project Workflow Skill
 

@@ -9,6 +9,7 @@
 
 #include <unity.h>
 #include <cmath>
+#include <cstring>
 
 // ========== Mock Arduino ==========
 unsigned long _mockMillis = 0;
@@ -60,6 +61,15 @@ public:
 #ifndef isnan
 #define isnan(x) std::isnan(x)
 #endif
+
+class Preferences {
+public:
+    bool begin(const char*, bool) { return true; }
+    void end() {}
+    size_t getBytesLength(const char*) { return 0; }
+    size_t getBytes(const char*, void*, size_t) { return 0; }
+    size_t putBytes(const char*, const void*, size_t len) { return len; }
+};
 
 // ========== Include mocks before source ==========
 #include "mock/OneWire.h"

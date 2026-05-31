@@ -232,6 +232,9 @@ static void _showHelp(CommandOutput_t out) {
     commandPrintf(out, "  help     - แสดงรายการคำสั่ง\r\n");
     commandPrintf(out, "  clear    - ล้างหน้าจอ\r\n");
     commandPrintf(out, "  status   - แสดงค่าเซ็นเซอร์ทั้งหมด\r\n");
+    commandPrintf(out, "  temp scan- scan DS18B20 mix/fish bindings\r\n");
+    commandPrintf(out, "  temp swap- สลับ DS18B20 mix/fish binding\r\n");
+    commandPrintf(out, "  temp bind mix|fish <index> - bind DS18B20 จาก scan index\r\n");
     commandPrintf(out, "  test     - รันระบบ Self-Test\r\n");
     commandPrintf(out, "  health   - แสดงสุขภาพระบบ\r\n");
     commandPrintf(out, "  tasks    - แสดงสถานะ Task (heartbeat + stack)\r\n");
@@ -284,12 +287,15 @@ static void _showHelp(CommandOutput_t out) {
  */
 static void _showStatus(CommandOutput_t out) {
     float lastTds = tdsGetLastValue();
+    float fishTds = tdsGetLastValueForChannel(TDS_CHANNEL_FISH);
     commandPrintf(out, "\r\n");
     commandPrintf(out, "========== SENSOR STATUS ==========\r\n");
-    commandPrintf(out, "  Water Temp : %.2f C\r\n", tempRead());
+    commandPrintf(out, "  Water Mix  : %.2f C\r\n", tempGetTemperature(TEMP_CHANNEL_MIX));
+    commandPrintf(out, "  Water Fish : %.2f C\r\n", tempGetTemperature(TEMP_CHANNEL_FISH));
     commandPrintf(out, "  Air Temp   : %.2f C\r\n", dhtReadTemperature());
     commandPrintf(out, "  Humidity   : %.2f %%\r\n", dhtReadHumidity());
-    commandPrintf(out, "  TDS        : %.0f ppm\r\n", lastTds);
+    commandPrintf(out, "  TDS Mix    : %.0f ppm\r\n", lastTds);
+    commandPrintf(out, "  TDS Fish   : %.0f ppm\r\n", fishTds);
     commandPrintf(out, "  pH         : %.2f\r\n", phRead());
     commandPrintf(out, "  Light      : %.0f lux\r\n", lightRead());
     commandPrintf(out, "===================================\r\n");
@@ -329,6 +335,40 @@ static void _showCrashInfo(CommandOutput_t out) {
         commandPrintf(out, "  No persisted crash info\r\n");
     }
     commandPrintf(out, "===============================\r\n");
+}
+
+static void _showTempBindings(CommandOutput_t out) {
+    commandPrintf(out, "\r\n========== DS18B20 TEMP BINDINGS ==========\r\n");
+    int count = tempGetDeviceCount();
+    commandPrintf(out, "  Devices found: %d\r\n", count);
+    for (int i = 0; i < count; i++) {
+        char addr[17];
+        if (tempGetScannedAddressHex((uint8_t)i, addr, sizeof(addr))) {
+            commandPrintf(out, "  [%d] %s\r\n", i, addr);
+        }
+    }
+
+    char mixAddr[17];
+    char fishAddr[17];
+    commandPrintf(out, "  Mix binding : %s (%.2f C)\r\n",
+                  tempGetBoundAddressHex(TEMP_CHANNEL_MIX, mixAddr, sizeof(mixAddr)) ? mixAddr : "unbound",
+                  tempGetTemperature(TEMP_CHANNEL_MIX));
+    commandPrintf(out, "  Fish binding: %s (%.2f C)\r\n",
+                  tempGetBoundAddressHex(TEMP_CHANNEL_FISH, fishAddr, sizeof(fishAddr)) ? fishAddr : "unbound",
+                  tempGetTemperature(TEMP_CHANNEL_FISH));
+    commandPrintf(out, "===========================================\r\n");
+}
+
+static bool _parseTempChannel(const char* value, TempChannel* out) {
+    if (strcmp(value, "mix") == 0) {
+        *out = TEMP_CHANNEL_MIX;
+        return true;
+    }
+    if (strcmp(value, "fish") == 0) {
+        *out = TEMP_CHANNEL_FISH;
+        return true;
+    }
+    return false;
 }
 
 /**
@@ -404,10 +444,12 @@ static void _runSystemTest(CommandOutput_t out) {
     // ─── 2. SENSORS ──────────────────────────────────────────
     commandPrintf(out, "\r\n─── 2. SENSORS ────────────────────────────\r\n");
     
-    float t_water = tempRead();
+    float t_water = tempGetTemperature(TEMP_CHANNEL_MIX);
+    float t_water_fish = tempGetTemperature(TEMP_CHANNEL_FISH);
     float t_air = dhtReadTemperature();
     float humid = dhtReadHumidity();
     float tds = tdsGetLastValue();
+    float tds_fish = tdsGetLastValueForChannel(TDS_CHANNEL_FISH);
     float light = lightRead();
     float ph = phRead();
     
@@ -417,7 +459,9 @@ static void _runSystemTest(CommandOutput_t out) {
         commandPrintf(out, "  Water Temp   : ⏸️  DISABLED\r\n");
     } else {
         bool ok = !isnan(t_water) && t_water > 0;
-        commandPrintf(out, "  Water Temp   : %s %.1f °C\r\n", ok ? "✅" : "❌", t_water);
+        bool fishOk = !isnan(t_water_fish) && t_water_fish > 0;
+        commandPrintf(out, "  Water Mix    : %s %.1f °C\r\n", ok ? "✅" : "❌", t_water);
+        commandPrintf(out, "  Water Fish   : %s %.1f °C\r\n", fishOk ? "✅" : "⚠️", t_water_fish);
         ok ? pass++ : fail++;
     }
     
@@ -441,7 +485,9 @@ static void _runSystemTest(CommandOutput_t out) {
         commandPrintf(out, "  TDS          : ⏸️  DISABLED\r\n");
     } else {
         bool ok = (tds >= 0);
-        commandPrintf(out, "  TDS          : %s %.0f ppm\r\n", ok ? "✅" : "❌", tds);
+        bool fishOk = (tds_fish >= 0);
+        commandPrintf(out, "  TDS Mix      : %s %.0f ppm\r\n", ok ? "✅" : "❌", tds);
+        commandPrintf(out, "  TDS Fish     : %s %.0f ppm\r\n", fishOk ? "✅" : "⚠️", tds_fish);
         ok ? pass++ : fail++;
     }
     
@@ -673,6 +719,33 @@ void commandProcess(char* cmd, CommandOutput_t output) {
     }
     else if (strcmp(cleanCmd, "mqtt") == 0) {
         _showMqtt(output);
+    }
+    else if (strcmp(cleanCmd, "temp") == 0 || strcmp(cleanCmd, "temp scan") == 0) {
+        _showTempBindings(output);
+    }
+    else if (strcmp(cleanCmd, "temp swap") == 0) {
+        if (tempSwapChannels()) {
+            commandPrintf(output, "[TEMP] Swapped mix/fish DS18B20 bindings\r\n");
+        } else {
+            commandPrintf(output, "[TEMP] Swap failed; both mix and fish must be bound first\r\n");
+        }
+        _showTempBindings(output);
+    }
+    else if (strncmp(cleanCmd, "temp bind ", 10) == 0) {
+        char channelName[8] = {0};
+        int index = -1;
+        if (sscanf(cleanCmd + 10, "%7s %d", channelName, &index) == 2) {
+            TempChannel channel;
+            if (_parseTempChannel(channelName, &channel) && index >= 0 &&
+                tempBindChannelToIndex(channel, (uint8_t)index)) {
+                commandPrintf(output, "[TEMP] Bound %s to scan index %d\r\n", channelName, index);
+            } else {
+                commandPrintf(output, "[TEMP] Bind failed. Use: temp bind mix|fish <index>\r\n");
+            }
+        } else {
+            commandPrintf(output, "[TEMP] Usage: temp bind mix|fish <index>\r\n");
+        }
+        _showTempBindings(output);
     }
     else if (strcmp(cleanCmd, "ph") == 0) {
         commandPrintf(output, "[PH] pH: %.2f, Voltage: %.1f mV\r\n", phRead(), phReadVoltage());

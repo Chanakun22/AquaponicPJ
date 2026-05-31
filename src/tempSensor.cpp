@@ -6,6 +6,7 @@
 
 #include "tempSensor.h"
 #include "logger.h"
+#include <Preferences.h>
 
 
 // ============================================================================
@@ -14,9 +15,13 @@
 
 static OneWire _oneWire(ONE_WIRE_PIN);
 static DallasTemperature _sensors(&_oneWire);
+static Preferences _tempPrefs;
 static unsigned long _tempLastReadTime = 0;
 static unsigned long _tempRequestTime = 0;
-static float _lastWaterTemp = NAN;
+static float _lastWaterTemp[TEMP_CHANNEL_COUNT] = {NAN, NAN};
+static DeviceAddress _boundAddresses[TEMP_CHANNEL_COUNT];
+static bool _hasBoundAddress[TEMP_CHANNEL_COUNT] = {false, false};
+static int _deviceCount = 0;
 
 // State machine for async read
 enum TempState { TEMP_IDLE, TEMP_WAITING };
@@ -26,6 +31,96 @@ static TempState _tempState = TEMP_IDLE;
 static const unsigned long CONVERSION_DELAY_MS = 800;
 static uint8_t _retryCount = 0;
 const uint8_t MAX_RETRIES = 3;
+
+static const char* _channelKey(TempChannel channel) {
+    return channel == TEMP_CHANNEL_FISH ? "addr_fish" : "addr_mix";
+}
+
+static const char* _channelName(TempChannel channel) {
+    return channel == TEMP_CHANNEL_FISH ? "fish" : "mix";
+}
+
+static bool _isValidChannel(TempChannel channel) {
+    return channel >= 0 && channel < TEMP_CHANNEL_COUNT;
+}
+
+static bool _addressEquals(const DeviceAddress a, const DeviceAddress b) {
+    return memcmp(a, b, 8) == 0;
+}
+
+static void _formatAddress(const DeviceAddress addr, char* out, size_t outSize) {
+    if (out == NULL || outSize == 0) {
+        return;
+    }
+    if (outSize < 17) {
+        out[0] = '\0';
+        return;
+    }
+    snprintf(out, outSize, "%02X%02X%02X%02X%02X%02X%02X%02X",
+             addr[0], addr[1], addr[2], addr[3],
+             addr[4], addr[5], addr[6], addr[7]);
+}
+
+static void _saveAddress(TempChannel channel) {
+    _tempPrefs.begin("tempSensor", false);
+    _tempPrefs.putBytes(_channelKey(channel), _boundAddresses[channel], 8);
+    _tempPrefs.end();
+}
+
+static bool _loadAddress(TempChannel channel) {
+    _tempPrefs.begin("tempSensor", true);
+    size_t len = _tempPrefs.getBytesLength(_channelKey(channel));
+    bool ok = len == 8 && _tempPrefs.getBytes(_channelKey(channel), _boundAddresses[channel], 8) == 8;
+    _tempPrefs.end();
+    _hasBoundAddress[channel] = ok;
+    return ok;
+}
+
+static bool _bindFromIndex(TempChannel channel, uint8_t index, bool save) {
+    if (!_isValidChannel(channel) || index >= _deviceCount) {
+        return false;
+    }
+
+    DeviceAddress addr;
+    if (!_sensors.getAddress(addr, index)) {
+        return false;
+    }
+
+    memcpy(_boundAddresses[channel], addr, 8);
+    _hasBoundAddress[channel] = true;
+    if (save) {
+        _saveAddress(channel);
+    }
+    return true;
+}
+
+static void _autoBindMissingAddresses(void) {
+    if (_deviceCount <= 0) {
+        return;
+    }
+
+    if (!_hasBoundAddress[TEMP_CHANNEL_MIX]) {
+        _bindFromIndex(TEMP_CHANNEL_MIX, 0, true);
+    }
+
+    if (!_hasBoundAddress[TEMP_CHANNEL_FISH] && _deviceCount > 1) {
+        uint8_t fishIndex = 1;
+        DeviceAddress candidate;
+        for (uint8_t i = 0; i < _deviceCount; i++) {
+            if (_sensors.getAddress(candidate, i) &&
+                (!_hasBoundAddress[TEMP_CHANNEL_MIX] ||
+                 !_addressEquals(candidate, _boundAddresses[TEMP_CHANNEL_MIX]))) {
+                fishIndex = i;
+                break;
+            }
+        }
+        _bindFromIndex(TEMP_CHANNEL_FISH, fishIndex, true);
+    }
+}
+
+static bool _isInvalidTemp(float temp) {
+    return temp == DEVICE_DISCONNECTED_C || temp == 85.0f || isnan(temp);
+}
 
 // ============================================================================
 // PUBLIC FUNCTIONS
@@ -38,16 +133,89 @@ void tempSetup(void) {
     _sensors.setWaitForConversion(false);
     
     // Check if sensor is present
-    int deviceCount = _sensors.getDeviceCount();
-    if (deviceCount == 0) {
+    _deviceCount = _sensors.getDeviceCount();
+    _loadAddress(TEMP_CHANNEL_MIX);
+    _loadAddress(TEMP_CHANNEL_FISH);
+    _autoBindMissingAddresses();
+    for (int ch = 0; ch < TEMP_CHANNEL_COUNT; ch++) {
+        _lastWaterTemp[ch] = NAN;
+    }
+    _tempState = TEMP_IDLE;
+    _retryCount = 0;
+
+    if (_deviceCount == 0) {
         LOG_ERROR("DS18B20 not found! Check wiring.");
     } else {
-        LOG_INFO("DS18B20 initialized - Found %d device(s) [Async Mode]", deviceCount);
+        LOG_INFO("DS18B20 initialized - Found %d device(s) [Async Mode]", _deviceCount);
+        for (int ch = 0; ch < TEMP_CHANNEL_COUNT; ch++) {
+            if (_hasBoundAddress[ch]) {
+                char addr[17];
+                _formatAddress(_boundAddresses[ch], addr, sizeof(addr));
+                LOG_INFO("DS18B20 %s bound to %s", _channelName((TempChannel)ch), addr);
+            } else {
+                LOG_WARN("DS18B20 %s channel not bound", _channelName((TempChannel)ch));
+            }
+        }
     }
 }
 
 float tempRead(void) {
-    return _lastWaterTemp;
+    return tempGetTemperature(TEMP_CHANNEL_MIX);
+}
+
+float tempGetTemperature(TempChannel channel) {
+    if (!_isValidChannel(channel)) {
+        return NAN;
+    }
+    return _lastWaterTemp[channel];
+}
+
+int tempGetDeviceCount(void) {
+    return _deviceCount;
+}
+
+bool tempGetScannedAddressHex(uint8_t index, char* out, size_t outSize) {
+    if (index >= _deviceCount) {
+        return false;
+    }
+    DeviceAddress addr;
+    if (!_sensors.getAddress(addr, index)) {
+        return false;
+    }
+    _formatAddress(addr, out, outSize);
+    return true;
+}
+
+bool tempGetBoundAddressHex(TempChannel channel, char* out, size_t outSize) {
+    if (!_isValidChannel(channel) || !_hasBoundAddress[channel]) {
+        return false;
+    }
+    _formatAddress(_boundAddresses[channel], out, outSize);
+    return true;
+}
+
+bool tempBindChannelToIndex(TempChannel channel, uint8_t index) {
+    bool ok = _bindFromIndex(channel, index, true);
+    if (ok) {
+        _lastWaterTemp[channel] = NAN;
+    }
+    return ok;
+}
+
+bool tempSwapChannels(void) {
+    if (!_hasBoundAddress[TEMP_CHANNEL_MIX] || !_hasBoundAddress[TEMP_CHANNEL_FISH]) {
+        return false;
+    }
+
+    DeviceAddress tmp;
+    memcpy(tmp, _boundAddresses[TEMP_CHANNEL_MIX], 8);
+    memcpy(_boundAddresses[TEMP_CHANNEL_MIX], _boundAddresses[TEMP_CHANNEL_FISH], 8);
+    memcpy(_boundAddresses[TEMP_CHANNEL_FISH], tmp, 8);
+    _saveAddress(TEMP_CHANNEL_MIX);
+    _saveAddress(TEMP_CHANNEL_FISH);
+    _lastWaterTemp[TEMP_CHANNEL_MIX] = NAN;
+    _lastWaterTemp[TEMP_CHANNEL_FISH] = NAN;
+    return true;
 }
 
 void tempLoop(void) {
@@ -68,13 +236,26 @@ void tempLoop(void) {
         case TEMP_WAITING:
             // รอ conversion เสร็จ (800ms สำหรับ 12-bit including margin)
             if (currentTime - _tempRequestTime >= CONVERSION_DELAY_MS) {
-                float temp = _sensors.getTempCByIndex(0);
+                bool anyInvalid = false;
                 
-                // ตรวจสอบค่าผิดพลาด (-127 = ไม่มีเซ็นเซอร์ หรือ Error)
-                if (temp == -127.0f || temp == 85.0f) { // 85.0 is also power-on reset value
+                for (int ch = 0; ch < TEMP_CHANNEL_COUNT; ch++) {
+                    if (!_hasBoundAddress[ch]) {
+                        _lastWaterTemp[ch] = NAN;
+                        continue;
+                    }
+
+                    float temp = _sensors.getTempC(_boundAddresses[ch]);
+                    if (_isInvalidTemp(temp)) {
+                        anyInvalid = true;
+                    } else {
+                        _lastWaterTemp[ch] = temp;
+                    }
+                }
+
+                if (anyInvalid) {
                     if (_retryCount < MAX_RETRIES) {
                         _retryCount++;
-                        LOG_WARN("DS18B20 read fail (%.1f), retrying... (%d/%d)", temp, _retryCount, MAX_RETRIES);
+                        LOG_WARN("DS18B20 read fail, retrying... (%d/%d)", _retryCount, MAX_RETRIES);
                         
                         // Request again immediately
                         _sensors.requestTemperatures();
@@ -83,11 +264,15 @@ void tempLoop(void) {
                         return; 
                     } else {
                         LOG_ERROR("Failed to read temperature from DS18B20 after %d retries", MAX_RETRIES);
-                        _lastWaterTemp = NAN;
+                        for (int ch = 0; ch < TEMP_CHANNEL_COUNT; ch++) {
+                            if (_hasBoundAddress[ch]) {
+                                float temp = _sensors.getTempC(_boundAddresses[ch]);
+                                if (_isInvalidTemp(temp)) {
+                                    _lastWaterTemp[ch] = NAN;
+                                }
+                            }
+                        }
                     }
-                } else {
-                    _lastWaterTemp = temp;
-                    // LOG_INFO("Temp read success: %.2f", temp);
                 }
                 
                 _tempLastReadTime = currentTime;

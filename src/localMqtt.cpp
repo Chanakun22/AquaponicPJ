@@ -1122,7 +1122,14 @@ bool localMqttIsConnected(void) {
     return _localMqtt.connected();
 }
 
-void localMqttPublishData(float waterTemp, float airTemp, float humidity, float tds, float light, float ph) {
+void localMqttPublishData(float waterTemp,
+                          float waterTempFish,
+                          float airTemp,
+                          float humidity,
+                          float tds,
+                          float tdsFish,
+                          float light,
+                          float ph) {
     if (millis() - _lastPublishTime < LOCAL_PUBLISH_INTERVAL) {
         return;
     }
@@ -1139,16 +1146,26 @@ void localMqttPublishData(float waterTemp, float airTemp, float humidity, float 
     _sensorPublishDoc.clear();
     
     // Format same as Netpie for consistency, or simpler flat JSON
-    if (!isnan(waterTemp)) _sensorPublishDoc["water_temp"] = round(waterTemp * 10) / 10.0;
+    if (!isnan(waterTemp)) {
+        _sensorPublishDoc["water_temp"] = round(waterTemp * 10) / 10.0;
+        _sensorPublishDoc["water_temp_mix"] = round(waterTemp * 10) / 10.0;
+    }
+    if (!isnan(waterTempFish)) _sensorPublishDoc["water_temp_fish"] = round(waterTempFish * 10) / 10.0;
     if (!isnan(airTemp)) _sensorPublishDoc["air_temp"] = round(airTemp * 10) / 10.0;
     if (!isnan(humidity)) _sensorPublishDoc["humidity"] = round(humidity * 10) / 10.0;
-    if (tds >= 0) _sensorPublishDoc["tds"] = round(tds * 10) / 10.0;
+    if (tds >= 0) {
+        _sensorPublishDoc["tds"] = round(tds * 10) / 10.0;
+        _sensorPublishDoc["tds_mix"] = round(tds * 10) / 10.0;
+    }
+    if (tdsFish >= 0) _sensorPublishDoc["tds_fish"] = round(tdsFish * 10) / 10.0;
     if (light >= 0) _sensorPublishDoc["light"] = round(light * 10) / 10.0;
     if (ph >= 0) _sensorPublishDoc["ph"] = round(ph * 100) / 100.0;
     
     // Add TDS voltage for calibration
     float tdsVoltage = tdsGetVoltage();
     if (tdsVoltage >= 0) _sensorPublishDoc["tds_voltage"] = round(tdsVoltage * 1000) / 1000.0;
+    float tdsFishVoltage = tdsGetVoltageForChannel(TDS_CHANNEL_FISH);
+    if (tdsFishVoltage >= 0) _sensorPublishDoc["tds_fish_voltage"] = round(tdsFishVoltage * 1000) / 1000.0;
     
     // Add pH voltage for calibration (mV)
     float phVoltage = phReadVoltage();

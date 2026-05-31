@@ -128,6 +128,23 @@ static bool _isWatchdogResetReason(esp_reset_reason_t reason) {
 }
 #endif
 
+static bool _lastCrashWasDhtRead(void) {
+    char crashInfo[160];
+    if (!systemGetLastCrashInfo(crashInfo, sizeof(crashInfo))) {
+        return false;
+    }
+
+    return strstr(crashInfo, "stage=dht_loop") != NULL ||
+           strstr(crashInfo, "stage=air_temp_humidity") != NULL;
+}
+
+static void _autoDisableUnstableSensorsAfterCrash(void) {
+    if (_lastCrashWasDhtRead() && systemGetSensorEnabled(SENSOR_AIR_TEMP)) {
+        systemSetSensorEnabled(SENSOR_AIR_TEMP, false);
+        LOG_WARN("Auto-disabled DHT22 air sensor after WDT during DHT read; re-enable after checking wiring/pull-up");
+    }
+}
+
 // ============================================================================
 // PUBLIC FUNCTIONS
 // ============================================================================
@@ -166,6 +183,7 @@ void systemInit(void) {
     
     // Load Sensor States
     systemSensorInit();
+    _autoDisableUnstableSensorsAfterCrash();
     
     // Get initial heap
     #if defined(ESP32)

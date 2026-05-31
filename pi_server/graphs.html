@@ -496,7 +496,8 @@
 
         function renderEnvChart(data) {
             const datasets = [
-                { label: 'Water Temp (°C)', data: data.datasets.water_temp, borderColor: '#38bdf8', tension: 0.4, spanGaps: true },
+                { label: 'Water Temp Mix (°C)', data: data.datasets.water_temp_mix || data.datasets.water_temp, borderColor: '#38bdf8', tension: 0.4, spanGaps: true },
+                { label: 'Water Temp Fish (°C)', data: data.datasets.water_temp_fish || [], borderColor: '#22c55e', tension: 0.4, spanGaps: true },
                 { label: 'Air Temp (°C)', data: data.datasets.air_temp, borderColor: '#f472b6', tension: 0.4, spanGaps: true },
                 { label: 'Humidity (%)', data: data.datasets.humidity, borderColor: '#a78bfa', tension: 0.4, hidden: true, spanGaps: true }
             ];
@@ -507,7 +508,8 @@
         function renderWaterChart(data) {
             const datasets = [
                 { label: 'pH Level', data: data.datasets.ph, borderColor: '#34d399', yAxisID: 'y', tension: 0.4, spanGaps: true },
-                { label: 'TDS (ppm)', data: data.datasets.tds, borderColor: '#fbbf24', yAxisID: 'y1', tension: 0.4, spanGaps: true }
+                { label: 'TDS Mix (ppm)', data: data.datasets.tds_mix || data.datasets.tds, borderColor: '#fbbf24', yAxisID: 'y1', tension: 0.4, spanGaps: true },
+                { label: 'TDS Fish (ppm)', data: data.datasets.tds_fish || [], borderColor: '#fb7185', yAxisID: 'y1', tension: 0.4, spanGaps: true }
             ];
 
             waterChart = upsertLineChart(waterChart, 'waterChart', data.labels, datasets, {

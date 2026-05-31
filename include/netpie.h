@@ -41,7 +41,14 @@ bool netpieIsConnected(void);
  * @param light ความเข้มแสง (lux)
  * @param ph ค่า pH (0-14)
  */
-void netpiePublishData(float waterTemp, float airTemp, float humidity, float tds, float light, float ph);
+void netpiePublishData(float waterTemp,
+                       float waterTempFish,
+                       float airTemp,
+                       float humidity,
+                       float tds,
+                       float tdsFish,
+                       float light,
+                       float ph);
 
 /**
  * @brief ส่งข้อความไปยัง topic ที่กำหนด

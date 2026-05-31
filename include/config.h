@@ -22,7 +22,9 @@
  */
 
 // TDS Sensor
-#define TDS_PIN             5       // ขา Analog สำหรับ TDS Sensor
+#define TDS_PIN             5       // ขา Analog สำหรับ TDS Sensor เดิม (mix tank)
+#define TDS_MIX_PIN         TDS_PIN // alias สำหรับ multi-channel refactor
+#define TDS_FISH_PIN        7       // ขา Analog สำหรับ TDS Sensor ตู้ปลา
 
 // DHT22 Sensor (Temperature & Humidity)
 #define DHT_PIN             15      // ขา Digital สำหรับ DHT22
@@ -179,6 +181,9 @@
  */
 #define DHT_TYPE            DHT22   // ชนิดเซ็นเซอร์ (DHT11, DHT22, DHT21)
 #define DHT_READ_INTERVAL   2000    // ช่วงเวลาอ่านค่า (ms)
+#define DHT_SLOW_READ_WARN_MS 250   // เตือนถ้า DHT read ใช้เวลานานผิดปกติ
+#define DHT_MAX_CONSECUTIVE_FAILURES 3 // จำนวน fail ติดกันก่อนพัก sensor ชั่วคราว
+#define DHT_FAIL_BACKOFF_MS 10000    // พักการอ่าน DHT หลัง fail ต่อเนื่อง (ms)
 
 /**
  * @section DS18B20 Settings

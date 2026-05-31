@@ -1101,6 +1101,8 @@ last_data = {
     # ESP32 Data
     "water_temp": 0, "air_temp": 0, "humidity": 0,
     "tds": 0, "ph": 0, "light": 0,
+    "water_temp_mix": 0, "water_temp_fish": None,
+    "tds_mix": 0, "tds_fish": None,
     "fan_enabled": False, "fan_auto_mode": True, "fan_manual_state": False,
     "fan_running": False, "fan_state": "DISABLED", "fan_reason": "Waiting for ESP32 status", "fan_has_output": False,
     "uptime_sec": 0, "wifi_rssi": 0, "free_heap": 0,
@@ -1148,6 +1150,11 @@ def init_db():
                     light REAL
                 )
             ''')
+            cursor.execute("PRAGMA table_info(sensors)")
+            existing_columns = {row[1] for row in cursor.fetchall()}
+            for column_name in ("water_temp_mix", "water_temp_fish", "tds_mix", "tds_fish"):
+                if column_name not in existing_columns:
+                    cursor.execute(f"ALTER TABLE sensors ADD COLUMN {column_name} REAL")
             
             # Settings History Table
             cursor.execute('''
@@ -1490,13 +1497,22 @@ def on_message(client, userdata, msg):
         
         # Preserve the last good reading when a sensor key is absent from a packet.
         # The firmware may omit a value temporarily while waiting for the next valid read.
-        SENSOR_KEYS = ["water_temp", "air_temp", "humidity", "tds", "ph", "light"]
+        SENSOR_KEYS = [
+            "water_temp", "water_temp_mix", "water_temp_fish",
+            "air_temp", "humidity",
+            "tds", "tds_mix", "tds_fish",
+            "ph", "light"
+        ]
         sensor_config = app_settings.get("sensor_config", {})
         sensor_config_keys = {
             "water_temp": "water",
+            "water_temp_mix": "water",
+            "water_temp_fish": "water",
             "air_temp": "air",
             "humidity": "air",
             "tds": "tds",
+            "tds_mix": "tds",
+            "tds_fish": "tds",
             "ph": "ph",
             "light": "light",
         }
@@ -1536,15 +1552,22 @@ def save_data_to_db(data):
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO sensors (water_temp, air_temp, humidity, tds, ph, light)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO sensors (
+                    water_temp, air_temp, humidity, tds, ph, light,
+                    water_temp_mix, water_temp_fish, tds_mix, tds_fish
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 sensor_db_value(data, "water_temp"),
                 sensor_db_value(data, "air_temp"),
                 sensor_db_value(data, "humidity"),
                 sensor_db_value(data, "tds"),
                 sensor_db_value(data, "ph"),
-                sensor_db_value(data, "light")
+                sensor_db_value(data, "light"),
+                sensor_db_value(data, "water_temp_mix"),
+                sensor_db_value(data, "water_temp_fish"),
+                sensor_db_value(data, "tds_mix"),
+                sensor_db_value(data, "tds_fish")
             ))
             conn.commit()
             last_db_save = now
@@ -1561,6 +1584,8 @@ def normalize_history_value(sensor_key, value):
 
     invalid_exact_values = {
         "water_temp": {0, 85.0, -127},
+        "water_temp_mix": {0, 85.0, -127},
+        "water_temp_fish": {0, 85.0, -127},
         "air_temp": {0},
         "humidity": {0},
         "ph": {0},
@@ -1569,7 +1594,7 @@ def normalize_history_value(sensor_key, value):
     if sensor_key in invalid_exact_values and value in invalid_exact_values[sensor_key]:
         return None
 
-    if sensor_key == "tds" and value <= 0:
+    if sensor_key in ("tds", "tds_mix", "tds_fish") and value <= 0:
         return None
 
     if sensor_key == "ph" and (value <= 0 or value > 14):
@@ -1637,7 +1662,8 @@ def fetch_history_rows(start_date_raw="", end_date_raw=""):
     days = app_settings.get("display", {}).get("graph_days", 3)
     range_meta = build_history_range_meta(start_date, end_date, days)
     query = '''
-        SELECT timestamp, water_temp, air_temp, humidity, tds, ph, light
+        SELECT timestamp, water_temp, air_temp, humidity, tds, ph, light,
+               water_temp_mix, water_temp_fish, tds_mix, tds_fish
         FROM sensors
     '''
     filters = []
@@ -1684,9 +1710,13 @@ def build_history_payload(rows, range_meta):
     labels = []
     data = {
         "water_temp": [],
+        "water_temp_mix": [],
+        "water_temp_fish": [],
         "air_temp": [],
         "humidity": [],
         "tds": [],
+        "tds_mix": [],
+        "tds_fish": [],
         "ph": [],
         "light": []
     }
@@ -1700,6 +1730,10 @@ def build_history_payload(rows, range_meta):
         data["tds"].append(normalize_history_value("tds", row[4]))
         data["ph"].append(normalize_history_value("ph", row[5]))
         data["light"].append(normalize_history_value("light", row[6]))
+        data["water_temp_mix"].append(normalize_history_value("water_temp_mix", row[7]))
+        data["water_temp_fish"].append(normalize_history_value("water_temp_fish", row[8]))
+        data["tds_mix"].append(normalize_history_value("tds_mix", row[9]))
+        data["tds_fish"].append(normalize_history_value("tds_fish", row[10]))
 
     payload_range = dict(range_meta)
     payload_range["sample_count"] = len(ordered_rows)
@@ -2678,9 +2712,13 @@ def export_history_excel():
             '   <Row>',
             '    <Cell><Data ss:Type="String">Timestamp (Thailand)</Data></Cell>',
             '    <Cell><Data ss:Type="String">Water Temp (C)</Data></Cell>',
+            '    <Cell><Data ss:Type="String">Water Temp Mix (C)</Data></Cell>',
+            '    <Cell><Data ss:Type="String">Water Temp Fish (C)</Data></Cell>',
             '    <Cell><Data ss:Type="String">Air Temp (C)</Data></Cell>',
             '    <Cell><Data ss:Type="String">Humidity (%)</Data></Cell>',
             '    <Cell><Data ss:Type="String">TDS (ppm)</Data></Cell>',
+            '    <Cell><Data ss:Type="String">TDS Mix (ppm)</Data></Cell>',
+            '    <Cell><Data ss:Type="String">TDS Fish (ppm)</Data></Cell>',
             '    <Cell><Data ss:Type="String">pH</Data></Cell>',
             '    <Cell><Data ss:Type="String">Light (lux)</Data></Cell>',
             '   </Row>',
@@ -2691,9 +2729,13 @@ def export_history_excel():
             xml_rows.append('   <Row>')
             xml_rows.append(xml_cell(local_dt.strftime("%Y-%m-%d %H:%M:%S") if local_dt else row[0]))
             xml_rows.append(xml_cell(normalize_history_value("water_temp", row[1]), is_number=True))
+            xml_rows.append(xml_cell(normalize_history_value("water_temp_mix", row[7]), is_number=True))
+            xml_rows.append(xml_cell(normalize_history_value("water_temp_fish", row[8]), is_number=True))
             xml_rows.append(xml_cell(normalize_history_value("air_temp", row[2]), is_number=True))
             xml_rows.append(xml_cell(normalize_history_value("humidity", row[3]), is_number=True))
             xml_rows.append(xml_cell(normalize_history_value("tds", row[4]), is_number=True))
+            xml_rows.append(xml_cell(normalize_history_value("tds_mix", row[9]), is_number=True))
+            xml_rows.append(xml_cell(normalize_history_value("tds_fish", row[10]), is_number=True))
             xml_rows.append(xml_cell(normalize_history_value("ph", row[5]), is_number=True))
             xml_rows.append(xml_cell(normalize_history_value("light", row[6]), is_number=True))
             xml_rows.append('   </Row>')
