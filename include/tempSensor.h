@@ -45,6 +45,12 @@ float tempGetTemperature(TempChannel channel);
 int tempGetDeviceCount(void);
 
 /**
+ * @brief รีเฟรชผลการ scan DS18B20 บน OneWire bus แบบ realtime
+ * @return จำนวน device ที่พบล่าสุด
+ */
+int tempRefreshScan(void);
+
+/**
  * @brief อ่าน address ของ DS18B20 ที่ scan เจอเป็น hex string
  */
 bool tempGetScannedAddressHex(uint8_t index, char* out, size_t outSize);

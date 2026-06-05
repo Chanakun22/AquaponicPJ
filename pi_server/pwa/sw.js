@@ -1,5 +1,5 @@
 // Service Worker for Aquaponics PWA
-const CACHE_NAME = 'aquaponics-v34';
+const CACHE_NAME = 'aquaponics-v47';
 const STATIC_ASSETS = [
     '/',
     '/static/fonts/fonts.css',

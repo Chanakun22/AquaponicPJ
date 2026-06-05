@@ -70,6 +70,14 @@ void tdsSetCalibration(float lowPpm,
 					   float highVoltage,
 					   float highTemperature,
 					   bool rawVoltageInput);
+void tdsSetCalibrationForChannel(TdsChannel channel,
+								 float lowPpm,
+								 float lowVoltage,
+								 float lowTemperature,
+								 float highPpm,
+								 float highVoltage,
+								 float highTemperature,
+								 bool rawVoltageInput);
 
 /**
  * @brief ตรวจสอบว่า sensor ได้รับการ calibrate แล้วหรือยัง

@@ -224,54 +224,58 @@ float tempGetTemperature(TempChannel ch);
 
 ## 7. Phased Implementation Plan
 
-### Phase A — Foundation (ไม่ใช้ probe จริง, dry-run code)
+> **สถานะล่าสุด (2026-05-31):** Firmware ครบทุก channel (temp/tds/ph) แล้ว + Pi dashboard รองรับ mix/fish ครบ
+> เหลือเฉพาะ **wire hardware probe จริง + calibrate** และ optional cleanup
+
+### Phase A — Foundation (ไม่ใช้ probe จริง, dry-run code) ✅ DONE
 **Risk: LOW** | Effort: 4-6 hr
 
-- [ ] เพิ่ม `PhChannel` / `TdsChannel` / `TempChannel` enum ใน header
-- [ ] Refactor internal storage เป็น array (ยังไม่ expose channel ใหม่ใน MQTT)
-- [ ] สร้าง backward-compat shims
-- [ ] Build + native test ผ่าน (ค่า MIX channel อ่านเหมือนเดิม)
+- [x] เพิ่ม `PhChannel` / `TdsChannel` / `TempChannel` enum ใน header
+- [x] Refactor internal storage เป็น array (ยังไม่ expose channel ใหม่ใน MQTT)
+- [x] สร้าง backward-compat shims
+- [x] Build + native test ผ่าน (ค่า MIX channel อ่านเหมือนเดิม)
 
-### Phase B — Water Temp #2 (ง่ายสุด, ทำก่อน)
+### Phase B — Water Temp #2 (ง่ายสุด, ทำก่อน) ✅ DONE (code) / ⏳ wire pending
 **Risk: LOW** | Effort: 2-3 hr
 
-- [ ] Wire DS18B20 ตัวที่ 2 ขนานบน GPIO 13
-- [ ] เพิ่ม CLI: `temp scan`, `temp bind mix/fish`
-- [ ] เก็บ address mapping ใน NVS
-- [ ] ส่ง `water_temp_fish` ใน MQTT (legacy `water_temp` ยังคง = mix)
-- [ ] Pi dashboard: เพิ่ม card Fish Tank Temperature
-- [ ] ทดสอบ 24 ชั่วโมง — ตรวจค่าเสถียร, ไม่สลับ
+- [ ] Wire DS18B20 ตัวที่ 2 ขนานบน GPIO 13 *(hardware — pending)*
+- [x] เพิ่ม CLI: `temp scan`, `temp bind mix/fish`
+- [x] เก็บ address mapping ใน NVS
+- [x] ส่ง `water_temp_fish` ใน MQTT (legacy `water_temp` ยังคง = mix)
+- [x] Pi dashboard: เพิ่ม card Fish Tank Temperature
+- [ ] ทดสอบ 24 ชั่วโมง — ตรวจค่าเสถียร, ไม่สลับ *(หลัง wire)*
 
-### Phase C — pH #2
+### Phase C — pH #2 ✅ DONE (code) / ⏳ wire + calibrate pending
 **Risk: MEDIUM** | Effort: 3-4 hr
 
-- [ ] Wire E-201-C ตัวที่ 2 → GPIO 1 (ADC1_CH0)
-- [ ] Refactor `phSensor.cpp` ให้รองรับ 2 channel จริง
-- [ ] เพิ่ม CLI: `cal686/401/918 fish/mix`
-- [ ] เพิ่ม MQTT: `ph_fish`
-- [ ] Pi dashboard: card + graph + calibration UI
-- [ ] Calibrate ทั้ง 2 probe ครบ 3 จุด
-- [ ] ทดสอบ 24 ชั่วโมง
+- [ ] Wire E-201-C ตัวที่ 2 → GPIO 1 (ADC1_CH0) *(hardware — pending)*
+- [x] Refactor `phSensor.cpp` ให้รองรับ 2 channel จริง (array-based + backward-compat shims)
+- [x] เพิ่ม CLI: `cal686/401/918 [mix|fish]`
+- [x] เพิ่ม MQTT: `ph_mix`, `ph_fish` + per-channel cal topic/status
+- [x] Pi dashboard: card + graph + calibration UI (channel selector)
+- [ ] Calibrate ทั้ง 2 probe ครบ 3 จุด *(หลัง wire)*
+- [ ] ทดสอบ 24 ชั่วโมง *(หลัง wire)*
 
-### Phase D — TDS #2
+### Phase D — TDS #2 ✅ DONE (code) / ⏳ wire + calibrate pending
 **Risk: MEDIUM** | Effort: 3-4 hr
 
-- [ ] Wire TDS probe ตัวที่ 2 → GPIO 7 (ADC1_CH6)
-- [ ] Refactor `TdsSensor.cpp` ให้รองรับ 2 channel
-- [ ] Pi: หน้า settings เพิ่ม calibration ของ fish tank
-- [ ] เพิ่ม MQTT: `tds_fish`
-- [ ] Calibrate ทั้ง 2 probe
-- [ ] ทดสอบ 24 ชั่วโมง
+- [ ] Wire TDS probe ตัวที่ 2 → GPIO 7 (ADC1_CH6) *(hardware — pending)*
+- [x] Refactor `TdsSensor.cpp` ให้รองรับ 2 channel
+- [x] Pi: หน้า settings เพิ่ม calibration ของ fish tank
+- [x] เพิ่ม MQTT: `tds_fish`
+- [ ] Calibrate ทั้ง 2 probe *(หลัง wire)*
+- [ ] ทดสอบ 24 ชั่วโมง *(หลัง wire)*
 
-### Phase E — Dashboard polish + cleanup
+### Phase E — Dashboard polish + cleanup ✅ DONE (dashboard) / 🔵 cleanup optional
 **Risk: LOW** | Effort: 2-3 hr
 
-- [ ] Pi dashboard: layout ปรับให้ดูเทียบ mix vs fish ง่าย
-- [ ] Graphs: 2 series ต่อ chart (mix + fish)
-- [ ] CHANGELOG.md update
-- [ ] (Optional) Remove legacy `tds`/`ph`/`water_temp` keys หลัง Pi อัปเดตหมดแล้ว
+- [x] Pi dashboard: layout ปรับให้ดูเทียบ mix vs fish ง่าย (compare-grid tiles)
+- [x] Graphs: 2 series ต่อ chart (mix + fish) — pH/TDS/Temp
+- [x] CHANGELOG.md update
+- [ ] (Optional) Remove legacy `tds`/`ph`/`water_temp` keys หลัง Pi อัปเดตหมดแล้ว *(ยังเก็บไว้เพื่อ backward compat)*
 
 **Total effort estimate: ~14-20 ชั่วโมง** (กระจาย 3-5 วันทำงาน)
+**งานที่เหลือ:** wire probe จริง (pH+TDS+Temp fish) → calibrate → soak test
 
 ---
 

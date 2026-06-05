@@ -1,7 +1,7 @@
 /**
  * @file phSensor.h
  * @brief อ่านค่า pH จาก Analog pH Sensor (E-201-C)
- * @details รองรับ calibration 3 จุด (pH 4.01, 6.86 และ 9.18)
+ * @details รองรับ 2 channel (mix tank + fish tank) และ calibration 3 จุด (pH 4.01, 6.86, 9.18) ต่อ channel
  */
 
 #ifndef PH_SENSOR_H
@@ -29,84 +29,55 @@
 #define PH_ADC_DUMMY_READS    2     // Discard initial ADC reads so pH sampling starts after channel settles
 
 // Calibration values (ต้อง calibrate ใหม่ตาม sensor จริง)
-#define PH_VOLTAGE_AT_686   2058    // ADC value ที่ pH 6.86 (neutral-ish)
+#define PH_VOLTAGE_AT_686   2058    // ADC value ที่ pH 6.86 (neutral-ish) - default reference
 #define PH_VOLTAGE_SLOPE    -59.16  // mV per pH unit at 25°C
 
 // ============================================================================
-// PUBLIC FUNCTION PROTOTYPES
+// CHANNEL DEFINITIONS
 // ============================================================================
 
-/**
- * @brief เริ่มต้น pH Sensor
- */
-void phSetup(void);
+typedef enum {
+    PH_CHANNEL_MIX = 0,     // ถังผสม (probe เดิม, GPIO 6)
+    PH_CHANNEL_FISH,        // ตู้ปลา (probe ใหม่, GPIO 1)
+    PH_CHANNEL_COUNT
+} PhChannel;
 
-/**
- * @brief วนลูปอ่านค่า pH
- * @note เรียกใช้ใน loop()
- */
+// ============================================================================
+// PUBLIC FUNCTION PROTOTYPES (multi-channel)
+// ============================================================================
+
+void phSetup(void);
 void phLoop(void);
 
-/**
- * @brief อ่านค่า pH ปัจจุบัน
- * @return ค่า pH (0-14) หรือ -1 ถ้ายังไม่พร้อม
- */
-float phRead(void);
+float phReadChannel(PhChannel channel);
+float phReadVoltageChannel(PhChannel channel);
+bool  phIsReadyChannel(PhChannel channel);
 
-/**
- * @brief อ่านค่า voltage จาก sensor
- * @return voltage (mV)
- */
-float phReadVoltage(void);
+void phCalibratePh686Channel(PhChannel channel);
+void phCalibratePh401Channel(PhChannel channel);
+void phCalibratePh918Channel(PhChannel channel);
 
-/**
- * @brief ตรวจสอบว่า sensor พร้อมหรือยัง
- * @return true ถ้าพร้อมใช้งาน
- */
-bool phIsReady(void);
+bool phHasCalibration401Channel(PhChannel channel);
+bool phHasCalibration686Channel(PhChannel channel);
+bool phHasCalibration918Channel(PhChannel channel);
 
-/**
- * @brief Calibrate sensor ที่ pH 6.86
- * @note จุ่ม probe ใน buffer pH 6.86 แล้วเรียกฟังก์ชันนี้
- */
-void phCalibratePh686(void);
+void phClearCalibrationChannel(PhChannel channel);
 
-/**
- * @brief Calibrate sensor ที่ pH 4.01
- * @note จุ่ม probe ใน buffer pH 4.01 แล้วเรียกฟังก์ชันนี้
- */
-void phCalibratePh401(void);
+void phSetTemperature(float temperature);   // shared across all channels (water temp compensation)
 
-/**
- * @brief Calibrate sensor ที่ pH 9.18
- * @note จุ่ม probe ใน buffer pH 9.18 แล้วเรียกฟังก์ชันนี้
- */
-void phCalibratePh918(void);
+// ============================================================================
+// BACKWARD-COMPAT SHIMS — default = MIX channel
+// ============================================================================
 
-/**
- * @brief ตรวจสอบว่าจุด pH 4.01 ถูก calibrate แล้วหรือยัง
- */
-bool phHasCalibration401(void);
-
-/**
- * @brief ตรวจสอบว่าจุด pH 6.86 ถูก calibrate แล้วหรือยัง
- */
-bool phHasCalibration686(void);
-
-/**
- * @brief ตรวจสอบว่าจุด pH 9.18 ถูก calibrate แล้วหรือยัง
- */
-bool phHasCalibration918(void);
-
-/**
- * @brief ตั้งค่าอุณหภูมิน้ำสำหรับ Temperature Compensation
- * @param temperature อุณหภูมิน้ำ (°C)
- */
-void phSetTemperature(float temperature);
-
-/**
- * @brief ลบค่า Calibration ที่บันทึกไว้ใน NVS
- */
-void phClearCalibration(void);
+inline float phRead(void)            { return phReadChannel(PH_CHANNEL_MIX); }
+inline float phReadVoltage(void)     { return phReadVoltageChannel(PH_CHANNEL_MIX); }
+inline bool  phIsReady(void)         { return phIsReadyChannel(PH_CHANNEL_MIX); }
+inline void  phCalibratePh686(void)  { phCalibratePh686Channel(PH_CHANNEL_MIX); }
+inline void  phCalibratePh401(void)  { phCalibratePh401Channel(PH_CHANNEL_MIX); }
+inline void  phCalibratePh918(void)  { phCalibratePh918Channel(PH_CHANNEL_MIX); }
+inline bool  phHasCalibration401(void) { return phHasCalibration401Channel(PH_CHANNEL_MIX); }
+inline bool  phHasCalibration686(void) { return phHasCalibration686Channel(PH_CHANNEL_MIX); }
+inline bool  phHasCalibration918(void) { return phHasCalibration918Channel(PH_CHANNEL_MIX); }
+inline void  phClearCalibration(void)  { phClearCalibrationChannel(PH_CHANNEL_MIX); }
 
 #endif // PH_SENSOR_H

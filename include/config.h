@@ -33,7 +33,9 @@
 #define ONE_WIRE_PIN        13      // ขา OneWire สำหรับ DS18B20
 
 // pH Sensor (Analog)
-#define PH_SENSOR_PIN       6       // ขา Analog สำหรับ pH Sensor
+#define PH_SENSOR_PIN       6       // legacy alias = mix tank probe (kept for backward compat)
+#define PH_SENSOR_MIX_PIN   6       // ขา Analog สำหรับ pH Sensor ถังผสม
+#define PH_SENSOR_FISH_PIN  1       // ขา Analog สำหรับ pH Sensor ตู้ปลา (ADC1_CH0)
 
 // LED
 #define STATUS_LED_PIN      LED_BUILTIN  // ขา LED แสดงสถานะ

@@ -518,11 +518,54 @@
         gap: 14px;
       }
 
+      .tank-sensor-grid,
+      .fish-sensor-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 18px;
+      }
+
+      .tank-sensors {
+        position: relative;
+        overflow: hidden;
+        grid-column: span 2;
+        background:
+          radial-gradient(circle at top right, rgba(0, 200, 255, 0.08), transparent 38%),
+          linear-gradient(180deg, rgba(24, 27, 33, 0.98), rgba(18, 21, 27, 0.98));
+        border-color: rgba(255,255,255,0.1);
+      }
+
+      .tank-sensors::after {
+        content: "";
+        position: absolute;
+        inset: auto -10% -50% 48%;
+        height: 160px;
+        border-radius: 999px;
+        background: radial-gradient(circle, rgba(0, 242, 170, 0.08), transparent 70%);
+        pointer-events: none;
+      }
+
       .measure-tile {
-        padding: 16px;
-        border-radius: 18px;
-        background: rgba(255,255,255,0.04);
+        position: relative;
+        z-index: 1;
+        padding: 14px 14px 13px;
+        border-radius: 16px;
+        background: rgba(255,255,255,0.025);
         border: 1px solid rgba(255,255,255,0.07);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+      }
+
+      .measure-tile.water-tile {
+        border-top-color: rgba(0, 200, 255, 0.45);
+      }
+
+      .measure-tile.tds-tile {
+        border-top-color: rgba(0, 242, 170, 0.45);
+      }
+
+      .measure-tile.ph-tile {
+        border-top-color: rgba(217, 70, 239, 0.45);
       }
 
       .measure-label {
@@ -540,14 +583,17 @@
       }
 
       .measure-value.compact {
-        font-size: 1.5rem;
+        font-size: clamp(1.35rem, 2vw, 1.85rem);
+        white-space: nowrap;
+        letter-spacing: -0.03em;
       }
 
       .measure-note {
-        margin-top: 10px;
+        margin-top: 9px;
         color: var(--text-muted);
-        line-height: 1.5;
-        min-height: 2.2em;
+        line-height: 1.45;
+        min-height: 1.4em;
+        font-size: 0.78rem;
       }
 
       .compare-grid {
@@ -582,6 +628,9 @@
       .card.air .val-main { color: var(--warning); text-shadow: 0 0 30px rgba(255, 191, 0, 0.2); }
       .card.tds .val-main { color: var(--primary); text-shadow: 0 0 30px rgba(0, 242, 170, 0.2); }
       .card.ph .val-main { color: #d946ef; text-shadow: 0 0 30px rgba(217, 70, 239, 0.2); }
+      .card.light .val-main { color: #facc15; text-shadow: 0 0 30px rgba(250, 204, 21, 0.2); font-size: 2rem; }
+      .card.mix-sensors .measure-value { color: #00f2aa; text-shadow: 0 0 24px rgba(0, 242, 170, 0.18); }
+      .card.fish-sensors .measure-value { color: #38bdf8; text-shadow: 0 0 24px rgba(56, 189, 248, 0.18); }
 
       /* === Health/System Section === */
       .system-section {
@@ -817,6 +866,9 @@
         .info-grid { grid-template-columns: repeat(2, 1fr); }
         .log-panel { padding: 14px; }
         .phlight-grid { grid-template-columns: 1fr; }
+        .tank-sensors { grid-column: auto; }
+        .tank-sensor-grid,
+        .fish-sensor-grid { grid-template-columns: 1fr; }
       }
 
       /* Disabled Sensor Badge */
@@ -1177,31 +1229,66 @@
 
       <div class="dashboard-grid">
         
-        <!-- Water Temp -->
-        <div class="card water" id="card-water">
+        <!-- Mix Tank Sensors -->
+        <div class="card tank-sensors mix-sensors" id="card-mix-sensors">
           <div class="card-header">
-            <div class="card-title"><i class="fa-solid fa-water"></i> อุณหภูมิน้ำ</div>
+            <div class="card-title"><i class="fa-solid fa-seedling"></i> Mix Tank Sensors</div>
             <i class="fa-solid fa-ellipsis" style="color: var(--text-muted)"></i>
           </div>
-          <div class="val-box">
-            <div class="val-main" id="waterTemp">--</div>
-            <div class="val-unit">°C</div>
+          <div class="range-row">
+            <div class="range-chip">Mix Tank</div>
+            <div class="range-chip">automation control</div>
+            <div class="range-chip">ค่าใช้ตัดสินใจจ่ายปุ๋ย</div>
+          </div>
+          <div class="tank-sensor-grid">
+            <div class="measure-tile water-tile">
+              <div class="measure-label">Water Temp</div>
+              <div class="measure-value compact"><span id="waterTempMix">--</span> °C</div>
+              <div class="measure-note" id="waterRangeState" data-tone="neutral">กำลังตรวจสอบ...</div>
+            </div>
+            <div class="measure-tile tds-tile">
+              <div class="measure-label">TDS</div>
+              <div class="measure-value compact"><span id="tdsMix">--</span> ppm</div>
+              <div class="measure-note" id="tdsRangeState" data-tone="neutral">กำลังตรวจสอบ...</div>
+            </div>
+            <div class="measure-tile ph-tile">
+              <div class="measure-label">pH</div>
+              <div class="measure-value compact"><span id="phMix">--</span></div>
+              <div class="measure-note" id="phState" data-tone="neutral">กำลังตรวจสอบ...</div>
+            </div>
+          </div>
+          <div class="sensor-hint" id="mixSensorsHint" data-tone="neutral">ค่า mix tank จะแสดงรวมกันที่นี่</div>
+          <div class="sensor-hint" id="waterHint" data-tone="neutral" style="display:none"></div>
+          <div class="sensor-hint" id="tdsQuality" data-tone="neutral" style="display:none"></div>
+          <div class="sensor-hint" id="phHint" data-tone="neutral" style="display:none"></div>
+        </div>
+
+        <!-- Fish Tank Sensors -->
+        <div class="card tank-sensors fish-sensors" id="card-fish-sensors">
+          <div class="card-header">
+            <div class="card-title"><i class="fa-solid fa-fish"></i> Fish Tank Sensors</div>
+            <i class="fa-solid fa-ellipsis" style="color: var(--text-muted)"></i>
           </div>
           <div class="range-row">
-            <div class="range-chip">ช่วงแนะนำ 18-32°C</div>
-            <div class="range-chip" id="waterRangeState" data-tone="neutral">กำลังตรวจสอบ...</div>
+            <div class="range-chip">Fish Tank</div>
+            <div class="range-chip">monitor only</div>
+            <div class="range-chip">รวมค่า fish ไว้ใบเดียว</div>
           </div>
-          <div class="compare-grid">
-            <div class="compare-tile">
-              <div class="compare-label">Mix Tank</div>
-              <div class="compare-value" id="waterTempMix">--</div>
+          <div class="tank-sensor-grid">
+            <div class="measure-tile water-tile">
+              <div class="measure-label">Water Temp</div>
+              <div class="measure-value compact"><span id="waterTempFish">--</span> °C</div>
             </div>
-            <div class="compare-tile">
-              <div class="compare-label">Fish Tank</div>
-              <div class="compare-value" id="waterTempFish">--</div>
+            <div class="measure-tile tds-tile">
+              <div class="measure-label">TDS</div>
+              <div class="measure-value compact"><span id="tdsFish">--</span> ppm</div>
+            </div>
+            <div class="measure-tile ph-tile">
+              <div class="measure-label">pH</div>
+              <div class="measure-value compact"><span id="phFish">--</span></div>
             </div>
           </div>
-          <div class="sensor-hint" id="waterHint" data-tone="neutral">คำแนะนำเรื่องอุณหภูมิน้ำจะแสดงที่นี่</div>
+          <div class="sensor-hint" id="fishSensorsHint" data-tone="neutral">ค่า fish tank จะแสดงรวมกันที่นี่</div>
         </div>
 
         <!-- Air Temp -->
@@ -1222,52 +1309,19 @@
           <div class="sensor-hint" id="airHint" data-tone="neutral">คำแนะนำเรื่องอุณหภูมิอากาศและความชื้นจะแสดงที่นี่</div>
         </div>
 
-        <!-- TDS -->
-        <div class="card tds" id="card-tds">
+        <!-- Light -->
+        <div class="card light" id="card-light">
           <div class="card-header">
-            <div class="card-title"><i class="fa-solid fa-vial"></i> ค่า TDS</div>
+            <div class="card-title"><i class="fa-solid fa-sun"></i> เซ็นเซอร์แสง</div>
             <i class="fa-solid fa-ellipsis" style="color: var(--text-muted)"></i>
           </div>
           <div class="val-box">
-            <div class="val-main" id="tds">--</div>
-            <div class="val-unit">ppm</div>
+            <div class="val-main" id="light">--</div>
           </div>
           <div class="range-row">
-            <div class="range-chip">ช่วงแนะนำ 200-1500 ppm</div>
-            <div class="range-chip" id="tdsRangeState" data-tone="neutral">กำลังตรวจสอบ...</div>
+            <div class="range-chip" id="lightState" data-tone="neutral">กำลังรอข้อมูล</div>
           </div>
-          <div class="compare-grid">
-            <div class="compare-tile">
-              <div class="compare-label">Mix Tank</div>
-              <div class="compare-value" id="tdsMix">--</div>
-            </div>
-            <div class="compare-tile">
-              <div class="compare-label">Fish Tank</div>
-              <div class="compare-value" id="tdsFish">--</div>
-            </div>
-          </div>
-          <div class="sensor-hint" id="tdsQuality" data-tone="neutral">กำลังวิเคราะห์...</div>
-        </div>
-
-        <!-- pH & Light (Combined for balance) -->
-        <div class="card ph" id="card-phlight">
-            <div class="card-header">
-              <div class="card-title"><i class="fa-solid fa-flask"></i> pH และแสง</div>
-              <i class="fa-solid fa-ellipsis" style="color: var(--text-muted)"></i>
-            </div>
-          <div class="phlight-grid">
-            <div class="measure-tile">
-               <div class="measure-label">ค่า pH</div>
-               <div class="measure-value" id="ph">--</div>
-               <div class="measure-note" id="phState" data-tone="neutral">ช่วงแนะนำ 6.0-8.5</div>
-            </div>
-            <div class="measure-tile">
-              <div class="measure-label">เซ็นเซอร์แสง</div>
-              <div class="measure-value compact" id="light">--</div>
-              <div class="measure-note" id="lightState" data-tone="neutral">กำลังรอข้อมูล</div>
-            </div>
-          </div>
-          <div class="sensor-hint" id="phHint" data-tone="neutral">คำแนะนำเรื่อง pH และแสงจะแสดงที่นี่</div>
+          <div class="sensor-hint" id="lightHint" data-tone="neutral">สถานะไฟปลูกพืชและรอบกลางวัน/กลางคืนจะแสดงที่นี่</div>
         </div>
 
       </div>
@@ -1603,6 +1657,11 @@
         element.dataset.tone = tone;
       }
 
+      function setText(id, text) {
+        const element = document.getElementById(id);
+        if (element) element.textContent = text;
+      }
+
       function setHeroCard(cardId, valueId, subId, tone, value, sub) {
         const card = document.getElementById(cardId);
         if (card) card.dataset.tone = tone;
@@ -1809,33 +1868,61 @@
         const waterFish = data.water_temp_fish;
         const tdsMix = data.tds_mix ?? data.tds;
         const tdsFish = data.tds_fish;
+        const phMix = data.ph_mix ?? data.ph;
+        const phFish = data.ph_fish;
 
-        document.getElementById("waterTemp").innerText = waterMix != null ? waterMix.toFixed(1) : "--";
-        document.getElementById("waterTempMix").innerText = waterMix != null ? waterMix.toFixed(1) + " °C" : "--";
-        document.getElementById("waterTempFish").innerText = waterFish != null ? waterFish.toFixed(1) + " °C" : "--";
-        document.getElementById("airTemp").innerText = data.air_temp != null ? data.air_temp.toFixed(1) : "--";
-        document.getElementById("humidity").innerText = data.humidity != null ? data.humidity.toFixed(1) : "--";
-        document.getElementById("tds").innerText = tdsMix != null ? tdsMix.toFixed(0) : "--";
-        document.getElementById("tdsMix").innerText = tdsMix != null ? tdsMix.toFixed(0) + " ppm" : "--";
-        document.getElementById("tdsFish").innerText = tdsFish != null ? tdsFish.toFixed(0) + " ppm" : "--";
-        document.getElementById("ph").innerText = data.ph != null ? data.ph.toFixed(2) : "--";
-        document.getElementById("light").innerText = data.light != null ? data.light.toFixed(0) + " lux" : "--";
+        setText("waterTempMix", waterMix != null ? waterMix.toFixed(1) : "--");
+        setText("waterTempFish", waterFish != null ? waterFish.toFixed(1) : "--");
+        setText("airTemp", data.air_temp != null ? data.air_temp.toFixed(1) : "--");
+        setText("humidity", data.humidity != null ? data.humidity.toFixed(1) : "--");
+        setText("tdsMix", tdsMix != null ? tdsMix.toFixed(0) : "--");
+        setText("tdsFish", tdsFish != null ? tdsFish.toFixed(0) : "--");
+        setText("phMix", phMix != null ? phMix.toFixed(2) : "--");
+        setText("phFish", phFish != null ? phFish.toFixed(2) : "--");
+        setText("light", data.light != null ? data.light.toFixed(0) + " lux" : "--");
 
         const waterEval = evaluateThreshold("water_temp", waterMix);
         const airEval = evaluateThreshold("air_temp", data.air_temp);
         const tdsEval = evaluateThreshold("tds", tdsMix);
-        const phEval = evaluateThreshold("ph", data.ph);
+        const phEval = evaluateThreshold("ph", phMix);
 
         setToneText("waterRangeState", waterEval.short, waterEval.tone);
         setToneText("waterHint", waterEval.detail, waterEval.tone);
         setToneText("airRangeState", airEval.short, airEval.tone);
         setToneText("airHint", `${airEval.detail} · ความชื้น ${data.humidity != null ? data.humidity.toFixed(1) + "%" : "--"}`, airEval.tone);
         setToneText("tdsRangeState", tdsEval.short, tdsEval.tone);
-        const fishText = tdsFish != null ? ` · Fish ${tdsFish.toFixed(0)} ppm` : "";
-        setToneText("tdsQuality", `${getTdsQuality(tdsMix)} · ${tdsEval.detail}${fishText}`, tdsEval.tone);
+        setToneText("tdsQuality", `${getTdsQuality(tdsMix)} · ${tdsEval.detail}`, tdsEval.tone);
         setToneText("phState", phEval.short, phEval.tone);
         setToneText("lightState", data.light == null ? "กำลังรอข้อมูล" : (data.light_state ? "โหมดกลางวัน" : "โหมดกลางคืน"), data.light == null ? "neutral" : "good");
-        setToneText("phHint", `${phEval.detail} · โหมดแสง: ${data.light_state ? "กลางวัน" : "กลางคืน"}`, phEval.tone);
+        setToneText("phHint", phEval.detail, phEval.tone);
+        const mixAvailable = waterMix != null || tdsMix != null || phMix != null;
+        const mixSummary = [
+          waterMix != null ? `Temp ${waterMix.toFixed(1)}°C` : "Temp --",
+          tdsMix != null ? `TDS ${tdsMix.toFixed(0)} ppm` : "TDS --",
+          phMix != null ? `pH ${phMix.toFixed(2)}` : "pH --"
+        ].join(" · ");
+        const mixTone = [waterEval, tdsEval, phEval].some((item) => item.tone === "danger")
+          ? "danger"
+          : [waterEval, tdsEval, phEval].some((item) => item.tone === "warn")
+            ? "warn"
+            : (mixAvailable ? "good" : "neutral");
+        setToneText(
+          "mixSensorsHint",
+          mixAvailable ? `${mixSummary} · ใช้เป็นค่าหลักสำหรับ automation` : "ยังไม่ได้รับค่าเซ็นเซอร์จาก mix tank",
+          mixTone
+        );
+        const fishAvailable = waterFish != null || tdsFish != null || phFish != null;
+        const fishSummary = [
+          waterFish != null ? `Temp ${waterFish.toFixed(1)}°C` : "Temp --",
+          tdsFish != null ? `TDS ${tdsFish.toFixed(0)} ppm` : "TDS --",
+          phFish != null ? `pH ${phFish.toFixed(2)}` : "pH --"
+        ].join(" · ");
+        setToneText(
+          "fishSensorsHint",
+          fishAvailable ? `${fishSummary} · monitor only ไม่ใช้คุม automation` : "ยังไม่ได้รับค่าเซ็นเซอร์จาก fish tank",
+          fishAvailable ? "good" : "neutral"
+        );
+        setToneText("lightHint", data.light == null ? "ยังไม่ได้รับค่าแสงจากอุปกรณ์" : `โหมดแสง: ${data.light_state ? "กลางวัน" : "กลางคืน"}`, data.light == null ? "neutral" : "good");
 
         const attentionMessages = [];
         if (data.water_alarm) attentionMessages.push("ระบบน้ำมี Alarm อยู่ ตรวจดูโซนควบคุมและล้าง Alarm ได้เมื่อสาเหตุถูกแก้แล้ว");
@@ -2125,11 +2212,12 @@
             else card.classList.remove("sensor-disabled");
           }
         };
-        toggleCard("card-water", sensorConfig.water);
+        const mixSensorsEnabled = sensorConfig.water !== false || sensorConfig.tds !== false || sensorConfig.ph !== false;
+        toggleCard("card-mix-sensors", mixSensorsEnabled);
         toggleCard("card-air", sensorConfig.air);
-        toggleCard("card-tds", sensorConfig.tds);
-        const phLightEnabled = (sensorConfig.ph !== false) && (sensorConfig.light !== false);
-        toggleCard("card-phlight", phLightEnabled);
+        const fishSensorsEnabled = sensorConfig.water !== false || sensorConfig.tds !== false || sensorConfig.ph !== false;
+        toggleCard("card-fish-sensors", fishSensorsEnabled);
+        toggleCard("card-light", sensorConfig.light);
       }
 
       function updateHealth(data) {

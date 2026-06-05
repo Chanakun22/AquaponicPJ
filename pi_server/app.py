@@ -4,6 +4,7 @@ import paho.mqtt.client as mqtt
 import copy
 import io
 import json
+import math
 import threading
 import psutil
 import time
@@ -952,14 +953,36 @@ def load_settings():
             "high_ppm": 1000,
             "high_voltage": 0.0,
             "raw_voltage": False,
-            "calibrated": False
+            "calibrated": False,
+            "mix": {
+                "low_temp": 25.0,
+                "low_ppm": 500,
+                "low_voltage": 0.0,
+                "high_temp": 25.0,
+                "high_ppm": 1000,
+                "high_voltage": 0.0,
+                "raw_voltage": False,
+                "calibrated": False
+            },
+            "fish": {
+                "low_temp": 25.0,
+                "low_ppm": 500,
+                "low_voltage": 0.0,
+                "high_temp": 25.0,
+                "high_ppm": 1000,
+                "high_voltage": 0.0,
+                "raw_voltage": False,
+                "calibrated": False
+            }
         },
         "ph_calibration": {
             "cal401_done": False,
             "cal686_done": False,
             "cal918_done": False,
             "last_voltage": 0.0,
-            "last_ph": 0.0
+            "last_ph": 0.0,
+            "mix": {"cal401_done": False, "cal686_done": False, "cal918_done": False, "last_voltage": 0.0, "last_ph": 0.0},
+            "fish": {"cal401_done": False, "cal686_done": False, "cal918_done": False, "last_voltage": 0.0, "last_ph": 0.0}
         },
         "camera": {
             "width": 1280,
@@ -1103,6 +1126,7 @@ last_data = {
     "tds": 0, "ph": 0, "light": 0,
     "water_temp_mix": 0, "water_temp_fish": None,
     "tds_mix": 0, "tds_fish": None,
+    "ph_mix": 0, "ph_fish": None,
     "fan_enabled": False, "fan_auto_mode": True, "fan_manual_state": False,
     "fan_running": False, "fan_state": "DISABLED", "fan_reason": "Waiting for ESP32 status", "fan_has_output": False,
     "uptime_sec": 0, "wifi_rssi": 0, "free_heap": 0,
@@ -1152,7 +1176,7 @@ def init_db():
             ''')
             cursor.execute("PRAGMA table_info(sensors)")
             existing_columns = {row[1] for row in cursor.fetchall()}
-            for column_name in ("water_temp_mix", "water_temp_fish", "tds_mix", "tds_fish"):
+            for column_name in ("water_temp_mix", "water_temp_fish", "tds_mix", "tds_fish", "ph_mix", "ph_fish"):
                 if column_name not in existing_columns:
                     cursor.execute(f"ALTER TABLE sensors ADD COLUMN {column_name} REAL")
             
@@ -1370,6 +1394,16 @@ def on_message(client, userdata, msg):
                     "cal918_done",
                     app_settings["ph_calibration"].get("cal918_done", False)
                 )
+                # Per-channel status (mix + fish) from multi-channel firmware
+                for ch in ("mix", "fish"):
+                    if isinstance(ph_status.get(ch), dict):
+                        ch_status = ph_status[ch]
+                        app_settings["ph_calibration"].setdefault(ch, {})
+                        app_settings["ph_calibration"][ch]["last_voltage"] = ch_status.get("ph_voltage", 0)
+                        app_settings["ph_calibration"][ch]["last_ph"] = ch_status.get("ph_value", 0)
+                        app_settings["ph_calibration"][ch]["cal401_done"] = ch_status.get("cal401_done", False)
+                        app_settings["ph_calibration"][ch]["cal686_done"] = ch_status.get("cal686_done", False)
+                        app_settings["ph_calibration"][ch]["cal918_done"] = ch_status.get("cal918_done", False)
                 save_settings(app_settings)
                 print(f"🔄 pH Calibration status updated: {ph_status}")
                 save_log(f"pH Calibration updated: voltage={ph_status.get('ph_voltage')}mV, pH={ph_status.get('ph_value')}")
@@ -1501,7 +1535,7 @@ def on_message(client, userdata, msg):
             "water_temp", "water_temp_mix", "water_temp_fish",
             "air_temp", "humidity",
             "tds", "tds_mix", "tds_fish",
-            "ph", "light"
+            "ph", "ph_mix", "ph_fish", "light"
         ]
         sensor_config = app_settings.get("sensor_config", {})
         sensor_config_keys = {
@@ -1514,6 +1548,8 @@ def on_message(client, userdata, msg):
             "tds_mix": "tds",
             "tds_fish": "tds",
             "ph": "ph",
+            "ph_mix": "ph",
+            "ph_fish": "ph",
             "light": "light",
         }
         for sk in SENSOR_KEYS:
@@ -1554,9 +1590,9 @@ def save_data_to_db(data):
             cursor.execute('''
                 INSERT INTO sensors (
                     water_temp, air_temp, humidity, tds, ph, light,
-                    water_temp_mix, water_temp_fish, tds_mix, tds_fish
+                    water_temp_mix, water_temp_fish, tds_mix, tds_fish, ph_mix, ph_fish
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 sensor_db_value(data, "water_temp"),
                 sensor_db_value(data, "air_temp"),
@@ -1567,7 +1603,9 @@ def save_data_to_db(data):
                 sensor_db_value(data, "water_temp_mix"),
                 sensor_db_value(data, "water_temp_fish"),
                 sensor_db_value(data, "tds_mix"),
-                sensor_db_value(data, "tds_fish")
+                sensor_db_value(data, "tds_fish"),
+                sensor_db_value(data, "ph_mix"),
+                sensor_db_value(data, "ph_fish")
             ))
             conn.commit()
             last_db_save = now
@@ -1589,6 +1627,8 @@ def normalize_history_value(sensor_key, value):
         "air_temp": {0},
         "humidity": {0},
         "ph": {0},
+        "ph_mix": {0},
+        "ph_fish": {0},
     }
 
     if sensor_key in invalid_exact_values and value in invalid_exact_values[sensor_key]:
@@ -1597,7 +1637,7 @@ def normalize_history_value(sensor_key, value):
     if sensor_key in ("tds", "tds_mix", "tds_fish") and value <= 0:
         return None
 
-    if sensor_key == "ph" and (value <= 0 or value > 14):
+    if sensor_key in ("ph", "ph_mix", "ph_fish") and (value <= 0 or value > 14):
         return None
 
     if sensor_key == "humidity" and (value < 0 or value > 100):
@@ -1663,7 +1703,7 @@ def fetch_history_rows(start_date_raw="", end_date_raw=""):
     range_meta = build_history_range_meta(start_date, end_date, days)
     query = '''
         SELECT timestamp, water_temp, air_temp, humidity, tds, ph, light,
-               water_temp_mix, water_temp_fish, tds_mix, tds_fish
+               water_temp_mix, water_temp_fish, tds_mix, tds_fish, ph_mix, ph_fish
         FROM sensors
     '''
     filters = []
@@ -1718,6 +1758,8 @@ def build_history_payload(rows, range_meta):
         "tds_mix": [],
         "tds_fish": [],
         "ph": [],
+        "ph_mix": [],
+        "ph_fish": [],
         "light": []
     }
 
@@ -1734,6 +1776,8 @@ def build_history_payload(rows, range_meta):
         data["water_temp_fish"].append(normalize_history_value("water_temp_fish", row[8]))
         data["tds_mix"].append(normalize_history_value("tds_mix", row[9]))
         data["tds_fish"].append(normalize_history_value("tds_fish", row[10]))
+        data["ph_mix"].append(normalize_history_value("ph_mix", row[11]))
+        data["ph_fish"].append(normalize_history_value("ph_fish", row[12]))
 
     payload_range = dict(range_meta)
     payload_range["sample_count"] = len(ordered_rows)
@@ -1742,6 +1786,799 @@ def build_history_payload(rows, range_meta):
         "labels": labels,
         "datasets": data,
         "range": payload_range,
+    }
+
+
+HISTORY_EDITABLE_COLUMNS = (
+    "water_temp", "water_temp_mix", "water_temp_fish",
+    "air_temp", "humidity",
+    "tds", "tds_mix", "tds_fish",
+    "ph", "ph_mix", "ph_fish",
+    "light",
+)
+
+
+def parse_history_pagination(page_raw, per_page_raw):
+    try:
+        page = max(1, int(page_raw or 1))
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        per_page = int(per_page_raw or 100)
+    except (TypeError, ValueError):
+        per_page = 100
+    per_page = max(10, min(per_page, 500))
+    return page, per_page
+
+
+def _history_edit_where_clause(start_date_raw="", end_date_raw=""):
+    start_date = parse_history_date_param(start_date_raw, "start_date")
+    end_date = parse_history_date_param(end_date_raw, "end_date")
+    if start_date and end_date and end_date < start_date:
+        raise ValueError("end_date must be on or after start_date.")
+
+    filters = []
+    params = []
+    if start_date:
+        start_utc = datetime.combine(start_date, datetime.min.time()) - HISTORY_THAI_OFFSET
+        filters.append("timestamp >= ?")
+        params.append(start_utc.strftime("%Y-%m-%d %H:%M:%S"))
+    if end_date:
+        end_utc_exclusive = datetime.combine(end_date + timedelta(days=1), datetime.min.time()) - HISTORY_THAI_OFFSET
+        filters.append("timestamp < ?")
+        params.append(end_utc_exclusive.strftime("%Y-%m-%d %H:%M:%S"))
+
+    where_sql = ""
+    if filters:
+        where_sql = " WHERE " + " AND ".join(filters)
+    return start_date, end_date, where_sql, params
+
+
+def validate_history_edit_value(column, value):
+    if column not in HISTORY_EDITABLE_COLUMNS:
+        raise ValueError(f"Column '{column}' is not editable.")
+
+    if value is None or value == "":
+        return None
+
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid numeric value for {column}.") from exc
+
+    if column in ("water_temp", "water_temp_mix", "water_temp_fish"):
+        if numeric < 0 or numeric > 50:
+            raise ValueError(f"{column} must be between 0 and 50°C.")
+    elif column == "air_temp":
+        if numeric < -20 or numeric > 60:
+            raise ValueError("air_temp must be between -20 and 60°C.")
+    elif column == "humidity":
+        if numeric < 0 or numeric > 100:
+            raise ValueError("humidity must be between 0 and 100%.")
+    elif column in ("tds", "tds_mix", "tds_fish"):
+        if numeric <= 0 or numeric > 10000:
+            raise ValueError(f"{column} must be between 0 and 10000 ppm.")
+    elif column in ("ph", "ph_mix", "ph_fish"):
+        if numeric <= 0 or numeric > 14:
+            raise ValueError(f"{column} must be between 0 and 14.")
+    elif column == "light":
+        if numeric < 0 or numeric > 200000:
+            raise ValueError("light must be between 0 and 200000 lux.")
+
+    return numeric
+
+
+def _history_row_to_edit_dict(row):
+    local_dt = history_timestamp_to_local_dt(row[1])
+    payload = {
+        "id": row[0],
+        "timestamp": row[1],
+        "timestamp_local": local_dt.strftime("%Y-%m-%d %H:%M:%S") if local_dt else row[1],
+    }
+    column_names = HISTORY_EDITABLE_COLUMNS
+    for index, column in enumerate(column_names, start=2):
+        payload[column] = normalize_history_value(column, row[index])
+    return payload
+
+
+def fetch_history_rows_for_edit(start_date_raw="", end_date_raw="", page=1, per_page=100):
+    global app_settings
+
+    page, per_page = parse_history_pagination(page, per_page)
+    start_date, end_date, where_sql, params = _history_edit_where_clause(start_date_raw, end_date_raw)
+    days = app_settings.get("display", {}).get("graph_days", 3)
+    range_meta = build_history_range_meta(start_date, end_date, days)
+
+    count_query = f"SELECT COUNT(*) FROM sensors{where_sql}"
+    data_query = f'''
+        SELECT id, timestamp, {", ".join(HISTORY_EDITABLE_COLUMNS)}
+        FROM sensors
+        {where_sql}
+        ORDER BY id DESC
+        LIMIT ? OFFSET ?
+    '''
+    data_params = list(params) + [per_page, (page - 1) * per_page]
+
+    with db_lock:
+        conn = None
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute(count_query, params)
+            total_count = int(cursor.fetchone()[0] or 0)
+            cursor.execute(data_query, data_params)
+            rows = cursor.fetchall()
+        finally:
+            if conn:
+                conn.close()
+
+    range_meta = dict(range_meta)
+    range_meta["page"] = page
+    range_meta["per_page"] = per_page
+    range_meta["total_count"] = total_count
+    range_meta["total_pages"] = max(1, (total_count + per_page - 1) // per_page)
+
+    return [_history_row_to_edit_dict(row) for row in rows], range_meta
+
+
+def update_history_row(row_id, updates, username="", ip_address=""):
+    if not updates:
+        raise ValueError("No fields to update.")
+
+    assignments = []
+    values = []
+    changed_fields = []
+
+    for column, raw_value in updates.items():
+        if column not in HISTORY_EDITABLE_COLUMNS:
+            raise ValueError(f"Column '{column}' is not editable.")
+        validated = validate_history_edit_value(column, raw_value)
+        assignments.append(f"{column} = ?")
+        values.append(validated)
+        changed_fields.append(f"{column}={validated}")
+
+    values.append(int(row_id))
+    query = f"UPDATE sensors SET {', '.join(assignments)} WHERE id = ?"
+
+    with db_lock:
+        conn = None
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute(query, values)
+            if cursor.rowcount <= 0:
+                raise ValueError(f"History row id={row_id} not found.")
+            conn.commit()
+        finally:
+            if conn:
+                conn.close()
+
+    detail = f"row_id={row_id}; " + ", ".join(changed_fields)
+    log_activity(username or "?", "history_edit", detail, ip_address)
+    return _history_row_to_edit_dict(_fetch_history_row_by_id(row_id))
+
+
+def _fetch_history_row_by_id(row_id):
+    query = f'''
+        SELECT id, timestamp, {", ".join(HISTORY_EDITABLE_COLUMNS)}
+        FROM sensors
+        WHERE id = ?
+        LIMIT 1
+    '''
+    with db_lock:
+        conn = None
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute(query, (int(row_id),))
+            row = cursor.fetchone()
+        finally:
+            if conn:
+                conn.close()
+
+    if not row:
+        raise ValueError(f"History row id={row_id} not found.")
+    return row
+
+
+def delete_history_row(row_id, username="", ip_address=""):
+    with db_lock:
+        conn = None
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM sensors WHERE id = ?", (int(row_id),))
+            if cursor.rowcount <= 0:
+                raise ValueError(f"History row id={row_id} not found.")
+            conn.commit()
+        finally:
+            if conn:
+                conn.close()
+
+    log_activity(username or "?", "history_delete", f"row_id={row_id}", ip_address)
+
+
+HISTORY_AUTO_FIX_MAX_ROWS = 10000
+
+
+def _history_values_differ(before, after, epsilon=1e-6):
+    if before is None and after is None:
+        return False
+    if before is None or after is None:
+        return True
+    return abs(float(before) - float(after)) > epsilon
+
+
+def _history_clamp(value, min_value, max_value):
+    return max(min_value, min(max_value, value))
+
+
+def fetch_all_history_rows_chronological(start_date_raw="", end_date_raw=""):
+    global app_settings
+
+    start_date, end_date, where_sql, params = _history_edit_where_clause(start_date_raw, end_date_raw)
+    days = app_settings.get("display", {}).get("graph_days", 3)
+    range_meta = build_history_range_meta(start_date, end_date, days)
+
+    count_query = f"SELECT COUNT(*) FROM sensors{where_sql}"
+    data_query = f'''
+        SELECT id, timestamp, {", ".join(HISTORY_EDITABLE_COLUMNS)}
+        FROM sensors
+        {where_sql}
+        ORDER BY id ASC
+        LIMIT ?
+    '''
+
+    with db_lock:
+        conn = None
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute(count_query, params)
+            total_count = int(cursor.fetchone()[0] or 0)
+            if total_count > HISTORY_AUTO_FIX_MAX_ROWS:
+                raise ValueError(
+                    f"ช่วงนี้มี {total_count} แถว เกิน limit {HISTORY_AUTO_FIX_MAX_ROWS} — แคบช่วงวันที่ลงก่อน"
+                )
+            cursor.execute(data_query, list(params) + [HISTORY_AUTO_FIX_MAX_ROWS])
+            rows = cursor.fetchall()
+        finally:
+            if conn:
+                conn.close()
+
+    range_meta = dict(range_meta)
+    range_meta["total_count"] = total_count
+    return [_history_row_to_edit_dict(row) for row in rows], range_meta
+
+
+def fetch_history_column_stats(start_date_raw="", end_date_raw="", column="ph_mix"):
+    if column not in HISTORY_EDITABLE_COLUMNS:
+        raise ValueError(f"Column '{column}' is not supported.")
+
+    _, _, where_sql, params = _history_edit_where_clause(start_date_raw, end_date_raw)
+    query = f'''
+        SELECT
+            MIN({column}) AS min_value,
+            MAX({column}) AS max_value,
+            AVG({column}) AS mean_value,
+            COUNT({column}) AS sample_count
+        FROM sensors
+        {where_sql}
+        {"AND" if where_sql else "WHERE"} {column} IS NOT NULL
+    '''
+
+    with db_lock:
+        conn = None
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            row = cursor.fetchone()
+        finally:
+            if conn:
+                conn.close()
+
+    if not row or not row[3]:
+        return {
+            "column": column,
+            "min_value": None,
+            "max_value": None,
+            "mean_value": None,
+            "sample_count": 0,
+        }
+
+    return {
+        "column": column,
+        "min_value": round(float(row[0]), 4) if row[0] is not None else None,
+        "max_value": round(float(row[1]), 4) if row[1] is not None else None,
+        "mean_value": round(float(row[2]), 4) if row[2] is not None else None,
+        "sample_count": int(row[3] or 0),
+    }
+
+
+def _history_series_stats(values):
+    numeric = [float(value) for value in values if value is not None]
+    if not numeric:
+        return None, None, None
+
+    ordered = sorted(numeric)
+    count = len(ordered)
+    mid = count // 2
+    if count % 2:
+        median = ordered[mid]
+    else:
+        median = (ordered[mid - 1] + ordered[mid]) / 2.0
+
+    return min(numeric), max(numeric), median
+
+
+def _history_is_outlier(before, min_value, max_value, previous_before, spike_limit):
+    if before is None:
+        return True
+    if before < min_value or before > max_value:
+        return True
+    if previous_before is not None and abs(before - previous_before) > spike_limit:
+        return True
+    return False
+
+
+def _history_micro_ripple(row, index, mean_value, max_step, variation_scale):
+    local_dt = history_timestamp_to_local_dt(row.get("timestamp"))
+    if local_dt is not None:
+        phase = ((local_dt.hour * 60) + local_dt.minute + local_dt.second) % 97
+        offset = (phase - 48.5) / 48.5
+    else:
+        offset = ((index % 11) - 5) / 5.0
+    amplitude = max_step * max(variation_scale, 0.1) * 0.35
+    return mean_value + offset * amplitude
+
+
+def _history_remap_with_ripple(row, index, before, source_min, source_max, source_center,
+                               min_value, max_value, mean_value, max_step, variation_scale):
+    if before is None:
+        return _history_micro_ripple(row, index, mean_value, max_step, variation_scale)
+
+    source_span = float(source_max) - float(source_min)
+    target_half = (max_value - min_value) * float(variation_scale) * 0.5
+    if source_span < 1e-9:
+        return _history_micro_ripple(row, index, mean_value, max_step, variation_scale)
+
+    normalized = (float(before) - float(source_center)) / source_span
+    return _history_clamp(mean_value + normalized * target_half * 2.0, min_value, max_value)
+
+
+def _history_interpolate_missing(values):
+    if not values:
+        return values
+
+    result = list(values)
+    count = len(result)
+    known_indexes = [index for index, value in enumerate(result) if value is not None]
+    if not known_indexes:
+        return result
+    if len(known_indexes) == 1:
+        only_value = result[known_indexes[0]]
+        return [only_value if value is None else value for value in result]
+
+    first_index = known_indexes[0]
+    last_index = known_indexes[-1]
+    first_value = result[first_index]
+    last_value = result[last_index]
+
+    for index in range(0, first_index):
+        result[index] = first_value
+    for index in range(last_index + 1, count):
+        result[index] = last_value
+
+    for left_index, right_index in zip(known_indexes, known_indexes[1:]):
+        left_value = result[left_index]
+        right_value = result[right_index]
+        gap = right_index - left_index
+        if gap <= 1:
+            continue
+        for step in range(1, gap):
+            ratio = step / gap
+            result[left_index + step] = left_value + (right_value - left_value) * ratio
+
+    return result
+
+
+def compute_history_auto_fix_plan(
+    rows,
+    column,
+    min_value,
+    max_value,
+    mean_value,
+    max_step,
+    spike_limit=None,
+    variation_scale=0.4,
+):
+    if column not in HISTORY_EDITABLE_COLUMNS:
+        raise ValueError(f"Column '{column}' is not editable.")
+    if min_value > max_value:
+        raise ValueError("min_value must be less than or equal to max_value.")
+    if not (min_value <= mean_value <= max_value):
+        raise ValueError("mean_value must be between min_value and max_value.")
+    if max_step <= 0:
+        raise ValueError("max_step must be greater than 0.")
+
+    validate_history_edit_value(column, min_value)
+    validate_history_edit_value(column, max_value)
+    validate_history_edit_value(column, mean_value)
+
+    try:
+        variation_scale = float(variation_scale)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("variation_scale must be a number between 0 and 1.") from exc
+    variation_scale = max(0.0, min(variation_scale, 1.0))
+
+    if spike_limit is None:
+        span = max_value - min_value
+        spike_limit = max(max_step * 3.0, span * 0.25)
+    elif spike_limit <= 0:
+        raise ValueError("spike_limit must be greater than 0.")
+
+    before_values = []
+    for row in rows:
+        raw = row.get(column)
+        before_values.append(
+            normalize_history_value(column, raw) if raw is not None else None
+        )
+
+    source_min, source_max, source_center = _history_series_stats(before_values)
+    if source_center is None:
+        source_min = source_max = source_center = mean_value
+
+    working = []
+    previous_before = None
+    previous_fixed = None
+
+    for index, row in enumerate(rows):
+        before = before_values[index]
+        is_outlier = _history_is_outlier(
+            before, min_value, max_value, previous_before, spike_limit
+        )
+
+        if not is_outlier:
+            fixed = before
+        else:
+            wish = _history_remap_with_ripple(
+                row,
+                index,
+                before,
+                source_min,
+                source_max,
+                source_center,
+                min_value,
+                max_value,
+                mean_value,
+                max_step,
+                variation_scale,
+            )
+            if previous_fixed is None:
+                fixed = wish
+            else:
+                delta = _history_clamp(wish - previous_fixed, -max_step, max_step)
+                fixed = _history_clamp(previous_fixed + delta, min_value, max_value)
+
+        working.append(fixed)
+        previous_before = before
+        previous_fixed = fixed
+
+    working = _history_interpolate_missing(working)
+
+    smoothed = []
+    previous_fixed = None
+    for index, fixed in enumerate(working):
+        before = before_values[index]
+        is_outlier = _history_is_outlier(
+            before, min_value, max_value,
+            before_values[index - 1] if index > 0 else None,
+            spike_limit,
+        )
+
+        if not is_outlier:
+            smoothed.append(before if before is not None else fixed)
+            previous_fixed = smoothed[-1]
+            continue
+
+        if previous_fixed is None:
+            smoothed.append(fixed)
+        else:
+            delta = _history_clamp(fixed - previous_fixed, -max_step, max_step)
+            smoothed.append(_history_clamp(previous_fixed + delta, min_value, max_value))
+        previous_fixed = smoothed[-1]
+
+    plan = []
+    for index, row in enumerate(rows):
+        before = before_values[index]
+        fixed = smoothed[index]
+        changed = _history_values_differ(before, fixed)
+        plan.append({
+            "id": row["id"],
+            "timestamp": row["timestamp"],
+            "timestamp_local": row["timestamp_local"],
+            "before": before,
+            "after": fixed,
+            "changed": changed,
+        })
+
+    changed_rows = [item for item in plan if item["changed"]]
+    return plan, changed_rows, float(spike_limit)
+
+
+def apply_history_auto_fix(
+    start_date_raw="",
+    end_date_raw="",
+    column="ph_mix",
+    min_value=0.0,
+    max_value=0.0,
+    mean_value=0.0,
+    max_step=0.1,
+    spike_limit=None,
+    variation_scale=0.4,
+    dry_run=True,
+    username="",
+    ip_address="",
+):
+    rows, range_meta = fetch_all_history_rows_chronological(start_date_raw, end_date_raw)
+    if not rows:
+        raise ValueError("ไม่พบข้อมูลในช่วงวันที่ที่เลือก")
+
+    plan, changed_rows, resolved_spike_limit = compute_history_auto_fix_plan(
+        rows,
+        column,
+        float(min_value),
+        float(max_value),
+        float(mean_value),
+        float(max_step),
+        None if spike_limit in (None, "") else float(spike_limit),
+        variation_scale=variation_scale,
+    )
+
+    applied_count = 0
+    if not dry_run:
+        with db_lock:
+            conn = None
+            try:
+                conn = sqlite3.connect(DB_FILE)
+                cursor = conn.cursor()
+                for item in changed_rows:
+                    cursor.execute(
+                        f"UPDATE sensors SET {column} = ? WHERE id = ?",
+                        (item["after"], int(item["id"])),
+                    )
+                    if cursor.rowcount > 0:
+                        applied_count += 1
+                conn.commit()
+            finally:
+                if conn:
+                    conn.close()
+
+        log_activity(
+            username or "?",
+            "history_auto_fix",
+            (
+                f"column={column}; rows_changed={len(changed_rows)}; "
+                f"min={min_value}; max={max_value}; mean={mean_value}; "
+                f"max_step={max_step}; spike_limit={resolved_spike_limit}; "
+                f"variation_scale={variation_scale}; "
+                f"range={range_meta.get('label_th', '')}"
+            ),
+            ip_address,
+        )
+
+    preview_limit = 500
+    return {
+        "column": column,
+        "dry_run": bool(dry_run),
+        "rows_scanned": len(plan),
+        "rows_changed": len(changed_rows),
+        "rows_applied": applied_count if not dry_run else 0,
+        "spike_limit": resolved_spike_limit,
+        "variation_scale": float(variation_scale),
+        "range": range_meta,
+        "preview": plan[:preview_limit],
+        "preview_truncated": len(plan) > preview_limit,
+    }
+
+
+def _history_copy_difference(row, index, amplitude):
+    if amplitude <= 0:
+        return 0.0
+
+    local_dt = history_timestamp_to_local_dt(row.get("timestamp"))
+    if local_dt is not None:
+        phase = ((local_dt.hour * 3600) + (local_dt.minute * 60) + local_dt.second) * 0.017
+    else:
+        phase = index * 0.73
+
+    return (math.sin(phase) + math.cos(phase * 1.37) * 0.55) * amplitude
+
+
+def compute_history_copy_sensor_plan(
+    rows,
+    source_column,
+    target_column,
+    target_mean,
+    ripple_scale=1.0,
+    difference_scale=0.2,
+    max_step=None,
+    min_value=None,
+    max_value=None,
+):
+    if source_column not in HISTORY_EDITABLE_COLUMNS:
+        raise ValueError(f"Source column '{source_column}' is not supported.")
+    if target_column not in HISTORY_EDITABLE_COLUMNS:
+        raise ValueError(f"Target column '{target_column}' is not supported.")
+    if source_column == target_column:
+        raise ValueError("Source and target columns must be different.")
+
+    try:
+        ripple_scale = float(ripple_scale)
+        difference_scale = float(difference_scale)
+        target_mean = float(target_mean)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("target_mean, ripple_scale, and difference_scale must be numeric.") from exc
+
+    ripple_scale = max(0.0, min(ripple_scale, 2.0))
+    difference_scale = max(0.0, min(difference_scale, 1.0))
+    validate_history_edit_value(target_column, target_mean)
+
+    if max_step is not None:
+        max_step = float(max_step)
+        if max_step <= 0:
+            raise ValueError("max_step must be greater than 0.")
+
+    source_values = []
+    target_before_values = []
+    for row in rows:
+        raw_source = row.get(source_column)
+        source_values.append(
+            normalize_history_value(source_column, raw_source) if raw_source is not None else None
+        )
+        raw_target = row.get(target_column)
+        target_before_values.append(
+            normalize_history_value(target_column, raw_target) if raw_target is not None else None
+        )
+
+    filled_source = _history_interpolate_missing(source_values)
+    _, _, source_center = _history_series_stats(filled_source)
+    if source_center is None:
+        raise ValueError(f"ไม่มีค่า {source_column} ในช่วงนี้ให้ copy")
+
+    source_span = 0.0
+    numeric_source = [float(value) for value in filled_source if value is not None]
+    if numeric_source:
+        source_span = max(numeric_source) - min(numeric_source)
+    source_std = source_span if source_span > 1e-9 else max(abs(target_mean) * 0.01, 0.02)
+    diff_amplitude = source_std * difference_scale
+
+    working = []
+    for index, row in enumerate(rows):
+        source_value = filled_source[index]
+        ripple = (float(source_value) - float(source_center)) * ripple_scale
+        copied = target_mean + ripple + _history_copy_difference(row, index, diff_amplitude)
+        if min_value is not None and max_value is not None:
+            copied = _history_clamp(copied, float(min_value), float(max_value))
+        else:
+            copied = validate_history_edit_value(target_column, copied)
+        working.append(copied)
+
+    if max_step is not None:
+        smoothed = []
+        previous = None
+        for value in working:
+            if previous is None:
+                smoothed.append(value)
+            else:
+                delta = _history_clamp(value - previous, -max_step, max_step)
+                next_value = previous + delta
+                if min_value is not None and max_value is not None:
+                    next_value = _history_clamp(next_value, float(min_value), float(max_value))
+                else:
+                    next_value = validate_history_edit_value(target_column, next_value)
+                smoothed.append(next_value)
+            previous = smoothed[-1]
+        working = smoothed
+
+    plan = []
+    for index, row in enumerate(rows):
+        before = target_before_values[index]
+        after = working[index]
+        changed = _history_values_differ(before, after)
+        plan.append({
+            "id": row["id"],
+            "timestamp": row["timestamp"],
+            "timestamp_local": row["timestamp_local"],
+            "before": before,
+            "after": after,
+            "source_value": source_values[index] if source_values[index] is not None else filled_source[index],
+            "changed": changed,
+        })
+
+    changed_rows = [item for item in plan if item["changed"]]
+    return plan, changed_rows, {
+        "source_mean": float(source_center),
+        "target_mean": float(target_mean),
+        "difference_amplitude": float(diff_amplitude),
+    }
+
+
+def apply_history_copy_sensor(
+    start_date_raw="",
+    end_date_raw="",
+    source_column="ph_fish",
+    target_column="ph_mix",
+    target_mean=7.0,
+    ripple_scale=1.0,
+    difference_scale=0.2,
+    max_step=None,
+    min_value=None,
+    max_value=None,
+    dry_run=True,
+    username="",
+    ip_address="",
+):
+    rows, range_meta = fetch_all_history_rows_chronological(start_date_raw, end_date_raw)
+    if not rows:
+        raise ValueError("ไม่พบข้อมูลในช่วงวันที่ที่เลือก")
+
+    plan, changed_rows, meta = compute_history_copy_sensor_plan(
+        rows,
+        source_column,
+        target_column,
+        target_mean,
+        ripple_scale=ripple_scale,
+        difference_scale=difference_scale,
+        max_step=None if max_step in (None, "") else max_step,
+        min_value=None if min_value in (None, "") else min_value,
+        max_value=None if max_value in (None, "") else max_value,
+    )
+
+    applied_count = 0
+    if not dry_run:
+        with db_lock:
+            conn = None
+            try:
+                conn = sqlite3.connect(DB_FILE)
+                cursor = conn.cursor()
+                for item in changed_rows:
+                    cursor.execute(
+                        f"UPDATE sensors SET {target_column} = ? WHERE id = ?",
+                        (item["after"], int(item["id"])),
+                    )
+                    if cursor.rowcount > 0:
+                        applied_count += 1
+                conn.commit()
+            finally:
+                if conn:
+                    conn.close()
+
+        log_activity(
+            username or "?",
+            "history_copy_sensor",
+            (
+                f"{source_column}->{target_column}; rows_changed={len(changed_rows)}; "
+                f"target_mean={target_mean}; ripple_scale={ripple_scale}; "
+                f"difference_scale={difference_scale}; max_step={max_step}; "
+                f"range={range_meta.get('label_th', '')}"
+            ),
+            ip_address,
+        )
+
+    preview_limit = 500
+    return {
+        "source_column": source_column,
+        "target_column": target_column,
+        "dry_run": bool(dry_run),
+        "rows_scanned": len(plan),
+        "rows_changed": len(changed_rows),
+        "rows_applied": applied_count if not dry_run else 0,
+        "meta": meta,
+        "range": range_meta,
+        "preview": plan[:preview_limit],
+        "preview_truncated": len(plan) > preview_limit,
     }
 
 # === Start MQTT in Background Thread ===
@@ -1885,6 +2722,11 @@ def index():
 @login_required
 def graphs_page():
     return _send_local_file('graphs.html')
+
+@app.route('/fix')
+@admin_required
+def fix_history_page():
+    return _send_local_file('fix.html')
 
 @app.route('/full_logs')
 @login_required
@@ -2075,12 +2917,57 @@ def post_settings():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # === TDS Calibration API ===
+def _normalize_tds_channel(channel):
+    return channel if channel in ("mix", "fish") else "mix"
+
+def _get_tds_calibration_channel_defaults(channel):
+    root = {
+        "low_temp": 25.0,
+        "low_ppm": 500,
+        "low_voltage": 0.0,
+        "high_temp": 25.0,
+        "high_ppm": 1000,
+        "high_voltage": 0.0,
+        "raw_voltage": False,
+        "calibrated": False,
+    }
+    if channel == "mix":
+        return root
+    return {
+        "low_temp": 25.0,
+        "low_ppm": 500,
+        "low_voltage": 0.0,
+        "high_temp": 25.0,
+        "high_ppm": 1000,
+        "high_voltage": 0.0,
+        "raw_voltage": False,
+        "calibrated": False,
+    }
+
+def _get_tds_calibration_for_channel(settings, channel):
+    channel = _normalize_tds_channel(channel)
+    cal_root = settings.get("tds_calibration", {})
+    channel_data = cal_root.get(channel)
+    if isinstance(channel_data, dict) and channel_data.get("low_voltage", 0) > 0:
+        return channel_data
+    if channel == "mix":
+        return cal_root
+    return _get_tds_calibration_channel_defaults(channel)
+
 @app.route('/api/tds_voltage')
 @admin_required
 def get_tds_voltage():
-    """Get current TDS voltage from ESP32 sensor data"""
+    """Get current TDS voltage from ESP32 sensor data (legacy = mix, plus per-channel)"""
     voltage = last_data.get("tds_voltage", 0)
-    return jsonify({"voltage": voltage})
+    return jsonify({
+        "voltage": voltage,
+        "mix": {
+            "voltage": last_data.get("tds_voltage", voltage) or 0,
+        },
+        "fish": {
+            "voltage": last_data.get("tds_fish_voltage", 0) or 0,
+        },
+    })
 
 @app.route('/api/tds_calibrate', methods=['POST'])
 @admin_required
@@ -2089,13 +2976,15 @@ def post_tds_calibrate():
     global app_settings, mqtt_client
     try:
         data = request.get_json()
+        channel = _normalize_tds_channel(data.get("channel", "mix"))
+        existing = _get_tds_calibration_for_channel(app_settings, channel)
         low_temp = float(data.get("low_temp", 25.0))
         low_ppm = float(data.get("low_ppm", 0))
         low_voltage = float(data.get("low_voltage", 0))
         high_temp = float(data.get("high_temp", 25.0))
         high_ppm = float(data.get("high_ppm", 0))
         high_voltage = float(data.get("high_voltage", 0))
-        raw_voltage = bool(data.get("raw_voltage", app_settings.get("tds_calibration", {}).get("raw_voltage", False)))
+        raw_voltage = bool(data.get("raw_voltage", existing.get("raw_voltage", False)))
         
         # Validate
         if low_voltage <= 0 or high_voltage <= 0:
@@ -2103,8 +2992,11 @@ def post_tds_calibrate():
         if low_voltage == high_voltage:
             return jsonify({"status": "error", "message": "Low and High voltage cannot be the same"}), 400
             
-        # Save to settings
-        app_settings["tds_calibration"] = {
+        # Save to settings (per channel)
+        app_settings.setdefault("tds_calibration", {})
+        app_settings["tds_calibration"].setdefault("mix", _get_tds_calibration_channel_defaults("mix"))
+        app_settings["tds_calibration"].setdefault("fish", _get_tds_calibration_channel_defaults("fish"))
+        cal_entry = {
             "low_temp": low_temp,
             "low_ppm": low_ppm,
             "low_voltage": low_voltage,
@@ -2114,13 +3006,22 @@ def post_tds_calibrate():
             "raw_voltage": raw_voltage,
             "calibrated": True
         }
+        app_settings["tds_calibration"][channel] = cal_entry
+        if channel == "mix":
+            app_settings["tds_calibration"].update(cal_entry)
         save_settings(app_settings)
-        log_activity(session.get('username', '?'), 'calibration', f'TDS Cal: Low={low_ppm}ppm, High={high_ppm}ppm', request.remote_addr)
+        log_activity(
+            session.get('username', '?'),
+            'calibration',
+            f'TDS Cal [{channel}]: Low={low_ppm}ppm, High={high_ppm}ppm',
+            request.remote_addr
+        )
         
         # Publish to ESP32 via MQTT
         if mqtt_client and mqtt_client.is_connected():
             import json
             payload = json.dumps({
+                "channel": channel,
                 "low_temp": low_temp,
                 "low_ppm": low_ppm,
                 "low_voltage": low_voltage,
@@ -2130,10 +3031,10 @@ def post_tds_calibrate():
                 "raw_voltage": raw_voltage
             })
             mqtt_client.publish("aquaponics/config/tds_cal", payload)
-            print(f"📤 TDS Calibration sent to ESP32: {payload}")
-            save_log(f"TDS Calibration updated: Low={low_ppm}ppm, High={high_ppm}ppm")
+            print(f"📤 TDS Calibration sent to ESP32 [{channel}]: {payload}")
+            save_log(f"TDS Calibration updated [{channel}]: Low={low_ppm}ppm, High={high_ppm}ppm")
         
-        return jsonify({"status": "ok", "message": "TDS Calibration saved and sent to ESP32"})
+        return jsonify({"status": "ok", "message": f"TDS Calibration [{channel}] saved and sent to ESP32"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -2141,10 +3042,21 @@ def post_tds_calibrate():
 @app.route('/api/ph_voltage')
 @admin_required
 def get_ph_voltage():
-    """Get current pH voltage and value from ESP32 sensor data"""
+    """Get current pH voltage and value from ESP32 sensor data (legacy = mix, plus per-channel)"""
     voltage = last_data.get("ph_voltage", 0)
     ph_value = last_data.get("ph_value", 0)
-    return jsonify({"voltage": voltage, "ph_value": ph_value})
+    return jsonify({
+        "voltage": voltage,
+        "ph_value": ph_value,
+        "mix": {
+            "voltage": last_data.get("ph_mix_voltage", voltage) or 0,
+            "ph_value": last_data.get("ph_mix", ph_value) or 0,
+        },
+        "fish": {
+            "voltage": last_data.get("ph_fish_voltage", 0) or 0,
+            "ph_value": last_data.get("ph_fish", 0) or 0,
+        },
+    })
 
 @app.route('/api/ph_calibrate', methods=['POST'])
 @admin_required
@@ -2154,6 +3066,9 @@ def post_ph_calibrate():
     try:
         data = request.get_json()
         action = data.get("action", "")
+        channel = data.get("channel", "mix")
+        if channel not in ["mix", "fish"]:
+            channel = "mix"
         action_aliases = {
             "cal4": "cal401",
             "cal7": "cal686"
@@ -2165,28 +3080,39 @@ def post_ph_calibrate():
         
         # Publish to ESP32 via MQTT
         if mqtt_client and mqtt_client.is_connected():
-            payload = json.dumps({"action": action})
+            payload = json.dumps({"action": action, "channel": channel})
             mqtt_client.publish("aquaponics/config/ph_cal", payload, qos=1)
-            print(f"📤 pH Calibration command sent to ESP32: {action}")
-            save_log(f"pH Calibration triggered: {action}")
-            log_activity(session.get('username', '?'), 'calibration', f'pH calibration: {action}', request.remote_addr)
+            print(f"📤 pH Calibration command sent to ESP32: {action} [{channel}]")
+            save_log(f"pH Calibration triggered: {action} [{channel}]")
+            log_activity(session.get('username', '?'), 'calibration', f'pH calibration: {action} [{channel}]', request.remote_addr)
             
-            # Update local settings
+            # Update local settings (per channel)
             app_settings.setdefault("ph_calibration", {})
+            app_settings["ph_calibration"].setdefault(channel, {})
             if action == "cal686":
-                app_settings["ph_calibration"]["cal686_done"] = True
+                app_settings["ph_calibration"][channel]["cal686_done"] = True
+                if channel == "mix":
+                    app_settings["ph_calibration"]["cal686_done"] = True
             elif action == "cal401":
-                app_settings["ph_calibration"]["cal401_done"] = True
+                app_settings["ph_calibration"][channel]["cal401_done"] = True
+                if channel == "mix":
+                    app_settings["ph_calibration"]["cal401_done"] = True
             elif action == "cal918":
-                app_settings["ph_calibration"]["cal918_done"] = True
+                app_settings["ph_calibration"][channel]["cal918_done"] = True
+                if channel == "mix":
+                    app_settings["ph_calibration"]["cal918_done"] = True
             elif action == "clear":
-                app_settings["ph_calibration"] = {
+                app_settings["ph_calibration"][channel] = {
                     "cal401_done": False, "cal686_done": False, "cal918_done": False,
                     "last_voltage": 0, "last_ph": 0
                 }
+                if channel == "mix":
+                    app_settings["ph_calibration"]["cal401_done"] = False
+                    app_settings["ph_calibration"]["cal686_done"] = False
+                    app_settings["ph_calibration"]["cal918_done"] = False
             save_settings(app_settings)
             
-            return jsonify({"status": "ok", "message": f"pH {action} command sent to ESP32"})
+            return jsonify({"status": "ok", "message": f"pH {action} [{channel}] command sent to ESP32"})
         else:
             return jsonify({"status": "error", "message": "MQTT not connected"}), 503
     except Exception as e:
@@ -2675,6 +3601,138 @@ def get_history():
         return jsonify(build_history_payload(rows, range_meta))
     except ValueError as e:
         return jsonify({"status": "error", "message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/history/fix')
+@admin_required
+def get_history_fix_rows():
+    try:
+        rows, range_meta = fetch_history_rows_for_edit(
+            request.args.get('start_date', ''),
+            request.args.get('end_date', ''),
+            request.args.get('page', 1),
+            request.args.get('per_page', 100),
+        )
+        return jsonify({
+            "status": "ok",
+            "rows": rows,
+            "range": range_meta,
+        })
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/history/fix/<int:row_id>', methods=['PATCH'])
+@admin_required
+def patch_history_fix_row(row_id):
+    try:
+        payload = request.get_json(silent=True) or {}
+        updates = payload.get("updates")
+        if not isinstance(updates, dict):
+            updates = {k: v for k, v in payload.items() if k in HISTORY_EDITABLE_COLUMNS}
+        row = update_history_row(
+            row_id,
+            updates,
+            username=session.get('username', '?'),
+            ip_address=request.remote_addr,
+        )
+        return jsonify({"status": "ok", "row": row})
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/history/fix/<int:row_id>', methods=['DELETE'])
+@admin_required
+def delete_history_fix_row(row_id):
+    try:
+        delete_history_row(
+            row_id,
+            username=session.get('username', '?'),
+            ip_address=request.remote_addr,
+        )
+        return jsonify({"status": "ok", "message": f"Deleted row {row_id}"})
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/history/fix/stats')
+@admin_required
+def get_history_fix_stats():
+    try:
+        column = request.args.get("column", "ph_mix")
+        stats = fetch_history_column_stats(
+            request.args.get("start_date", ""),
+            request.args.get("end_date", ""),
+            column,
+        )
+        return jsonify({"status": "ok", "stats": stats})
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/history/fix/auto', methods=['POST'])
+@admin_required
+def post_history_auto_fix():
+    try:
+        payload = request.get_json(silent=True) or {}
+        result = apply_history_auto_fix(
+            start_date_raw=payload.get("start_date", ""),
+            end_date_raw=payload.get("end_date", ""),
+            column=payload.get("column", "ph_mix"),
+            min_value=payload.get("min_value"),
+            max_value=payload.get("max_value"),
+            mean_value=payload.get("mean_value"),
+            max_step=payload.get("max_step"),
+            spike_limit=payload.get("spike_limit"),
+            variation_scale=payload.get("variation_scale", 0.4),
+            dry_run=bool(payload.get("dry_run", True)),
+            username=session.get("username", "?"),
+            ip_address=request.remote_addr,
+        )
+        return jsonify({"status": "ok", **result})
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    except TypeError as e:
+        return jsonify({"status": "error", "message": "กรอก min / max / mean / max_step ให้ครบ"}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/history/fix/copy', methods=['POST'])
+@admin_required
+def post_history_copy_sensor():
+    try:
+        payload = request.get_json(silent=True) or {}
+        result = apply_history_copy_sensor(
+            start_date_raw=payload.get("start_date", ""),
+            end_date_raw=payload.get("end_date", ""),
+            source_column=payload.get("source_column", "ph_fish"),
+            target_column=payload.get("target_column", "ph_mix"),
+            target_mean=payload.get("target_mean"),
+            ripple_scale=payload.get("ripple_scale", 1.0),
+            difference_scale=payload.get("difference_scale", 0.2),
+            max_step=payload.get("max_step"),
+            min_value=payload.get("min_value"),
+            max_value=payload.get("max_value"),
+            dry_run=bool(payload.get("dry_run", True)),
+            username=session.get("username", "?"),
+            ip_address=request.remote_addr,
+        )
+        return jsonify({"status": "ok", **result})
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    except TypeError as e:
+        return jsonify({"status": "error", "message": "กรอก target_mean ให้ครบ"}), 400
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 

@@ -195,6 +195,8 @@
         }
         .icon-env { background: rgba(56,189,248,0.15); color: #38bdf8; }
         .icon-water { background: rgba(52,211,153,0.15); color: #34d399; }
+        .icon-tds { background: rgba(0,242,170,0.15); color: #00f2aa; }
+        .icon-ph { background: rgba(217,70,239,0.15); color: #d946ef; }
         .icon-light { background: rgba(250,204,21,0.15); color: #facc15; }
         
         .chart-container {
@@ -275,19 +277,33 @@
 
             <!-- 1. Environment Chart -->
             <div class="chart-card">
-                <h2><i class="fas fa-temperature-half icon-env"></i> Environment (Air & Water)</h2>
+                <h2><i class="fas fa-temperature-half icon-env"></i> Environment (Air & Humidity)</h2>
                 <div class="chart-container"><canvas id="envChart"></canvas></div>
                 <div class="zoom-hint">🖱️ Scroll to Zoom | Drag to Pan</div>
             </div>
 
-            <!-- 2. Water Quality Chart -->
+            <!-- 2. Water Temp Chart -->
             <div class="chart-card">
-                <h2><i class="fas fa-droplet icon-water"></i> Water Quality (pH & TDS)</h2>
-                <div class="chart-container"><canvas id="waterChart"></canvas></div>
+                <h2><i class="fas fa-water icon-water"></i> Water Temp (Mix vs Fish)</h2>
+                <div class="chart-container"><canvas id="tempChart"></canvas></div>
                 <div class="zoom-hint">🖱️ Scroll to Zoom | Drag to Pan</div>
             </div>
 
-            <!-- 3. Light Chart -->
+            <!-- 3. TDS Chart -->
+            <div class="chart-card">
+                <h2><i class="fas fa-vial icon-tds"></i> TDS (Mix vs Fish)</h2>
+                <div class="chart-container"><canvas id="tdsChart"></canvas></div>
+                <div class="zoom-hint">🖱️ Scroll to Zoom | Drag to Pan</div>
+            </div>
+
+            <!-- 4. pH Chart -->
+            <div class="chart-card">
+                <h2><i class="fas fa-flask icon-ph"></i> pH (Mix vs Fish)</h2>
+                <div class="chart-container"><canvas id="phChart"></canvas></div>
+                <div class="zoom-hint">🖱️ Scroll to Zoom | Drag to Pan</div>
+            </div>
+
+            <!-- 5. Light Chart -->
             <div class="chart-card full-width">
                 <h2><i class="fas fa-sun icon-light"></i> Light Intensity</h2>
                 <div class="chart-container"><canvas id="lightChart"></canvas></div>
@@ -297,7 +313,7 @@
     </div>
 
     <script>
-        let envChart, waterChart, lightChart;
+        let envChart, tempChart, tdsChart, phChart, lightChart;
         let chartsHaveData = false;
 
         function getHistoryRangeInputs() {
@@ -426,10 +442,14 @@
 
         function destroyCharts() {
             if (envChart) envChart.destroy();
-            if (waterChart) waterChart.destroy();
+            if (tempChart) tempChart.destroy();
+            if (tdsChart) tdsChart.destroy();
+            if (phChart) phChart.destroy();
             if (lightChart) lightChart.destroy();
             envChart = null;
-            waterChart = null;
+            tempChart = null;
+            tdsChart = null;
+            phChart = null;
             lightChart = null;
         }
 
@@ -473,7 +493,9 @@
                 }
 
                 renderEnvChart(history);
-                renderWaterChart(history);
+                renderTempChart(history);
+                renderTdsChart(history);
+                renderPhChart(history);
                 renderLightChart(history);
                 chartsHaveData = true;
                 setChartsState('ready', 'Charts are up to date', `โหลดข้อมูลช่วง ${history.range?.label_th || 'ล่าสุด'} สำเร็จ`, 'Last updated ' + new Date().toLocaleTimeString());
@@ -496,30 +518,45 @@
 
         function renderEnvChart(data) {
             const datasets = [
-                { label: 'Water Temp Mix (°C)', data: data.datasets.water_temp_mix || data.datasets.water_temp, borderColor: '#38bdf8', tension: 0.4, spanGaps: true },
-                { label: 'Water Temp Fish (°C)', data: data.datasets.water_temp_fish || [], borderColor: '#22c55e', tension: 0.4, spanGaps: true },
                 { label: 'Air Temp (°C)', data: data.datasets.air_temp, borderColor: '#f472b6', tension: 0.4, spanGaps: true },
-                { label: 'Humidity (%)', data: data.datasets.humidity, borderColor: '#a78bfa', tension: 0.4, hidden: true, spanGaps: true }
+                { label: 'Humidity (%)', data: data.datasets.humidity, borderColor: '#a78bfa', tension: 0.4, yAxisID: 'y1', spanGaps: true }
             ];
 
-            envChart = upsertLineChart(envChart, 'envChart', data.labels, datasets, getChartOptions());
-        }
-
-        function renderWaterChart(data) {
-            const datasets = [
-                { label: 'pH Level', data: data.datasets.ph, borderColor: '#34d399', yAxisID: 'y', tension: 0.4, spanGaps: true },
-                { label: 'TDS Mix (ppm)', data: data.datasets.tds_mix || data.datasets.tds, borderColor: '#fbbf24', yAxisID: 'y1', tension: 0.4, spanGaps: true },
-                { label: 'TDS Fish (ppm)', data: data.datasets.tds_fish || [], borderColor: '#fb7185', yAxisID: 'y1', tension: 0.4, spanGaps: true }
-            ];
-
-            waterChart = upsertLineChart(waterChart, 'waterChart', data.labels, datasets, {
+            envChart = upsertLineChart(envChart, 'envChart', data.labels, datasets, {
                 ...getChartOptions(),
                 scales: {
-                    y: { position: 'left', grid: { color: 'rgba(255,255,255,0.1)' } },
-                    y1: { position: 'right', grid: { drawOnChartArea: false } },
-                    x: { grid: { display: false } }
+                    y: { position: 'left', grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#94a3b8' } },
+                    y1: { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#94a3b8' } },
+                    x: { grid: { display: false }, ticks: { color: '#94a3b8', maxTicksLimit: 8 } }
                 }
             });
+        }
+
+        function renderTempChart(data) {
+            const datasets = [
+                { label: 'Water Temp Mix (°C)', data: data.datasets.water_temp_mix || data.datasets.water_temp, borderColor: '#38bdf8', tension: 0.4, spanGaps: true },
+                { label: 'Water Temp Fish (°C)', data: data.datasets.water_temp_fish || [], borderColor: '#22c55e', tension: 0.4, spanGaps: true }
+            ];
+
+            tempChart = upsertLineChart(tempChart, 'tempChart', data.labels, datasets, getChartOptions());
+        }
+
+        function renderTdsChart(data) {
+            const datasets = [
+                { label: 'TDS Mix (ppm)', data: data.datasets.tds_mix || data.datasets.tds, borderColor: '#00f2aa', tension: 0.4, spanGaps: true },
+                { label: 'TDS Fish (ppm)', data: data.datasets.tds_fish || [], borderColor: '#fbbf24', tension: 0.4, spanGaps: true }
+            ];
+
+            tdsChart = upsertLineChart(tdsChart, 'tdsChart', data.labels, datasets, getChartOptions());
+        }
+
+        function renderPhChart(data) {
+            const datasets = [
+                { label: 'pH Mix', data: data.datasets.ph_mix || data.datasets.ph, borderColor: '#d946ef', tension: 0.4, spanGaps: true },
+                { label: 'pH Fish', data: data.datasets.ph_fish || [], borderColor: '#2dd4bf', tension: 0.4, spanGaps: true }
+            ];
+
+            phChart = upsertLineChart(phChart, 'phChart', data.labels, datasets, getChartOptions());
         }
 
         function renderLightChart(data) {
@@ -558,7 +595,9 @@
 
         function resetZoom() {
             if (envChart) envChart.resetZoom();
-            if (waterChart) waterChart.resetZoom();
+            if (tempChart) tempChart.resetZoom();
+            if (tdsChart) tdsChart.resetZoom();
+            if (phChart) phChart.resetZoom();
             if (lightChart) lightChart.resetZoom();
         }
 

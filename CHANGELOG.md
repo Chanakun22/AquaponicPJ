@@ -2,6 +2,114 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-06-05] - Admin History Graph Fix Page (/fix)
+
+### Added
+
+- **feat:** เพิ่มหน้า `/fix` (admin only) สำหรับแก้ไขค่า sensor ในประวัติกราฟย้อนหลังโดยตรง พร้อมตัวอย่างกราฟ, ตารางแก้ไขแบบ inline, pagination, บันทึกทีละแถว/บันทึกรวม, และลบแถวผิดปกติ
+- **feat:** เพิ่มตัวช่วยแก้ไขอัตโนมัติบน `/fix` — กรอก min/max/mean + max step (กันดีด) + spike limit แล้วให้ระบบปรับค่าทั้งช่วงเอง พร้อม preview กราฟ before/after และ API `POST /api/history/fix/auto`, `GET /api/history/fix/stats`
+- **feat:** เพิ่ม **Copy Sensor** บน `/fix` — คัดลอกรูปคลื่นจาก sensor ต้นทางไปปลายทาง (เช่น pH Fish → pH Mix) พร้อม Target Mean, Ripple Scale, Difference ให้เส้นเหมือนกันแต่ไม่ซ้อนกัน + API `POST /api/history/fix/copy`
+- **app.py:** เพิ่ม API `GET /api/history/fix`, `PATCH /api/history/fix/<id>`, `DELETE /api/history/fix/<id>` พร้อม validation ช่วงค่าและ activity log (`history_edit`, `history_delete`)
+- **header.js:** เพิ่มเมนู `แก้กราฟ` ในกลุ่มผู้ดูแล (admin only)
+- **pwa/sw.js:** bump cache `aquaponics-v42` → `aquaponics-v43`
+
+## [2026-06-05] - Per-Channel TDS Calibration (Mix / Fish)
+
+### Added
+
+- **feat:** TDS calibration แยก channel ครบวงจร — firmware `tdsSetCalibrationForChannel()`, MQTT `aquaponics/config/tds_cal` รองรับ `"channel": "mix"|"fish"`, Pi API `/api/tds_voltage` + `/api/tds_calibrate` รองรับ per-channel, และหน้า Settings มี dropdown เลือก probe เหมือน pH
+- **settings.html:** เก็บค่า cal แยก `tds_calibration.mix` / `tds_calibration.fish` พร้อม backward compat กับ root `tds_calibration` สำหรับ Mix
+- **pwa/sw.js:** bump cache `aquaponics-v41` → `aquaponics-v42`
+
+### Notes
+
+- Mix กับ Fish ใช้น้ำยามาตรฐานชุดเดียวกันได้ แต่ต้องกด Read voltage แยกต่อ probe แล้ว Save ทีละ channel
+
+## [2026-06-03] - Dashboard Separate Water Quality Cards
+
+### Changed
+
+- **index.html:** แยกการ์ด dashboard สำหรับ `Water Temp`, `TDS`, และ `pH` ออกเป็นรายถังชัดเจน (`Mix` / `Fish`) แทนการแสดงแบบ compare tile ในการ์ดเดียว
+- **index.html:** ปรับ `updateSensors()` ให้เติมค่าลงการ์ดใหม่โดยไม่ใส่หน่วยซ้ำ และเพิ่ม hint แยกสำหรับ fish tank (`waterFishHint`, `tdsFishHint`, `phFishHint`)
+- **index.html:** ปรับ sensor-disabled state ให้ครอบคลุมการ์ดใหม่ทั้ง mix/fish และแยก light ออกจาก pH
+- **pwa/sw.js:** bump cache `aquaponics-v36` → `aquaponics-v37`
+- **index.html:** ยุบ fish tank readings กลับเป็นการ์ดเดียว `Fish Tank Sensors` โดยรวม `Water Temp`, `TDS`, และ `pH` ใน card เดียวตามการใช้งานหน้า dashboard
+- **index.html:** ปรับ fish hint และ disabled state ให้ใช้ `card-fish-sensors` ใบเดียว
+- **pwa/sw.js:** bump cache `aquaponics-v37` → `aquaponics-v38`
+- **index.html:** ยุบ mix tank readings เป็นการ์ดเดียว `Mix Tank Sensors` ให้ UI จับคู่กับ `Fish Tank Sensors` และปรับ card styling เป็น tile 3 ค่า (`Water Temp`, `TDS`, `pH`) พร้อม summary ต่อถัง
+- **index.html:** ปรับ sensor-disabled state ให้ใช้การ์ดรายถัง (`card-mix-sensors`, `card-fish-sensors`) แทนการ์ดราย sensor ที่ถูกลบออก
+- **pwa/sw.js:** bump cache `aquaponics-v38` → `aquaponics-v39`
+- **index.html:** ปรับ tank sensor cards ให้เข้าธีม dashboard มากขึ้น โดยให้ Mix/Fish span เป็นการ์ดกว้าง, ลดสี tile เป็น dark glass พร้อม accent border, ปรับขนาดตัวเลข/หน่วยไม่ให้เบียด และเพิ่ม responsive layout บนมือถือ
+- **pwa/sw.js:** bump cache `aquaponics-v39` → `aquaponics-v40`
+- **graphs.html:** แยกกราฟย้อนหลังจากเดิมที่รวม water/pH/TDS หลายชนิดไว้ด้วยกัน เป็นกราฟเฉพาะ `Water Temp`, `TDS`, และ `pH` โดยแต่ละกราฟมีเส้น `Mix` / `Fish` แยกกันชัดเจน พร้อมคง `Environment` สำหรับ air/humidity และ `Light` แยกต่างหาก
+- **pwa/sw.js:** bump cache `aquaponics-v40` → `aquaponics-v41`
+
+## [2026-06-02] - DS18B20 OneWire Bus Race Fix
+
+### Fixed
+
+- **fix (critical):** แก้ปัญหา water temp อ่านเป็น `nan` ทั้ง mix/fish หลังเพิ่ม realtime `temp scan` — ต้นเหตุคือบัส OneWire ไม่มี mutex แต่ `temp scan`/`temp bind` (รันบน TaskNetworking) ไปเรียก `begin()`/`getAddress()` บนบัสพร้อมกับ `requestTemperatures()`/`getTempC()` ใน `tempLoop()` (TaskSensors) ทำให้ transaction ชนกันจนอ่านค่าไม่ได้
+- **refactor:** ย้ายการแตะบัส OneWire ทั้งหมดไปอยู่บน TaskSensors เท่านั้น
+  - เพิ่ม `_performScan()` (cache scanned addresses) เรียกจาก `tempSetup()` และจาก `tempLoop()` ตอน IDLE
+  - `tempRefreshScan()` เปลี่ยนเป็นแค่ตั้ง flag `_rescanRequested` (ไม่แตะบัส) แล้วให้ `tempLoop()` ทำ rescan จริงในรอบถัดไป
+  - `tempGetScannedAddressHex()`, `_bindFromIndex()`, `_autoBindMissingAddresses()` อ่านจาก cache `_scannedAddresses[]` แทนการ search บัสสดจาก command task
+
+### Notes
+
+- `temp scan` จะอัปเดต `Devices found` ในรอบการอ่านถัดไป (ภายใน ~`TEMP_READ_INTERVAL`) — รันซ้ำได้ถ้าต้องการค่าใหม่ทันที
+- Build production ผ่าน (RAM 19.0%, Flash 14.8%); `test_temp_native` + `test_water_system_native` ผ่านครบ
+
+## [2026-05-31] - Pi Dashboard pH Fish Channel UI
+
+### Added
+
+- **app.py:** รองรับ `ph_mix` / `ph_fish` ครบ pipeline
+  - เพิ่มใน `last_data` cache + DB schema (ALTER TABLE `ph_mix`, `ph_fish`) + DB INSERT
+  - History query/payload เพิ่ม columns + `datasets.ph_mix` / `datasets.ph_fish`
+  - `normalize_history_value` validate ช่วง pH สำหรับ `ph_mix`/`ph_fish`
+  - `SENSOR_KEYS` + `sensor_config_keys` เพิ่ม per-channel keys
+  - `ph_calibration` cache เพิ่ม nested `mix`/`fish` objects + status handler parse จาก firmware
+  - `/api/ph_calibrate` รับ field `channel` (`mix`/`fish`) → ส่งต่อใน MQTT payload
+  - `/api/ph_voltage` คืน nested `mix`/`fish` readings
+- **index.html:** เพิ่ม compare-grid tiles `pH Mix Tank` / `pH Fish Tank` ในการ์ด pH; `updateSensors()` อ่าน `ph_mix ?? ph`, `ph_fish`; hint แสดงค่า fish
+- **graphs.html:** Water chart แยกเป็น `pH Mix` + `pH Fish` series (เดิม single `pH Level`)
+- **settings.html:** เพิ่ม channel selector (mix/fish) ในการ์ด pH calibration; `calibratePh`/`clearPhCalibration` ส่ง `channel`; reading + status แสดงตาม channel ที่เลือก
+- **pwa/sw.js:** bump cache `aquaponics-v34` → `aquaponics-v35`
+
+### Notes
+
+- ปิด Phase C (pH multi-channel) ของ `FISH_TANK_SENSORS_PLAN.md` ครบ **end-to-end** (firmware + Pi dashboard) — เหลือเฉพาะ wire probe จริง + calibrate
+- Legacy keys (`ph`, `ph_voltage`) ยังคงไว้ = mix channel เพื่อ backward compat
+- `app.py` syntax check ผ่าน (`python -m py_compile`)
+
+## [2026-05-31] - pH Multi-Channel (Fish Tank Probe Support)
+
+### Added
+
+- **phSensor refactor:** เป็น multi-channel array-based pattern (เหมือน `TdsSensor`) — รองรับ 2 channel: `PH_CHANNEL_MIX` (GPIO 6, เดิม) และ `PH_CHANNEL_FISH` (GPIO 1, ADC1_CH0, ใหม่)
+  - เพิ่ม `PhChannel` enum + new API: `phReadChannel()`, `phReadVoltageChannel()`, `phIsReadyChannel()`, `phCalibratePh{401,686,918}Channel()`, `phHasCalibration{401,686,918}Channel()`, `phClearCalibrationChannel()`
+  - Backward-compat shims: `phRead()`, `phCalibratePh686()` ฯลฯ ทุกตัว default = MIX channel → caller เดิมไม่ต้องแก้
+  - NVS keys: `mix_v401`/`mix_v686`/`mix_v918` (MIX) + `fish_v401`/`fish_v686`/`fish_v918` (FISH); MIX channel ยัง fallback อ่าน legacy `v401`/`v686`/`v918`/`volt4`/`volt7` ได้ (auto-migrate ตอน save ครั้งถัดไป)
+  - Per-channel filtering state: ทุก EMA / deadband / step-limiter แยกระหว่าง mix และ fish ไม่กระทบกัน
+- **MQTT keys ใหม่** ใน `aquaponics/sensors`:
+  - `ph_mix`, `ph_fish` (ค่า pH ของแต่ละ channel)
+  - `ph_mix_voltage`, `ph_fish_voltage` (mV สำหรับ calibration UI)
+  - Legacy `ph` / `ph_voltage` คงไว้ = mix channel
+- **MQTT pH calibration topic** (`aquaponics/config/ph_cal`) รองรับ field `channel`: `"mix"` (default) หรือ `"fish"` → calibrate ต่อ probe ได้
+- **MQTT pH cal status** (`aquaponics/status/ph_cal`) เพิ่ม nested `mix`/`fish` objects พร้อม `cal{401,686,918}_done` แต่ละ channel (legacy keys ที่ root level ยังคงเป็น mix สำหรับ Pi UI เดิม)
+- **NETPIE shadow** เพิ่ม keys `ph_mix`, `ph_fish` (legacy `ph` = mix)
+- **CLI commands:**
+  - `ph` แสดงทั้ง mix และ fish channel
+  - `cal686 [mix|fish]`, `cal401 [mix|fish]`, `cal918 [mix|fish]` (default = mix; alias `cal7`/`cal4` ยังทำงาน)
+  - `status` แสดง `pH Mix` + `pH Fish` แยก row
+
+### Notes
+
+- **ยังไม่ wire fish probe จริง** — `PH_CHANNEL_FISH` อ่าน floating ADC1_CH0 จะให้ค่า noise/ไม่เสถียร แต่ระบบ handle NaN/-1 ได้ และไม่กระทบ MIX channel หรือ automation
+- **Automation ใช้ MIX channel เท่านั้น** (เหมือนเดิม) — ตู้ปลาเป็น monitor only ตามแผน
+- **Build verified:** Production firmware compile ผ่าน, RAM 19.0%, Flash 14.8%
+- **Native tests:** `test_water_system_native` ผ่านครบ 25/25 cases (ไม่ regression). `test_ph_native` มี 5 fail cases ที่เกี่ยวกับ mock NVS state across instances — เป็น preexisting infrastructure issue ก่อน refactor นี้
+
 ## [2026-05-31] - Fish Tank Water Temp and TDS Phase 1
 
 ### Added

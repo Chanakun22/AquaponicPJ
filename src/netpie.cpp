@@ -484,7 +484,12 @@ void netpiePublishData(float waterTemp,
         data["light"] = round(light * 10) / 10.0;
     }
     if (ph >= 0) {
-        data["ph"] = round(ph * 100) / 100.0;  // 2 decimal places for pH
+        data["ph"] = round(ph * 100) / 100.0;       // legacy alias = mix
+        data["ph_mix"] = round(ph * 100) / 100.0;
+    }
+    float phFish = phReadChannel(PH_CHANNEL_FISH);
+    if (phFish >= 0 && !isnan(phFish)) {
+        data["ph_fish"] = round(phFish * 100) / 100.0;
     }
     
     // เพิ่มสถานะไฟ

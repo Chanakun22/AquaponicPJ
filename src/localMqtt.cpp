@@ -97,6 +97,7 @@ typedef struct {
     uint8_t type;
     union {
         struct {
+            uint8_t channel;    // TdsChannel: 0 = mix, 1 = fish
             float lowPpm;
             float lowVoltage;
             float lowTemperature;
@@ -107,6 +108,7 @@ typedef struct {
         } tdsCal;
         struct {
             uint8_t action;
+            uint8_t channel;    // PhChannel: 0 = mix, 1 = fish
         } phCal;
         struct {
             bool states[SENSOR_COUNT];
@@ -456,7 +458,11 @@ static void _processDeferredAction(const LocalDeferredAction* action) {
 
     switch (action->type) {
         case LOCAL_DEFERRED_TDS_CAL:
-            tdsSetCalibration(
+        {
+            TdsChannel channel = (action->data.tdsCal.channel == (uint8_t)TDS_CHANNEL_FISH)
+                                    ? TDS_CHANNEL_FISH : TDS_CHANNEL_MIX;
+            tdsSetCalibrationForChannel(
+                channel,
                 action->data.tdsCal.lowPpm,
                 action->data.tdsCal.lowVoltage,
                 action->data.tdsCal.lowTemperature,
@@ -465,47 +471,54 @@ static void _processDeferredAction(const LocalDeferredAction* action) {
                 action->data.tdsCal.highTemperature,
                 action->data.tdsCal.rawVoltage
             );
-            LOG_INFO("TDS Calibration received from Pi!");
+            LOG_INFO("TDS %s calibration received from Pi!",
+                     channel == TDS_CHANNEL_FISH ? "fish" : "mix");
             break;
+        }
 
         case LOCAL_DEFERRED_PH_CAL:
+        {
+            PhChannel ch = (action->data.phCal.channel == (uint8_t)PH_CHANNEL_FISH)
+                            ? PH_CHANNEL_FISH : PH_CHANNEL_MIX;
+            const char* chName = (ch == PH_CHANNEL_FISH) ? "fish" : "mix";
             switch (action->data.phCal.action) {
                 case LOCAL_PH_CAL_686:
-                    if (phIsReady()) {
-                        phCalibratePh686();
-                        LOG_INFO("pH 6.86 Calibration triggered from Pi Dashboard!");
+                    if (phIsReadyChannel(ch)) {
+                        phCalibratePh686Channel(ch);
+                        LOG_INFO("pH 6.86 [%s] Calibration triggered from Pi Dashboard!", chName);
                         _queueStatusPublish(LOCAL_STATUS_PUBLISH_PH_CAL);
                     } else {
-                        LOG_ERROR("pH sensor not ready for calibration");
+                        LOG_ERROR("pH %s sensor not ready for calibration", chName);
                     }
                     break;
                 case LOCAL_PH_CAL_401:
-                    if (phIsReady()) {
-                        phCalibratePh401();
-                        LOG_INFO("pH 4.01 Calibration triggered from Pi Dashboard!");
+                    if (phIsReadyChannel(ch)) {
+                        phCalibratePh401Channel(ch);
+                        LOG_INFO("pH 4.01 [%s] Calibration triggered from Pi Dashboard!", chName);
                         _queueStatusPublish(LOCAL_STATUS_PUBLISH_PH_CAL);
                     } else {
-                        LOG_ERROR("pH sensor not ready for calibration");
+                        LOG_ERROR("pH %s sensor not ready for calibration", chName);
                     }
                     break;
                 case LOCAL_PH_CAL_918:
-                    if (phIsReady()) {
-                        phCalibratePh918();
-                        LOG_INFO("pH 9.18 Calibration triggered from Pi Dashboard!");
+                    if (phIsReadyChannel(ch)) {
+                        phCalibratePh918Channel(ch);
+                        LOG_INFO("pH 9.18 [%s] Calibration triggered from Pi Dashboard!", chName);
                         _queueStatusPublish(LOCAL_STATUS_PUBLISH_PH_CAL);
                     } else {
-                        LOG_ERROR("pH sensor not ready for calibration");
+                        LOG_ERROR("pH %s sensor not ready for calibration", chName);
                     }
                     break;
                 case LOCAL_PH_CAL_CLEAR:
-                    phClearCalibration();
-                    LOG_INFO("pH Calibration cleared from Pi Dashboard!");
+                    phClearCalibrationChannel(ch);
+                    LOG_INFO("pH [%s] Calibration cleared from Pi Dashboard!", chName);
                     _queueStatusPublish(LOCAL_STATUS_PUBLISH_PH_CAL);
                     break;
                 default:
                     break;
             }
             break;
+        }
 
         case LOCAL_DEFERRED_SENSOR_CONFIG:
         {
@@ -661,8 +674,12 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
     
     // Handle TDS Calibration
     if (strcmp(topic, "aquaponics/config/tds_cal") == 0) {
+        const char* channelStr = doc["channel"] | "mix";
         LocalDeferredAction action = {};
         action.type = LOCAL_DEFERRED_TDS_CAL;
+        action.data.tdsCal.channel = (strcmp(channelStr, "fish") == 0)
+                                        ? (uint8_t)TDS_CHANNEL_FISH
+                                        : (uint8_t)TDS_CHANNEL_MIX;
         action.data.tdsCal.lowPpm = doc["low_ppm"] | 0.0f;
         action.data.tdsCal.lowVoltage = doc["low_voltage"] | 0.0f;
         action.data.tdsCal.lowTemperature = doc["low_temp"] | 25.0f;
@@ -682,26 +699,33 @@ static void _onMqttMessage(char* topic, byte* payload, unsigned int length) {
     // Handle pH Calibration
     if (strcmp(topic, "aquaponics/config/ph_cal") == 0) {
         const char* action = doc["action"] | "";
+        const char* channelStr = doc["channel"] | "mix";
+        uint8_t channel = (strcmp(channelStr, "fish") == 0) ? (uint8_t)PH_CHANNEL_FISH
+                                                            : (uint8_t)PH_CHANNEL_MIX;
         
         if (strcmp(action, "cal686") == 0 || strcmp(action, "cal7") == 0) {
             LocalDeferredAction deferred = {};
             deferred.type = LOCAL_DEFERRED_PH_CAL;
             deferred.data.phCal.action = LOCAL_PH_CAL_686;
+            deferred.data.phCal.channel = channel;
             _enqueueDeferredAction(&deferred);
         } else if (strcmp(action, "cal401") == 0 || strcmp(action, "cal4") == 0) {
             LocalDeferredAction deferred = {};
             deferred.type = LOCAL_DEFERRED_PH_CAL;
             deferred.data.phCal.action = LOCAL_PH_CAL_401;
+            deferred.data.phCal.channel = channel;
             _enqueueDeferredAction(&deferred);
         } else if (strcmp(action, "cal918") == 0) {
             LocalDeferredAction deferred = {};
             deferred.type = LOCAL_DEFERRED_PH_CAL;
             deferred.data.phCal.action = LOCAL_PH_CAL_918;
+            deferred.data.phCal.channel = channel;
             _enqueueDeferredAction(&deferred);
         } else if (strcmp(action, "clear") == 0) {
             LocalDeferredAction deferred = {};
             deferred.type = LOCAL_DEFERRED_PH_CAL;
             deferred.data.phCal.action = LOCAL_PH_CAL_CLEAR;
+            deferred.data.phCal.channel = channel;
             _enqueueDeferredAction(&deferred);
         }
     }
@@ -1159,7 +1183,14 @@ void localMqttPublishData(float waterTemp,
     }
     if (tdsFish >= 0) _sensorPublishDoc["tds_fish"] = round(tdsFish * 10) / 10.0;
     if (light >= 0) _sensorPublishDoc["light"] = round(light * 10) / 10.0;
-    if (ph >= 0) _sensorPublishDoc["ph"] = round(ph * 100) / 100.0;
+    if (ph >= 0) {
+        _sensorPublishDoc["ph"] = round(ph * 100) / 100.0;
+        _sensorPublishDoc["ph_mix"] = round(ph * 100) / 100.0;
+    }
+    float phFish = phReadChannel(PH_CHANNEL_FISH);
+    if (phFish >= 0 && !isnan(phFish)) {
+        _sensorPublishDoc["ph_fish"] = round(phFish * 100) / 100.0;
+    }
     
     // Add TDS voltage for calibration
     float tdsVoltage = tdsGetVoltage();
@@ -1169,7 +1200,14 @@ void localMqttPublishData(float waterTemp,
     
     // Add pH voltage for calibration (mV)
     float phVoltage = phReadVoltage();
-    if (phVoltage >= 0) _sensorPublishDoc["ph_voltage"] = round(phVoltage * 10) / 10.0;
+    if (phVoltage >= 0) {
+        _sensorPublishDoc["ph_voltage"] = round(phVoltage * 10) / 10.0;
+        _sensorPublishDoc["ph_mix_voltage"] = round(phVoltage * 10) / 10.0;
+    }
+    float phFishVoltage = phReadVoltageChannel(PH_CHANNEL_FISH);
+    if (phFishVoltage >= 0) {
+        _sensorPublishDoc["ph_fish_voltage"] = round(phFishVoltage * 10) / 10.0;
+    }
     if (phIsReady()) _sensorPublishDoc["ph_value"] = round(phRead() * 100) / 100.0;
     
     // Add Network Connectivity Status
@@ -1312,15 +1350,31 @@ static void _publishSensorConfig(void) {
 static void _publishPhCalibrationStatus(void) {
     if (!_localMqtt.connected()) return;
 
-    StaticJsonDocument<256> doc;
+    StaticJsonDocument<512> doc;
+    // Legacy keys = mix channel (kept for Pi UI backward compat)
     doc["ph_voltage"] = round(phReadVoltage() * 10) / 10.0;
     doc["ph_value"] = round(phRead() * 100) / 100.0;
     doc["calibrated"] = phHasCalibration401() || phHasCalibration686() || phHasCalibration918();
     doc["cal401_done"] = phHasCalibration401();
     doc["cal686_done"] = phHasCalibration686();
     doc["cal918_done"] = phHasCalibration918();
-    
-    char buffer[256];
+
+    // Multi-channel keys (mix + fish)
+    JsonObject mix = doc.createNestedObject("mix");
+    mix["ph_voltage"] = round(phReadVoltageChannel(PH_CHANNEL_MIX) * 10) / 10.0;
+    mix["ph_value"] = round(phReadChannel(PH_CHANNEL_MIX) * 100) / 100.0;
+    mix["cal401_done"] = phHasCalibration401Channel(PH_CHANNEL_MIX);
+    mix["cal686_done"] = phHasCalibration686Channel(PH_CHANNEL_MIX);
+    mix["cal918_done"] = phHasCalibration918Channel(PH_CHANNEL_MIX);
+
+    JsonObject fish = doc.createNestedObject("fish");
+    fish["ph_voltage"] = round(phReadVoltageChannel(PH_CHANNEL_FISH) * 10) / 10.0;
+    fish["ph_value"] = round(phReadChannel(PH_CHANNEL_FISH) * 100) / 100.0;
+    fish["cal401_done"] = phHasCalibration401Channel(PH_CHANNEL_FISH);
+    fish["cal686_done"] = phHasCalibration686Channel(PH_CHANNEL_FISH);
+    fish["cal918_done"] = phHasCalibration918Channel(PH_CHANNEL_FISH);
+
+    char buffer[512];
     serializeJson(doc, buffer);
     _localMqtt.publish("aquaponics/status/ph_cal", buffer);
     LOG_INFO("Sent pH Calibration Status: %s", buffer);

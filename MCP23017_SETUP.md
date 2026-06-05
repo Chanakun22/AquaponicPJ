@@ -165,16 +165,18 @@ Total: 2 device(s) found
 
 **ลำดับตาม risk: ต่ำ → สูง**
 
-| # | Output | ความเสี่ยงถ้าทำงานผิด |
-|---|--------|----------------------|
-| 1 | Light | ต่ำ (ไฟผิดเวลาไม่อันตราย) |
-| 2 | Fan | ต่ำ |
-| 3 | Fish Feeder | กลาง (ปลาอด/อิ่มเกิน 1 มื้อ) |
-| 4 | Route Valve | กลาง (น้ำไปทางผิด) |
-| 5 | Circulation Pump | กลาง-สูง (ขาด O2 ในตู้) |
-| 6 | Refill Pump | สูง (เติมเกิน → ตู้ล้น) |
-| 7 | Pump Nutrient A | สูงสุด (overdose ปุ๋ย) |
-| 8 | Pump Nutrient B | สูงสุด |
+> **สถานะ migration ปัจจุบัน (2026-05-31):** 7/8 outputs ใช้ MCP23017 แล้ว เหลือเฉพาะ Fish Feeder ที่ยัง paused (`OUT_USE_MCP_FISH_FEEDER = 0`)
+
+| # | Output | ความเสี่ยงถ้าทำงานผิด | สถานะ |
+|---|--------|----------------------|-------|
+| 1 | Light | ต่ำ (ไฟผิดเวลาไม่อันตราย) | ✅ MCP |
+| 2 | Fan | ต่ำ | ✅ MCP |
+| 3 | Fish Feeder | กลาง (ปลาอด/อิ่มเกิน 1 มื้อ) | ⏸️ ESP32 GPIO (paused) |
+| 4 | Route Valve | กลาง (น้ำไปทางผิด) | ✅ MCP |
+| 5 | Circulation Pump | กลาง-สูง (ขาด O2 ในตู้) | ✅ MCP |
+| 6 | Refill Pump | สูง (เติมเกิน → ตู้ล้น) | ✅ MCP |
+| 7 | Pump Nutrient A | สูงสุด (overdose ปุ๋ย) | ✅ MCP |
+| 8 | Pump Nutrient B | สูงสุด | ✅ MCP |
 
 #### ขั้นตอนต่อโมดูล (ใช้ Light เป็นตัวอย่าง)
 

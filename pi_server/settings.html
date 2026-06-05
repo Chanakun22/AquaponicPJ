@@ -1944,7 +1944,15 @@
         <!-- TDS Calibration -->
         <div class="card">
             <h2><i class="fas fa-flask"></i> TDS Calibration</h2>
-            <div class="card-hint">กรอกอุณหภูมิของน้ำยามาตรฐานจริงในแต่ละจุดด้วย ปุ่ม Read จะเก็บ <strong>raw voltage</strong> จาก sensor แล้วให้ firmware ชดเชย temp กลับไปที่ reference 25°C กลางทางเดียว.</div>
+            <div class="card-hint">กรอกอุณหภูมิของน้ำยามาตรฐานจริงในแต่ละจุดด้วย ปุ่ม Read จะเก็บ <strong>raw voltage</strong> จาก probe ที่เลือก แล้วให้ firmware ชดเชย temp กลับไปที่ reference 25°C — <strong>Mix กับ Fish ต้อง calibrate แยกกัน</strong>.</div>
+
+            <div class="form-group">
+                <label>เลือก Probe ที่จะ Calibrate</label>
+                <select id="tds_cal_channel" onchange="onTdsChannelChange()" style="width:100%;">
+                    <option value="mix">Mix Tank (ถังผสม)</option>
+                    <option value="fish">Fish Tank (ตู้ปลา)</option>
+                </select>
+            </div>
             
             <div class="form-group">
                 <label>Current TDS Voltage (Raw)</label>
@@ -2003,6 +2011,14 @@
         <!-- pH Calibration -->
         <div class="card">
             <h2><i class="fas fa-vial"></i> pH Calibration</h2>
+
+            <div class="form-group">
+                <label>เลือก Probe ที่จะ Calibrate</label>
+                <select id="ph_cal_channel" onchange="onPhChannelChange()" style="width:100%;">
+                    <option value="mix">Mix Tank (ถังผสม)</option>
+                    <option value="fish">Fish Tank (ตู้ปลา)</option>
+                </select>
+            </div>
             
             <div class="form-group">
                 <label>Current pH Reading</label>
@@ -3329,11 +3345,54 @@
         });
 
         // === TDS Calibration Functions ===
+        function getTdsCalChannel() {
+            return document.getElementById('tds_cal_channel')?.value || 'mix';
+        }
+
+        function getTdsCalibrationForChannel(channel) {
+            const calRoot = settings.tds_calibration || {};
+            const channelData = calRoot[channel];
+            if (channelData && typeof channelData === 'object' && ('low_voltage' in channelData || 'calibrated' in channelData)) {
+                return channelData;
+            }
+            if (channel === 'mix') {
+                return calRoot;
+            }
+            return {};
+        }
+
+        function collectTdsCalibrationForm(channel = getTdsCalChannel()) {
+            return {
+                low_temp: parseFloat(document.getElementById('low_temp').value) || 25,
+                low_ppm: parseFloat(document.getElementById('low_ppm').value) || 0,
+                low_voltage: parseFloat(document.getElementById('low_voltage').value) || 0,
+                high_temp: parseFloat(document.getElementById('high_temp').value) || 25,
+                high_ppm: parseFloat(document.getElementById('high_ppm').value) || 0,
+                high_voltage: parseFloat(document.getElementById('high_voltage').value) || 0,
+                raw_voltage: getTdsCalibrationForChannel(channel).raw_voltage ?? settings.tds_calibration?.raw_voltage ?? false,
+                calibrated: Boolean(getTdsCalibrationForChannel(channel).calibrated)
+            };
+        }
+
+        function storeTdsCalibrationForm(channel = getTdsCalChannel()) {
+            settings.tds_calibration = settings.tds_calibration || {};
+            settings.tds_calibration[channel] = collectTdsCalibrationForm(channel);
+            if (channel === 'mix') {
+                settings.tds_calibration = {
+                    ...settings.tds_calibration,
+                    ...settings.tds_calibration[channel]
+                };
+            }
+        }
+
         async function refreshVoltage() {
             try {
                 const res = await fetch('/api/tds_voltage');
                 const data = await res.json();
-                document.getElementById('current_voltage').value = data.voltage.toFixed(3) + ' V';
+                const channel = getTdsCalChannel();
+                const chData = (data[channel] && typeof data[channel] === 'object') ? data[channel] : data;
+                const voltage = Number(chData.voltage || 0);
+                document.getElementById('current_voltage').value = voltage.toFixed(3) + ' V';
             } catch (e) {
                 document.getElementById('current_voltage').value = 'Error';
             }
@@ -3344,8 +3403,14 @@
                 const currentV = parseFloat(document.getElementById('current_voltage').value);
                 if (!isNaN(currentV)) {
                     document.getElementById('low_voltage').value = currentV.toFixed(3);
-                    settings.tds_calibration = { ...settings.tds_calibration, raw_voltage: true };
-                    showToast(`Low point captured! Raw voltage saved, firmware will apply ${document.getElementById('low_temp').value}°C compensation ✅`);
+                    storeTdsCalibrationForm();
+                    const channel = getTdsCalChannel();
+                    settings.tds_calibration[channel].raw_voltage = true;
+                    if (channel === 'mix') {
+                        settings.tds_calibration.raw_voltage = true;
+                    }
+                    const channelLabel = channel === 'fish' ? 'Fish Tank' : 'Mix Tank';
+                    showToast(`Low point captured [${channelLabel}]! Raw voltage saved, firmware will apply ${document.getElementById('low_temp').value}°C compensation ✅`);
                 }
             });
         }
@@ -3355,21 +3420,24 @@
                 const currentV = parseFloat(document.getElementById('current_voltage').value);
                 if (!isNaN(currentV)) {
                     document.getElementById('high_voltage').value = currentV.toFixed(3);
-                    settings.tds_calibration = { ...settings.tds_calibration, raw_voltage: true };
-                    showToast(`High point captured! Raw voltage saved, firmware will apply ${document.getElementById('high_temp').value}°C compensation ✅`);
+                    storeTdsCalibrationForm();
+                    const channel = getTdsCalChannel();
+                    settings.tds_calibration[channel].raw_voltage = true;
+                    if (channel === 'mix') {
+                        settings.tds_calibration.raw_voltage = true;
+                    }
+                    const channelLabel = channel === 'fish' ? 'Fish Tank' : 'Mix Tank';
+                    showToast(`High point captured [${channelLabel}]! Raw voltage saved, firmware will apply ${document.getElementById('high_temp').value}°C compensation ✅`);
                 }
             });
         }
 
         async function saveTdsCalibration() {
+            const channel = getTdsCalChannel();
+            const channelLabel = channel === 'fish' ? 'Fish Tank' : 'Mix Tank';
             const data = {
-                low_temp: parseFloat(document.getElementById('low_temp').value) || 25,
-                low_ppm: parseFloat(document.getElementById('low_ppm').value) || 0,
-                low_voltage: parseFloat(document.getElementById('low_voltage').value) || 0,
-                high_temp: parseFloat(document.getElementById('high_temp').value) || 25,
-                high_ppm: parseFloat(document.getElementById('high_ppm').value) || 0,
-                high_voltage: parseFloat(document.getElementById('high_voltage').value) || 0,
-                raw_voltage: settings.tds_calibration?.raw_voltage ?? false
+                channel,
+                ...collectTdsCalibrationForm(channel)
             };
 
             if (data.low_voltage <= 0 || data.high_voltage <= 0) {
@@ -3385,10 +3453,16 @@
                 });
                 const result = await res.json();
                 if (result.status === 'ok') {
-                    showToast('TDS Calibration saved! ✅');
+                    showToast(`TDS Calibration [${channelLabel}] saved! ✅`);
                     document.getElementById('cal_status').textContent = 'Calibrated ✅';
-                    // Update global settings object to reflect new calibration
-                    settings.tds_calibration = { ...settings.tds_calibration, ...data, calibrated: true };
+                    settings.tds_calibration = settings.tds_calibration || {};
+                    settings.tds_calibration[channel] = { ...data, calibrated: true };
+                    if (channel === 'mix') {
+                        settings.tds_calibration = {
+                            ...settings.tds_calibration,
+                            ...settings.tds_calibration[channel]
+                        };
+                    }
                 } else {
                     showToast('Error: ' + result.message, true);
                 }
@@ -3397,16 +3471,25 @@
             }
         }
 
+        function onTdsChannelChange() {
+            const select = document.getElementById('tds_cal_channel');
+            const previousChannel = select.dataset.previousChannel || 'mix';
+            storeTdsCalibrationForm(previousChannel);
+            populateTdsCalibration();
+        }
+
         function populateTdsCalibration() {
-            const cal = settings.tds_calibration || {};
+            const channel = getTdsCalChannel();
+            const channelLabel = channel === 'fish' ? 'Fish Tank' : 'Mix Tank';
+            const cal = getTdsCalibrationForChannel(channel);
             document.getElementById('low_temp').value = cal.low_temp || 25;
             document.getElementById('low_ppm').value = cal.low_ppm || 500;
             document.getElementById('low_voltage').value = cal.low_voltage || '';
             document.getElementById('high_temp').value = cal.high_temp || 25;
             document.getElementById('high_ppm').value = cal.high_ppm || 1000;
             document.getElementById('high_voltage').value = cal.high_voltage || '';
-            settings.tds_calibration = { ...cal };
-            document.getElementById('cal_status').textContent = cal.calibrated ? 'Calibrated ✅' : 'Not Calibrated';
+            document.getElementById('cal_status').textContent = cal.calibrated ? `Calibrated ✅ (${channelLabel})` : `Not Calibrated (${channelLabel})`;
+            document.getElementById('tds_cal_channel').dataset.previousChannel = channel;
             refreshVoltage();
         }
 
@@ -3417,12 +3500,19 @@
             try {
                 const res = await fetch('/api/ph_voltage');
                 const data = await res.json();
-                document.getElementById('ph_current_voltage').value = (data.voltage || 0).toFixed(1) + ' mV';
-                document.getElementById('ph_current_value').value = (data.ph_value || 0).toFixed(2);
+                const channel = document.getElementById('ph_cal_channel')?.value || 'mix';
+                const chData = (data[channel] && typeof data[channel] === 'object') ? data[channel] : data;
+                document.getElementById('ph_current_voltage').value = (chData.voltage || 0).toFixed(1) + ' mV';
+                document.getElementById('ph_current_value').value = (chData.ph_value || 0).toFixed(2);
             } catch (e) {
                 document.getElementById('ph_current_voltage').value = 'Error';
                 document.getElementById('ph_current_value').value = 'Error';
             }
+        }
+
+        function onPhChannelChange() {
+            refreshPhVoltage();
+            populatePhCalibration();
         }
 
         async function calibratePh(action) {
@@ -3438,8 +3528,10 @@
             }
             const label = meta.label;
             const statusId = meta.statusId;
+            const channel = document.getElementById('ph_cal_channel')?.value || 'mix';
+            const channelLabel = channel === 'fish' ? 'Fish Tank' : 'Mix Tank';
             
-            if (!confirm(`⚠️ ยืนยันการ Calibrate ${label}?\n\nตรวจสอบให้แน่ใจว่า:\n1. Probe จุ่มอยู่ใน buffer solution ${label}\n2. ค่า voltage เสถียรแล้ว (รอ 30 วินาที)\n\nกดตกลงเพื่อ Calibrate`)) {
+            if (!confirm(`⚠️ ยืนยันการ Calibrate ${label} [${channelLabel}]?\n\nตรวจสอบให้แน่ใจว่า:\n1. Probe ของ ${channelLabel} จุ่มอยู่ใน buffer solution ${label}\n2. ค่า voltage เสถียรแล้ว (รอ 30 วินาที)\n\nกดตกลงเพื่อ Calibrate`)) {
                 return;
             }
 
@@ -3449,12 +3541,12 @@
                 const res = await fetch('/api/ph_calibrate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: action })
+                    body: JSON.stringify({ action: action, channel: channel })
                 });
                 const result = await res.json();
                 
                 if (result.status === 'ok') {
-                    showToast(`${label} Calibration สำเร็จ! ✅`);
+                    showToast(`${label} [${channelLabel}] Calibration สำเร็จ! ✅`);
                     document.getElementById(statusId).textContent = 'Done ✅';
                     document.getElementById(statusId).style.color = '#10b981';
                     
@@ -3473,7 +3565,9 @@
         }
 
         async function clearPhCalibration() {
-            if (!confirm('⚠️ ยืนยันการลบค่า pH Calibration?\n\nค่า calibrate ทั้งหมดจะถูกลบ และกลับไปใช้ค่า default')) {
+            const channel = document.getElementById('ph_cal_channel')?.value || 'mix';
+            const channelLabel = channel === 'fish' ? 'Fish Tank' : 'Mix Tank';
+            if (!confirm(`⚠️ ยืนยันการลบค่า pH Calibration [${channelLabel}]?\n\nค่า calibrate ของ ${channelLabel} จะถูกลบ และกลับไปใช้ค่า default`)) {
                 return;
             }
 
@@ -3481,7 +3575,7 @@
                 const res = await fetch('/api/ph_calibrate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'clear' })
+                    body: JSON.stringify({ action: 'clear', channel: channel })
                 });
                 const result = await res.json();
                 
@@ -3503,7 +3597,10 @@
         }
 
         function populatePhCalibration() {
-            const phCal = settings.ph_calibration || {};
+            const phCalRoot = settings.ph_calibration || {};
+            const channel = document.getElementById('ph_cal_channel')?.value || 'mix';
+            // Per-channel status if present, otherwise fall back to legacy root-level (mix)
+            const phCal = (phCalRoot[channel] && typeof phCalRoot[channel] === 'object') ? phCalRoot[channel] : phCalRoot;
             document.getElementById('ph_cal401_status').textContent = phCal.cal401_done ? 'Done ✅' : '—';
             document.getElementById('ph_cal401_status').style.color = phCal.cal401_done ? '#10b981' : '#888';
             document.getElementById('ph_cal686_status').textContent = phCal.cal686_done ? 'Done ✅' : '—';

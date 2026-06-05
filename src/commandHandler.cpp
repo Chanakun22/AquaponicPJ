@@ -241,10 +241,10 @@ static void _showHelp(CommandOutput_t out) {
     commandPrintf(out, "  crash    - แสดง last crash/task stage ล่าสุด\r\n");
     commandPrintf(out, "  wifi     - แสดงข้อมูล WiFi\r\n");
     commandPrintf(out, "  mqtt     - แสดงสถานะ NETPIE\r\n");
-    commandPrintf(out, "  ph       - อ่านค่า pH ปัจจุบัน\r\n");
-    commandPrintf(out, "  cal686   - Calibrate pH 6.86\r\n");
-    commandPrintf(out, "  cal401   - Calibrate pH 4.01\r\n");
-    commandPrintf(out, "  cal918   - Calibrate pH 9.18\r\n");
+    commandPrintf(out, "  ph       - อ่านค่า pH ทั้ง 2 channel (mix + fish)\r\n");
+    commandPrintf(out, "  cal686 [mix|fish] - Calibrate pH 6.86 (default mix)\r\n");
+    commandPrintf(out, "  cal401 [mix|fish] - Calibrate pH 4.01 (default mix)\r\n");
+    commandPrintf(out, "  cal918 [mix|fish] - Calibrate pH 9.18 (default mix)\r\n");
     commandPrintf(out, "  cal7     - Alias ของ cal686\r\n");
     commandPrintf(out, "  cal4     - Alias ของ cal401\r\n");
     commandPrintf(out, "  light    - สถานะ light controller\r\n");
@@ -296,7 +296,8 @@ static void _showStatus(CommandOutput_t out) {
     commandPrintf(out, "  Humidity   : %.2f %%\r\n", dhtReadHumidity());
     commandPrintf(out, "  TDS Mix    : %.0f ppm\r\n", lastTds);
     commandPrintf(out, "  TDS Fish   : %.0f ppm\r\n", fishTds);
-    commandPrintf(out, "  pH         : %.2f\r\n", phRead());
+    commandPrintf(out, "  pH Mix     : %.2f\r\n", phReadChannel(PH_CHANNEL_MIX));
+    commandPrintf(out, "  pH Fish    : %.2f\r\n", phReadChannel(PH_CHANNEL_FISH));
     commandPrintf(out, "  Light      : %.0f lux\r\n", lightRead());
     commandPrintf(out, "===================================\r\n");
 }
@@ -339,7 +340,7 @@ static void _showCrashInfo(CommandOutput_t out) {
 
 static void _showTempBindings(CommandOutput_t out) {
     commandPrintf(out, "\r\n========== DS18B20 TEMP BINDINGS ==========\r\n");
-    int count = tempGetDeviceCount();
+    int count = tempRefreshScan();
     commandPrintf(out, "  Devices found: %d\r\n", count);
     for (int i = 0; i < count; i++) {
         char addr[17];
@@ -748,21 +749,33 @@ void commandProcess(char* cmd, CommandOutput_t output) {
         _showTempBindings(output);
     }
     else if (strcmp(cleanCmd, "ph") == 0) {
-        commandPrintf(output, "[PH] pH: %.2f, Voltage: %.1f mV\r\n", phRead(), phReadVoltage());
+        commandPrintf(output,
+                      "[PH] Mix : %.2f, Voltage %.1f mV\r\n"
+                      "[PH] Fish: %.2f, Voltage %.1f mV\r\n",
+                      phReadChannel(PH_CHANNEL_MIX),
+                      phReadVoltageChannel(PH_CHANNEL_MIX),
+                      phReadChannel(PH_CHANNEL_FISH),
+                      phReadVoltageChannel(PH_CHANNEL_FISH));
     }
-    else if (strcmp(cleanCmd, "cal686") == 0 || strcmp(cleanCmd, "cal7") == 0) {
-        commandPrintf(output, "[PH] Calibrating pH 6.86...\r\n");
-        phCalibratePh686();
+    else if (strncmp(cleanCmd, "cal686", 6) == 0 || strncmp(cleanCmd, "cal7", 4) == 0) {
+        PhChannel ch = (strstr(cleanCmd, "fish") != NULL) ? PH_CHANNEL_FISH : PH_CHANNEL_MIX;
+        const char* chName = (ch == PH_CHANNEL_FISH) ? "fish" : "mix";
+        commandPrintf(output, "[PH] Calibrating pH 6.86 [%s]...\r\n", chName);
+        phCalibratePh686Channel(ch);
         commandPrintf(output, "[PH] Calibration complete!\r\n");
     }
-    else if (strcmp(cleanCmd, "cal401") == 0 || strcmp(cleanCmd, "cal4") == 0) {
-        commandPrintf(output, "[PH] Calibrating pH 4.01...\r\n");
-        phCalibratePh401();
+    else if (strncmp(cleanCmd, "cal401", 6) == 0 || strncmp(cleanCmd, "cal4", 4) == 0) {
+        PhChannel ch = (strstr(cleanCmd, "fish") != NULL) ? PH_CHANNEL_FISH : PH_CHANNEL_MIX;
+        const char* chName = (ch == PH_CHANNEL_FISH) ? "fish" : "mix";
+        commandPrintf(output, "[PH] Calibrating pH 4.01 [%s]...\r\n", chName);
+        phCalibratePh401Channel(ch);
         commandPrintf(output, "[PH] Calibration complete!\r\n");
     }
-    else if (strcmp(cleanCmd, "cal918") == 0) {
-        commandPrintf(output, "[PH] Calibrating pH 9.18...\r\n");
-        phCalibratePh918();
+    else if (strncmp(cleanCmd, "cal918", 6) == 0) {
+        PhChannel ch = (strstr(cleanCmd, "fish") != NULL) ? PH_CHANNEL_FISH : PH_CHANNEL_MIX;
+        const char* chName = (ch == PH_CHANNEL_FISH) ? "fish" : "mix";
+        commandPrintf(output, "[PH] Calibrating pH 9.18 [%s]...\r\n", chName);
+        phCalibratePh918Channel(ch);
         commandPrintf(output, "[PH] Calibration complete!\r\n");
     }
     else if (strcmp(cleanCmd, "light") == 0) {

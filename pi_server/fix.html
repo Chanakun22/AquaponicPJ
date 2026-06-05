@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>แก้ไขกราฟย้อนหลัง - ระบบอควาโปนิกส์อัจฉริยะ</title>
+    <script src="/static/js/chart.umd.min.js"></script>
+    <link href="/static/fa/css/all.min.css" rel="stylesheet">
+    <link href="/static/fonts/fonts.css" rel="stylesheet">
+    <link href="/base.css" rel="stylesheet">
+    <style>
+        body {
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .page-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 4px;
+        }
+        .page-title h1 {
+            margin: 0;
+            font-size: 1.35rem;
+            color: #fbbf24;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .page-title p {
+            margin: 6px 0 0;
+            color: rgba(255,255,255,0.55);
+            font-size: 0.86rem;
+        }
+        .page-shell {
+            width: 100%;
+            max-width: 1400px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+        .admin-banner {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(245,158,11,0.25);
+            background: rgba(245,158,11,0.08);
+            color: #fde68a;
+            font-size: 0.88rem;
+        }
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: flex-end;
+            padding: 16px 18px;
+            background: var(--bg-panel, rgba(30,41,59,0.7));
+            border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
+            border-radius: 16px;
+        }
+        .field-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 150px;
+        }
+        .field-group label {
+            font-size: 0.78rem;
+            color: rgba(255,255,255,0.72);
+            font-weight: 600;
+        }
+        .field-group input,
+        .field-group select {
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.16);
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 0.9rem;
+            color-scheme: dark;
+        }
+        .btn {
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.16);
+            padding: 10px 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.88rem;
+            transition: all 0.2s;
+        }
+        .btn:hover { background: rgba(255,255,255,0.14); }
+        .btn-primary {
+            background: linear-gradient(135deg, #f59e0b, #fbbf24);
+            color: #111;
+            border: none;
+            font-weight: 700;
+        }
+        .btn-danger {
+            background: rgba(239,68,68,0.15);
+            border-color: rgba(239,68,68,0.35);
+            color: #fecaca;
+        }
+        .btn-success {
+            background: rgba(16,185,129,0.18);
+            border-color: rgba(16,185,129,0.35);
+            color: #a7f3d0;
+        }
+        .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .status-box {
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.04);
+            font-size: 0.86rem;
+            color: rgba(255,255,255,0.82);
+        }
+        .status-box.error {
+            border-color: rgba(239,68,68,0.35);
+            background: rgba(239,68,68,0.1);
+            color: #fecaca;
+        }
+        .chart-card,
+        .table-card {
+            background: var(--bg-panel, rgba(30,41,59,0.7));
+            border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
+            border-radius: 16px;
+            padding: 18px 20px;
+        }
+        .chart-card h2,
+        .table-card h2 {
+            margin: 0 0 12px;
+            font-size: 1rem;
+            color: #e2e8f0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .chart-container {
+            position: relative;
+            height: 280px;
+        }
+        .table-wrap {
+            overflow: auto;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1100px;
+            font-size: 0.82rem;
+        }
+        th, td {
+            padding: 8px 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            text-align: left;
+            vertical-align: middle;
+        }
+        th {
+            position: sticky;
+            top: 0;
+            background: rgba(15,23,42,0.95);
+            color: #cbd5e1;
+            z-index: 1;
+            white-space: nowrap;
+        }
+        tr:hover td { background: rgba(255,255,255,0.03); }
+        tr.dirty td { background: rgba(245,158,11,0.08); }
+        .cell-input {
+            width: 88px;
+            background: rgba(0,0,0,0.25);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: #fff;
+            border-radius: 8px;
+            padding: 6px 8px;
+            font-size: 0.82rem;
+        }
+        .cell-input:focus {
+            outline: none;
+            border-color: rgba(245,158,11,0.55);
+        }
+        .cell-input.empty {
+            color: rgba(255,255,255,0.35);
+        }
+        .row-actions {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 14px;
+        }
+        .pagination-meta {
+            color: rgba(255,255,255,0.65);
+            font-size: 0.84rem;
+        }
+        .timestamp-cell {
+            white-space: nowrap;
+            color: #cbd5e1;
+            font-family: monospace;
+            font-size: 0.78rem;
+        }
+        .assistant-card {
+            background: var(--bg-panel, rgba(30,41,59,0.7));
+            border: 1px solid rgba(245,158,11,0.22);
+            border-radius: 16px;
+            padding: 18px 20px;
+        }
+        .assistant-card h2 {
+            margin: 0 0 8px;
+            font-size: 1rem;
+            color: #fde68a;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .assistant-hint {
+            color: rgba(255,255,255,0.62);
+            font-size: 0.84rem;
+            margin-bottom: 14px;
+            line-height: 1.5;
+        }
+        .assistant-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+        .assistant-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+        .assistant-summary {
+            margin-top: 12px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            font-size: 0.84rem;
+            color: rgba(255,255,255,0.78);
+            line-height: 1.55;
+        }
+        @media (max-width: 700px) {
+            .chart-container { height: 220px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-shell">
+        <div class="page-title">
+            <div>
+                <h1><i class="fas fa-pen-to-square"></i> แก้ไขกราฟย้อนหลัง</h1>
+                <p>Admin เท่านั้น — เข้าผ่าน /fix โดยตรง</p>
+            </div>
+            <a class="btn" href="/graphs"><i class="fas fa-chart-line"></i> กลับไปกราฟ</a>
+        </div>
+
+        <div class="admin-banner">
+            <i class="fas fa-shield-halved"></i>
+            การแก้ไขนี้มีผลกับกราฟย้อนหลังทันที ควรใช้เฉพาะแก้ค่าผิดปกติ / spike / ค่า 0 ที่ไม่ควรมี
+        </div>
+
+        <div class="toolbar">
+            <div class="field-group">
+                <label>วันที่เริ่ม</label>
+                <input type="date" id="startDate">
+            </div>
+            <div class="field-group">
+                <label>วันที่สิ้นสุด</label>
+                <input type="date" id="endDate">
+            </div>
+            <div class="field-group">
+                <label>แสดงกราฟ</label>
+                <select id="chartMetric">
+                    <option value="ph_mix">pH Mix</option>
+                    <option value="ph_fish">pH Fish</option>
+                    <option value="tds_mix">TDS Mix</option>
+                    <option value="tds_fish">TDS Fish</option>
+                    <option value="water_temp_mix">Water Temp Mix</option>
+                    <option value="water_temp_fish">Water Temp Fish</option>
+                    <option value="air_temp">Air Temp</option>
+                    <option value="humidity">Humidity</option>
+                    <option value="light">Light</option>
+                </select>
+            </div>
+            <div class="field-group">
+                <label>ต่อหน้า</label>
+                <select id="perPage">
+                    <option value="50">50</option>
+                    <option value="100" selected>100</option>
+                    <option value="200">200</option>
+                </select>
+            </div>
+            <button class="btn btn-primary" id="loadBtn" type="button">
+                <i class="fas fa-search"></i> โหลดข้อมูล
+            </button>
+            <button class="btn btn-success" id="saveDirtyBtn" type="button" disabled>
+                <i class="fas fa-save"></i> บันทึกที่แก้ (<span id="dirtyCount">0</span>)
+            </button>
+        </div>
+
+        <div class="status-box" id="statusBox">เลือกช่วงวันที่แล้วกดโหลดข้อมูล</div>
+
+        <div class="assistant-card">
+            <h2><i class="fas fa-wand-magic-sparkles"></i> ตัวช่วยแก้ไขอัตโนมัติ</h2>
+            <div class="assistant-hint">
+                ค่าที่ <strong>อยู่ในช่วงและไม่กระโดดผิดปกติ</strong> จะถูกเก็บไว้ตามจริง — ไม่ดึงเป็นเส้นเรียบที่ mean
+                จุดที่เพี้ยน/spike/ว่างจะถูก remap ตามรูปคลื่นเดิม + <strong>Variation</strong> แล้วค่อยจำกัดด้วย Max Step
+            </div>
+            <div class="assistant-grid">
+                <div class="field-group">
+                    <label>แก้คอลัมน์</label>
+                    <select id="autoFixColumn">
+                        <option value="ph_mix">pH Mix</option>
+                        <option value="ph_fish">pH Fish</option>
+                        <option value="tds_mix">TDS Mix</option>
+                        <option value="tds_fish">TDS Fish</option>
+                        <option value="water_temp_mix">Water Temp Mix</option>
+                        <option value="water_temp_fish">Water Temp Fish</option>
+                        <option value="air_temp">Air Temp</option>
+                        <option value="humidity">Humidity</option>
+                        <option value="light">Light</option>
+                    </select>
+                </div>
+                <div class="field-group">
+                    <label>Min Value</label>
+                    <input type="number" id="autoMin" step="0.01" placeholder="เช่น 6.5">
+                </div>
+                <div class="field-group">
+                    <label>Max Value</label>
+                    <input type="number" id="autoMax" step="0.01" placeholder="เช่น 7.5">
+                </div>
+                <div class="field-group">
+                    <label>Mean Value</label>
+                    <input type="number" id="autoMean" step="0.01" placeholder="เช่น 7.0">
+                </div>
+                <div class="field-group">
+                    <label>Max Step (กันดีด)</label>
+                    <input type="number" id="autoMaxStep" step="0.01" min="0.001" placeholder="เช่น 0.05">
+                </div>
+                <div class="field-group">
+                    <label>Spike Limit (optional)</label>
+                    <input type="number" id="autoSpikeLimit" step="0.01" min="0.001" placeholder="ว่าง = auto">
+                </div>
+                <div class="field-group">
+                    <label>Variation (0–1)</label>
+                    <input type="number" id="autoVariation" step="0.05" min="0" max="1" value="0.4" placeholder="เช่น 0.4">
+                </div>
+            </div>
+            <div class="assistant-actions">
+                <button class="btn" id="autoFillStatsBtn" type="button">
+                    <i class="fas fa-calculator"></i> ดึง min/max/mean จากช่วง
+                </button>
+                <button class="btn" id="autoPreviewBtn" type="button">
+                    <i class="fas fa-eye"></i> ดูตัวอย่างก่อนแก้
+                </button>
+                <button class="btn btn-primary" id="autoApplyBtn" type="button">
+                    <i class="fas fa-bolt"></i> นำไปใช้จริง
+                </button>
+            </div>
+            <div class="assistant-summary" id="autoFixSummary">
+                ยังไม่ได้รันตัวช่วย — กด “ดูตัวอย่างก่อนแก้” เพื่อดูจำนวนแถวที่จะเปลี่ยนและกราฟ before/after
+            </div>
+        </div>
+
+        <div class="assistant-card" style="border-color: rgba(45,212,191,0.28);">
+            <h2 style="color:#5eead4;"><i class="fas fa-clone"></i> Copy Sensor (คลื่นเหมือนกัน แต่ค่าต่างนิดหน่อย)</h2>
+            <div class="assistant-hint">
+                คัดลอกรูปคลื่นจาก sensor ต้นทางไปยังปลายทาง — เหมือนกราฟ <strong>pH Mix vs Fish</strong> ใน dashboard
+                ปลายทางจะขึ้นลงตามต้นทาง แต่เลื่อนไปที่ <strong>Target Mean</strong> และมีความต่างเล็กน้อยไม่ให้เส้นซ้อนกัน
+            </div>
+            <div class="assistant-grid">
+                <div class="field-group">
+                    <label>Copy จาก</label>
+                    <select id="copySourceColumn">
+                        <option value="ph_fish">pH Fish</option>
+                        <option value="ph_mix">pH Mix</option>
+                        <option value="tds_fish">TDS Fish</option>
+                        <option value="tds_mix">TDS Mix</option>
+                        <option value="water_temp_fish">Water Temp Fish</option>
+                        <option value="water_temp_mix">Water Temp Mix</option>
+                    </select>
+                </div>
+                <div class="field-group">
+                    <label>Copy ไป</label>
+                    <select id="copyTargetColumn">
+                        <option value="ph_mix">pH Mix</option>
+                        <option value="ph_fish">pH Fish</option>
+                        <option value="tds_mix">TDS Mix</option>
+                        <option value="tds_fish">TDS Fish</option>
+                        <option value="water_temp_mix">Water Temp Mix</option>
+                        <option value="water_temp_fish">Water Temp Fish</option>
+                    </select>
+                </div>
+                <div class="field-group">
+                    <label>Target Mean (ศูนย์กลางปลายทาง)</label>
+                    <input type="number" id="copyTargetMean" step="0.01" value="7.0">
+                </div>
+                <div class="field-group">
+                    <label>Ripple Scale (0–2)</label>
+                    <input type="number" id="copyRippleScale" step="0.05" min="0" max="2" value="1.0">
+                </div>
+                <div class="field-group">
+                    <label>Difference (0–1)</label>
+                    <input type="number" id="copyDifference" step="0.05" min="0" max="1" value="0.25">
+                </div>
+                <div class="field-group">
+                    <label>Max Step (optional)</label>
+                    <input type="number" id="copyMaxStep" step="0.01" min="0.001" placeholder="เช่น 0.08">
+                </div>
+                <div class="field-group">
+                    <label>Min (optional)</label>
+                    <input type="number" id="copyMin" step="0.01" placeholder="เช่น 6.4">
+                </div>
+                <div class="field-group">
+                    <label>Max (optional)</label>
+                    <input type="number" id="copyMax" step="0.01" placeholder="เช่น 7.6">
+                </div>
+            </div>
+            <div class="assistant-actions">
+                <button class="btn" id="copyFillMeansBtn" type="button">
+                    <i class="fas fa-calculator"></i> ดึง mean ต้นทาง/ปลายทาง
+                </button>
+                <button class="btn" id="copyPreviewBtn" type="button">
+                    <i class="fas fa-eye"></i> ดูตัวอย่าง Copy
+                </button>
+                <button class="btn btn-primary" id="copyApplyBtn" type="button">
+                    <i class="fas fa-bolt"></i> นำ Copy ไปใช้จริง
+                </button>
+            </div>
+            <div class="assistant-summary" id="copySummary">
+                ตัวอย่างใช้งาน: Copy <strong>pH Fish → pH Mix</strong> ตั้ง Target Mean = 7.0 เพื่อให้ Mix มีคลื่นเหมือน Fish แต่สูงกว่าเล็กน้อย
+            </div>
+        </div>
+
+        <div class="chart-card">
+            <h2><i class="fas fa-chart-line"></i> ตัวอย่างกราฟ (ช่วงที่โหลด)</h2>
+            <div class="chart-container">
+                <canvas id="previewChart"></canvas>
+            </div>
+        </div>
+
+        <div class="table-card">
+            <h2><i class="fas fa-table"></i> ตารางข้อมูลย้อนหลัง</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>เวลา (ไทย)</th>
+                            <th>pH Mix</th>
+                            <th>pH Fish</th>
+                            <th>TDS Mix</th>
+                            <th>TDS Fish</th>
+                            <th>Temp Mix</th>
+                            <th>Temp Fish</th>
+                            <th>Air</th>
+                            <th>Hum</th>
+                            <th>Light</th>
+                            <th>จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyBody">
+                        <tr><td colspan="11">ยังไม่มีข้อมูล</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination">
+                <div class="pagination-meta" id="pageMeta">หน้า 1 / 1</div>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn" id="prevPageBtn" type="button" disabled><i class="fas fa-chevron-left"></i> ก่อนหน้า</button>
+                    <button class="btn" id="nextPageBtn" type="button" disabled>ถัดไป <i class="fas fa-chevron-right"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const EDITABLE_COLUMNS = [
+            'ph_mix', 'ph_fish', 'tds_mix', 'tds_fish',
+            'water_temp_mix', 'water_temp_fish',
+            'air_temp', 'humidity', 'light'
+        ];
+
+        const AUTO_FIX_PRESETS = {
+            ph_mix: { min: 5.5, max: 8.5, mean: 7.0, max_step: 0.05, spike_limit: 0.6, variation_scale: 0.45 },
+            ph_fish: { min: 5.5, max: 8.5, mean: 7.0, max_step: 0.05, spike_limit: 0.6, variation_scale: 0.45 },
+            tds_mix: { min: 100, max: 2000, mean: 600, max_step: 25, spike_limit: 300 },
+            tds_fish: { min: 100, max: 2000, mean: 400, max_step: 25, spike_limit: 250 },
+            water_temp_mix: { min: 20, max: 32, mean: 26, max_step: 0.2, spike_limit: 2 },
+            water_temp_fish: { min: 20, max: 32, mean: 25, max_step: 0.2, spike_limit: 2 },
+            air_temp: { min: 18, max: 40, mean: 28, max_step: 0.5, spike_limit: 4 },
+            humidity: { min: 30, max: 95, mean: 65, max_step: 2, spike_limit: 15 },
+            light: { min: 0, max: 50000, mean: 5000, max_step: 500, spike_limit: 8000 }
+        };
+
+        let currentPage = 1;
+        let totalPages = 1;
+        let loadedRows = [];
+        let dirtyRowIds = new Set();
+        let previewChart = null;
+        let autoFixPreview = null;
+        let copyPreview = null;
+        let copyPreviewMeta = null;
+
+        function setStatus(message, isError = false) {
+            const box = document.getElementById('statusBox');
+            box.textContent = message;
+            box.classList.toggle('error', isError);
+        }
+
+        function formatInputValue(value) {
+            if (value === null || value === undefined || Number.isNaN(value)) {
+                return '';
+            }
+            return String(value);
+        }
+
+        function parseInputValue(raw) {
+            const trimmed = String(raw ?? '').trim();
+            if (!trimmed) return null;
+            const numeric = Number(trimmed);
+            return Number.isFinite(numeric) ? numeric : NaN;
+        }
+
+        function buildQueryUrl() {
+            const params = new URLSearchParams();
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            const perPage = document.getElementById('perPage').value;
+            if (startDate) params.set('start_date', startDate);
+            if (endDate) params.set('end_date', endDate);
+            params.set('page', String(currentPage));
+            params.set('per_page', perPage);
+            return '/api/history/fix?' + params.toString();
+        }
+
+        function updateDirtyUi() {
+            document.getElementById('dirtyCount').textContent = String(dirtyRowIds.size);
+            document.getElementById('saveDirtyBtn').disabled = dirtyRowIds.size === 0;
+        }
+
+        function markRowDirty(rowId) {
+            dirtyRowIds.add(rowId);
+            const rowEl = document.querySelector(`tr[data-row-id="${rowId}"]`);
+            if (rowEl) rowEl.classList.add('dirty');
+            updateDirtyUi();
+        }
+
+        function clearRowDirty(rowId) {
+            dirtyRowIds.delete(rowId);
+            const rowEl = document.querySelector(`tr[data-row-id="${rowId}"]`);
+            if (rowEl) rowEl.classList.remove('dirty');
+            updateDirtyUi();
+        }
+
+        function collectRowUpdates(rowId) {
+            const updates = {};
+            EDITABLE_COLUMNS.forEach((column) => {
+                const input = document.querySelector(`[data-row-id="${rowId}"][data-column="${column}"]`);
+                if (!input) return;
+                const parsed = parseInputValue(input.value);
+                if (Number.isNaN(parsed)) {
+                    throw new Error(`ค่า ${column} ไม่ถูกต้อง`);
+                }
+                const original = loadedRows.find((row) => row.id === rowId);
+                const originalValue = original ? original[column] : null;
+                const normalizedOriginal = originalValue === null || originalValue === undefined ? null : Number(originalValue);
+                if (parsed !== normalizedOriginal) {
+                    updates[column] = parsed;
+                }
+            });
+            return updates;
+        }
+
+        function getDateRangeParams() {
+            return {
+                start_date: document.getElementById('startDate').value,
+                end_date: document.getElementById('endDate').value
+            };
+        }
+
+        function applyAutoFixPreset(column) {
+            const preset = AUTO_FIX_PRESETS[column];
+            if (!preset) return;
+            document.getElementById('autoMin').value = preset.min;
+            document.getElementById('autoMax').value = preset.max;
+            document.getElementById('autoMean').value = preset.mean;
+            document.getElementById('autoMaxStep').value = preset.max_step;
+            document.getElementById('autoSpikeLimit').value = preset.spike_limit ?? '';
+            document.getElementById('autoVariation').value = preset.variation_scale ?? 0.4;
+        }
+
+        function collectAutoFixPayload(dryRun) {
+            const minValue = Number(document.getElementById('autoMin').value);
+            const maxValue = Number(document.getElementById('autoMax').value);
+            const meanValue = Number(document.getElementById('autoMean').value);
+            const maxStep = Number(document.getElementById('autoMaxStep').value);
+            const spikeRaw = document.getElementById('autoSpikeLimit').value.trim();
+            const spikeLimit = spikeRaw ? Number(spikeRaw) : null;
+            const variationScale = Number(document.getElementById('autoVariation').value);
+
+            if (![minValue, maxValue, meanValue, maxStep, variationScale].every(Number.isFinite)) {
+                throw new Error('กรอก Min / Max / Mean / Max Step ให้ครบ');
+            }
+            if (minValue > maxValue) {
+                throw new Error('Min ต้องไม่มากกว่า Max');
+            }
+            if (meanValue < minValue || meanValue > maxValue) {
+                throw new Error('Mean ต้องอยู่ระหว่าง Min และ Max');
+            }
+            if (spikeLimit !== null && !Number.isFinite(spikeLimit)) {
+                throw new Error('Spike Limit ไม่ถูกต้อง');
+            }
+            if (variationScale < 0 || variationScale > 1) {
+                throw new Error('Variation ต้องอยู่ระหว่าง 0 ถึง 1');
+            }
+
+            return {
+                ...getDateRangeParams(),
+                column: document.getElementById('autoFixColumn').value,
+                min_value: minValue,
+                max_value: maxValue,
+                mean_value: meanValue,
+                max_step: maxStep,
+                spike_limit: spikeLimit,
+                variation_scale: variationScale,
+                dry_run: dryRun
+            };
+        }
+
+        function renderAutoFixSummary(result) {
+            const summary = document.getElementById('autoFixSummary');
+            const mode = result.dry_run ? 'ตัวอย่าง (ยังไม่บันทึก)' : 'นำไปใช้แล้ว';
+            summary.innerHTML = `
+                <strong>${mode}</strong> • คอลัมน์ <strong>${result.column}</strong><br>
+                สแกน <strong>${result.rows_scanned}</strong> แถว • จะเปลี่ยน <strong>${result.rows_changed}</strong> แถว
+                ${result.dry_run ? '' : ` • บันทึกแล้ว <strong>${result.rows_applied}</strong> แถว`}<br>
+                Spike Limit ที่ใช้: <strong>${Number(result.spike_limit).toFixed(4)}</strong>
+                • Variation: <strong>${Number(result.variation_scale ?? 0.4).toFixed(2)}</strong>
+                ${result.preview_truncated ? ' • แสดงกราฟ preview สูงสุด 500 จุดแรก' : ''}
+            `;
+        }
+
+        function renderCopyPreviewChart(preview, sourceColumn, targetColumn) {
+            const ctx = document.getElementById('previewChart').getContext('2d');
+            const labels = preview.map((item) => item.timestamp_local || item.timestamp);
+            const datasets = [
+                {
+                    label: `${sourceColumn} (ต้นทาง)`,
+                    data: preview.map((item) => item.source_value ?? null),
+                    borderColor: '#2dd4bf',
+                    tension: 0.2,
+                    spanGaps: true,
+                    pointRadius: 0
+                },
+                {
+                    label: `${targetColumn} (หลัง copy)`,
+                    data: preview.map((item) => item.after ?? null),
+                    borderColor: '#d946ef',
+                    tension: 0.2,
+                    spanGaps: true,
+                    pointRadius: 0
+                }
+            ];
+
+            if (previewChart) previewChart.destroy();
+            previewChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#cbd5e1' } } },
+                    scales: {
+                        x: { ticks: { color: '#94a3b8', maxTicksLimit: 8 }, grid: { display: false } },
+                        y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.08)' } }
+                    }
+                }
+            });
+        }
+
+        function collectCopyPayload(dryRun) {
+            const targetMean = Number(document.getElementById('copyTargetMean').value);
+            const rippleScale = Number(document.getElementById('copyRippleScale').value);
+            const differenceScale = Number(document.getElementById('copyDifference').value);
+            const maxStepRaw = document.getElementById('copyMaxStep').value.trim();
+            const minRaw = document.getElementById('copyMin').value.trim();
+            const maxRaw = document.getElementById('copyMax').value.trim();
+            const sourceColumn = document.getElementById('copySourceColumn').value;
+            const targetColumn = document.getElementById('copyTargetColumn').value;
+
+            if (![targetMean, rippleScale, differenceScale].every(Number.isFinite)) {
+                throw new Error('กรอก Target Mean / Ripple / Difference ให้ครบ');
+            }
+            if (sourceColumn === targetColumn) {
+                throw new Error('ต้นทางและปลายทางต้องไม่ใช่คอลัมน์เดียวกัน');
+            }
+
+            const payload = {
+                ...getDateRangeParams(),
+                source_column: sourceColumn,
+                target_column: targetColumn,
+                target_mean: targetMean,
+                ripple_scale: rippleScale,
+                difference_scale: differenceScale,
+                dry_run: dryRun
+            };
+
+            if (maxStepRaw) payload.max_step = Number(maxStepRaw);
+            if (minRaw) payload.min_value = Number(minRaw);
+            if (maxRaw) payload.max_value = Number(maxRaw);
+            return payload;
+        }
+
+        function renderCopySummary(result) {
+            const summary = document.getElementById('copySummary');
+            const mode = result.dry_run ? 'ตัวอย่าง Copy' : 'Copy แล้ว';
+            const meta = result.meta || {};
+            summary.innerHTML = `
+                <strong>${mode}</strong> • <strong>${result.source_column}</strong> → <strong>${result.target_column}</strong><br>
+                สแกน <strong>${result.rows_scanned}</strong> แถว • เปลี่ยน <strong>${result.rows_changed}</strong> แถว
+                ${result.dry_run ? '' : ` • บันทึกแล้ว <strong>${result.rows_applied}</strong> แถว`}<br>
+                Mean ต้นทาง ~ <strong>${Number(meta.source_mean ?? 0).toFixed(3)}</strong>
+                → Target Mean <strong>${Number(meta.target_mean ?? 0).toFixed(3)}</strong>
+                • ความต่างเพิ่ม ~ <strong>±${Number(meta.difference_amplitude ?? 0).toFixed(4)}</strong>
+            `;
+        }
+
+        async function fillCopyMeans() {
+            try {
+                const sourceColumn = document.getElementById('copySourceColumn').value;
+                const targetColumn = document.getElementById('copyTargetColumn').value;
+                const range = getDateRangeParams();
+                const [sourceRes, targetRes] = await Promise.all([
+                    fetch('/api/history/fix/stats?' + new URLSearchParams({ ...range, column: sourceColumn })),
+                    fetch('/api/history/fix/stats?' + new URLSearchParams({ ...range, column: targetColumn }))
+                ]);
+                const sourcePayload = await sourceRes.json();
+                const targetPayload = await targetRes.json();
+                if (!sourceRes.ok || sourcePayload.status === 'error') {
+                    throw new Error(sourcePayload.message || 'ดึง mean ต้นทางไม่ได้');
+                }
+
+                const sourceMean = sourcePayload.stats?.mean_value;
+                const targetMean = targetPayload.stats?.mean_value;
+                if (Number.isFinite(targetMean)) {
+                    document.getElementById('copyTargetMean').value = targetMean;
+                } else if (Number.isFinite(sourceMean)) {
+                    document.getElementById('copyTargetMean').value = sourceMean;
+                }
+                setStatus(`ต้นทาง ${sourceColumn} mean ~ ${sourceMean ?? '-'} | ปลายทาง ${targetColumn} mean ~ ${targetMean ?? '-'}`);
+            } catch (error) {
+                setStatus('ดึง mean ไม่สำเร็จ: ' + error.message, true);
+            }
+        }
+
+        async function runCopySensor(dryRun) {
+            try {
+                const payload = collectCopyPayload(dryRun);
+                if (!payload.start_date && !payload.end_date) {
+                    throw new Error('เลือกช่วงวันที่ก่อน');
+                }
+                if (!dryRun) {
+                    const ok = confirm(
+                        `ยืนยัน Copy ${payload.source_column} → ${payload.target_column}?\n\n` +
+                        `Target Mean: ${payload.target_mean}\n` +
+                        `Ripple: ${payload.ripple_scale} | Difference: ${payload.difference_scale}`
+                    );
+                    if (!ok) return;
+                }
+
+                setStatus(dryRun ? 'กำลังสร้างตัวอย่าง Copy...' : 'กำลัง Copy ข้อมูล...');
+                const response = await fetch('/api/history/fix/copy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                if (!response.ok || result.status === 'error') {
+                    throw new Error(result.message || ('HTTP ' + response.status));
+                }
+
+                copyPreview = result.preview || [];
+                copyPreviewMeta = {
+                    source_column: result.source_column,
+                    target_column: result.target_column
+                };
+                autoFixPreview = null;
+                document.getElementById('chartMetric').value = result.target_column;
+                renderCopySummary(result);
+                renderCopyPreviewChart(copyPreview, result.source_column, result.target_column);
+
+                if (dryRun) {
+                    setStatus(`ตัวอย่าง Copy พร้อม: จะเปลี่ยน ${result.rows_changed} / ${result.rows_scanned} แถว`);
+                } else {
+                    setStatus(`Copy สำเร็จ ${result.rows_applied} แถว — กำลังรีเฟรชตาราง`);
+                    currentPage = 1;
+                    await loadRows();
+                }
+            } catch (error) {
+                setStatus('Copy ล้มเหลว: ' + error.message, true);
+            }
+        }
+
+        function renderPreviewChart(rows, autoPreviewData = null) {
+            const metric = document.getElementById('chartMetric').value;
+            const ctx = document.getElementById('previewChart').getContext('2d');
+            const datasets = [];
+
+            if (copyPreview && copyPreview.length && copyPreviewMeta) {
+                renderCopyPreviewChart(copyPreview, copyPreviewMeta.source_column, copyPreviewMeta.target_column);
+                return;
+            }
+
+            if (autoPreviewData && autoPreviewData.length) {
+                const labels = autoPreviewData.map((item) => item.timestamp_local || item.timestamp);
+                datasets.push({
+                    label: `${metric} (ก่อนแก้)`,
+                    data: autoPreviewData.map((item) => item.before ?? null),
+                    borderColor: '#f87171',
+                    backgroundColor: 'rgba(248,113,113,0.08)',
+                    tension: 0.2,
+                    spanGaps: true,
+                    pointRadius: 0
+                });
+                datasets.push({
+                    label: `${metric} (หลังแก้)`,
+                    data: autoPreviewData.map((item) => item.after ?? null),
+                    borderColor: '#34d399',
+                    backgroundColor: 'rgba(52,211,153,0.08)',
+                    tension: 0.2,
+                    spanGaps: true,
+                    pointRadius: 0
+                });
+
+                if (previewChart) previewChart.destroy();
+                previewChart = new Chart(ctx, {
+                    type: 'line',
+                    data: { labels, datasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { labels: { color: '#cbd5e1' } } },
+                        scales: {
+                            x: { ticks: { color: '#94a3b8', maxTicksLimit: 8 }, grid: { display: false } },
+                            y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.08)' } }
+                        }
+                    }
+                });
+                return;
+            }
+
+            const ordered = [...rows].reverse();
+            const labels = ordered.map((row) => row.timestamp_local || row.timestamp);
+            const values = ordered.map((row) => row[metric] ?? null);
+            if (previewChart) previewChart.destroy();
+            previewChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: metric,
+                        data: values,
+                        borderColor: '#fbbf24',
+                        backgroundColor: 'rgba(251,191,36,0.12)',
+                        tension: 0.25,
+                        spanGaps: true,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#cbd5e1' } } },
+                    scales: {
+                        x: { ticks: { color: '#94a3b8', maxTicksLimit: 8 }, grid: { display: false } },
+                        y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.08)' } }
+                    }
+                }
+            });
+        }
+
+        function renderTable(rows) {
+            const tbody = document.getElementById('historyBody');
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="11">ไม่พบข้อมูลในช่วงนี้</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = rows.map((row) => {
+                const inputs = EDITABLE_COLUMNS.map((column) => {
+                    const value = formatInputValue(row[column]);
+                    const emptyClass = value === '' ? 'empty' : '';
+                    return `<td><input class="cell-input ${emptyClass}" data-row-id="${row.id}" data-column="${column}" value="${value}" placeholder="—"></td>`;
+                }).join('');
+
+                return `
+                    <tr data-row-id="${row.id}">
+                        <td class="timestamp-cell">${row.timestamp_local || row.timestamp}</td>
+                        ${inputs}
+                        <td>
+                            <div class="row-actions">
+                                <button class="btn btn-success save-row-btn" data-row-id="${row.id}" type="button"><i class="fas fa-save"></i></button>
+                                <button class="btn btn-danger delete-row-btn" data-row-id="${row.id}" type="button"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            tbody.querySelectorAll('.cell-input').forEach((input) => {
+                input.addEventListener('input', () => {
+                    markRowDirty(Number(input.dataset.rowId));
+                });
+            });
+
+            tbody.querySelectorAll('.save-row-btn').forEach((button) => {
+                button.addEventListener('click', () => saveRow(Number(button.dataset.rowId)));
+            });
+
+            tbody.querySelectorAll('.delete-row-btn').forEach((button) => {
+                button.addEventListener('click', () => deleteRow(Number(button.dataset.rowId)));
+            });
+        }
+
+        async function loadRows() {
+            setStatus('กำลังโหลดข้อมูล...');
+            dirtyRowIds.clear();
+            updateDirtyUi();
+
+            try {
+                const response = await fetch(buildQueryUrl());
+                const payload = await response.json();
+                if (!response.ok || payload.status === 'error') {
+                    throw new Error(payload.message || ('HTTP ' + response.status));
+                }
+
+                loadedRows = payload.rows || [];
+                totalPages = payload.range?.total_pages || 1;
+                currentPage = payload.range?.page || 1;
+                document.getElementById('pageMeta').textContent =
+                    `หน้า ${currentPage} / ${totalPages} • รวม ${payload.range?.total_count || 0} แถว • ${payload.range?.label_th || ''}`;
+                document.getElementById('prevPageBtn').disabled = currentPage <= 1;
+                document.getElementById('nextPageBtn').disabled = currentPage >= totalPages;
+
+                autoFixPreview = null;
+                copyPreview = null;
+                copyPreviewMeta = null;
+                renderTable(loadedRows);
+                renderPreviewChart(loadedRows);
+                setStatus(`โหลดสำเร็จ ${loadedRows.length} แถว`);
+            } catch (error) {
+                console.error(error);
+                setStatus('โหลดไม่สำเร็จ: ' + error.message, true);
+            }
+        }
+
+        async function saveRow(rowId) {
+            try {
+                const updates = collectRowUpdates(rowId);
+                if (!Object.keys(updates).length) {
+                    clearRowDirty(rowId);
+                    setStatus(`แถว #${rowId} ไม่มีการเปลี่ยนแปลง`);
+                    return;
+                }
+
+                const response = await fetch(`/api/history/fix/${rowId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ updates })
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status === 'error') {
+                    throw new Error(payload.message || ('HTTP ' + response.status));
+                }
+
+                const updatedRow = payload.row;
+                loadedRows = loadedRows.map((row) => row.id === rowId ? updatedRow : row);
+                clearRowDirty(rowId);
+                renderTable(loadedRows);
+                renderPreviewChart(loadedRows);
+                setStatus(`บันทึกแถว #${rowId} สำเร็จ`);
+            } catch (error) {
+                console.error(error);
+                setStatus('บันทึกไม่สำเร็จ: ' + error.message, true);
+            }
+        }
+
+        async function saveDirtyRows() {
+            const ids = Array.from(dirtyRowIds);
+            for (const rowId of ids) {
+                await saveRow(rowId);
+            }
+        }
+
+        async function deleteRow(rowId) {
+            if (!confirm(`ลบแถว #${rowId} ออกจากประวัติ?\n\nการลบนี้กู้คืนไม่ได้`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/history/fix/${rowId}`, { method: 'DELETE' });
+                const payload = await response.json();
+                if (!response.ok || payload.status === 'error') {
+                    throw new Error(payload.message || ('HTTP ' + response.status));
+                }
+
+                loadedRows = loadedRows.filter((row) => row.id !== rowId);
+                clearRowDirty(rowId);
+                renderTable(loadedRows);
+                renderPreviewChart(loadedRows);
+                setStatus(`ลบแถว #${rowId} แล้ว`);
+            } catch (error) {
+                console.error(error);
+                setStatus('ลบไม่สำเร็จ: ' + error.message, true);
+            }
+        }
+
+        async function fillAutoFixStats() {
+            try {
+                const column = document.getElementById('autoFixColumn').value;
+                const params = new URLSearchParams({ column, ...getDateRangeParams() });
+                const response = await fetch('/api/history/fix/stats?' + params.toString());
+                const payload = await response.json();
+                if (!response.ok || payload.status === 'error') {
+                    throw new Error(payload.message || ('HTTP ' + response.status));
+                }
+
+                const stats = payload.stats || {};
+                if (!stats.sample_count) {
+                    applyAutoFixPreset(column);
+                    setStatus('ไม่มีค่าในช่วงนี้ — ใช้ค่า preset แทน', true);
+                    return;
+                }
+
+                document.getElementById('autoMin').value = stats.min_value;
+                document.getElementById('autoMax').value = stats.max_value;
+                document.getElementById('autoMean').value = stats.mean_value;
+                if (!document.getElementById('autoMaxStep').value) {
+                    applyAutoFixPreset(column);
+                }
+                setStatus(`ดึงสถิติ ${column} จาก ${stats.sample_count} จุดแล้ว`);
+            } catch (error) {
+                console.error(error);
+                setStatus('ดึงสถิติไม่สำเร็จ: ' + error.message, true);
+            }
+        }
+
+        async function runAutoFix(dryRun) {
+            try {
+                const payload = collectAutoFixPayload(dryRun);
+                if (!payload.start_date && !payload.end_date) {
+                    throw new Error('เลือกช่วงวันที่ก่อน');
+                }
+
+                if (!dryRun) {
+                    const ok = confirm(
+                        `ยืนยันนำไปใช้จริง?\n\n` +
+                        `คอลัมน์: ${payload.column}\n` +
+                        `ช่วง: ${payload.start_date || '...'} ถึง ${payload.end_date || '...'}\n` +
+                        `Min ${payload.min_value} / Max ${payload.max_value} / Mean ${payload.mean_value}\n` +
+                        `Max Step ${payload.max_step}`
+                    );
+                    if (!ok) return;
+                }
+
+                setStatus(dryRun ? 'กำลังสร้างตัวอย่าง...' : 'กำลังแก้ข้อมูล...');
+                const response = await fetch('/api/history/fix/auto', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                if (!response.ok || result.status === 'error') {
+                    throw new Error(result.message || ('HTTP ' + response.status));
+                }
+
+                autoFixPreview = result.preview || [];
+                copyPreview = null;
+                copyPreviewMeta = null;
+                document.getElementById('chartMetric').value = result.column;
+                document.getElementById('autoFixColumn').value = result.column;
+                renderAutoFixSummary(result);
+                renderPreviewChart(loadedRows, autoFixPreview);
+
+                if (dryRun) {
+                    setStatus(`ตัวอย่างพร้อม: จะเปลี่ยน ${result.rows_changed} / ${result.rows_scanned} แถว`);
+                } else {
+                    setStatus(`แก้ไขสำเร็จ ${result.rows_applied} แถว — กำลังรีเฟรชตาราง`);
+                    currentPage = 1;
+                    await loadRows();
+                }
+            } catch (error) {
+                console.error(error);
+                setStatus('ตัวช่วยแก้ไขล้มเหลว: ' + error.message, true);
+            }
+        }
+
+        document.getElementById('loadBtn').addEventListener('click', () => {
+            currentPage = 1;
+            loadRows();
+        });
+        document.getElementById('saveDirtyBtn').addEventListener('click', saveDirtyRows);
+        document.getElementById('chartMetric').addEventListener('change', () => {
+            const column = document.getElementById('chartMetric').value;
+            document.getElementById('autoFixColumn').value = column;
+            autoFixPreview = null;
+            copyPreview = null;
+            copyPreviewMeta = null;
+            if (loadedRows.length) renderPreviewChart(loadedRows);
+        });
+        document.getElementById('autoFixColumn').addEventListener('change', () => {
+            const column = document.getElementById('autoFixColumn').value;
+            document.getElementById('chartMetric').value = column;
+            autoFixPreview = null;
+            applyAutoFixPreset(column);
+            if (loadedRows.length) renderPreviewChart(loadedRows);
+        });
+        document.getElementById('autoFillStatsBtn').addEventListener('click', fillAutoFixStats);
+        document.getElementById('autoPreviewBtn').addEventListener('click', () => runAutoFix(true));
+        document.getElementById('autoApplyBtn').addEventListener('click', () => runAutoFix(false));
+        document.getElementById('copyFillMeansBtn').addEventListener('click', fillCopyMeans);
+        document.getElementById('copyPreviewBtn').addEventListener('click', () => runCopySensor(true));
+        document.getElementById('copyApplyBtn').addEventListener('click', () => runCopySensor(false));
+        document.getElementById('prevPageBtn').addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage -= 1;
+                loadRows();
+            }
+        });
+        document.getElementById('nextPageBtn').addEventListener('click', () => {
+            if (currentPage < totalPages) {
+                currentPage += 1;
+                loadRows();
+            }
+        });
+
+        window.addEventListener('load', () => {
+            const today = new Date();
+            const start = new Date(today);
+            start.setDate(start.getDate() - 2);
+            document.getElementById('endDate').value = today.toISOString().slice(0, 10);
+            document.getElementById('startDate').value = start.toISOString().slice(0, 10);
+            applyAutoFixPreset(document.getElementById('autoFixColumn').value);
+        });
+    </script>
+</body>
+</html>

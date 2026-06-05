@@ -13,6 +13,9 @@
 // PRIVATE VARIABLES
 // ============================================================================
 
+// Max DS18B20 ที่ cache address ไว้สำหรับ scan/bind (mix + fish + เผื่อ)
+#define TEMP_MAX_SCAN_DEVICES 4
+
 static OneWire _oneWire(ONE_WIRE_PIN);
 static DallasTemperature _sensors(&_oneWire);
 static Preferences _tempPrefs;
@@ -22,6 +25,12 @@ static float _lastWaterTemp[TEMP_CHANNEL_COUNT] = {NAN, NAN};
 static DeviceAddress _boundAddresses[TEMP_CHANNEL_COUNT];
 static bool _hasBoundAddress[TEMP_CHANNEL_COUNT] = {false, false};
 static int _deviceCount = 0;
+
+// Address ที่ scan เจอล่าสุด — cache ไว้ให้ command task อ่านได้โดยไม่แตะบัส
+// (การแตะบัส OneWire ทั้งหมดทำใน TaskSensors เท่านั้น เพื่อกัน race เพราะบัสไม่มี mutex)
+static DeviceAddress _scannedAddresses[TEMP_MAX_SCAN_DEVICES];
+static int _scannedCount = 0;
+static volatile bool _rescanRequested = false;
 
 // State machine for async read
 enum TempState { TEMP_IDLE, TEMP_WAITING };
@@ -76,17 +85,38 @@ static bool _loadAddress(TempChannel channel) {
     return ok;
 }
 
+// ⚠️ ต้องเรียกใน TaskSensors context เท่านั้น (แตะบัส OneWire)
+static void _performScan(void) {
+    _sensors.begin();
+    _sensors.setWaitForConversion(false); // คง Async mode หลัง re-init
+
+    int count = _sensors.getDeviceCount();
+    if (count < 0) {
+        count = 0;
+    }
+    if (count > TEMP_MAX_SCAN_DEVICES) {
+        count = TEMP_MAX_SCAN_DEVICES;
+    }
+
+    int cached = 0;
+    for (int i = 0; i < count; i++) {
+        DeviceAddress addr;
+        if (_sensors.getAddress(addr, i)) {
+            memcpy(_scannedAddresses[cached], addr, 8);
+            cached++;
+        }
+    }
+
+    _scannedCount = cached;
+    _deviceCount = cached;
+}
+
 static bool _bindFromIndex(TempChannel channel, uint8_t index, bool save) {
-    if (!_isValidChannel(channel) || index >= _deviceCount) {
+    if (!_isValidChannel(channel) || (int)index >= _scannedCount) {
         return false;
     }
 
-    DeviceAddress addr;
-    if (!_sensors.getAddress(addr, index)) {
-        return false;
-    }
-
-    memcpy(_boundAddresses[channel], addr, 8);
+    memcpy(_boundAddresses[channel], _scannedAddresses[index], 8);
     _hasBoundAddress[channel] = true;
     if (save) {
         _saveAddress(channel);
@@ -95,7 +125,7 @@ static bool _bindFromIndex(TempChannel channel, uint8_t index, bool save) {
 }
 
 static void _autoBindMissingAddresses(void) {
-    if (_deviceCount <= 0) {
+    if (_scannedCount <= 0) {
         return;
     }
 
@@ -103,14 +133,12 @@ static void _autoBindMissingAddresses(void) {
         _bindFromIndex(TEMP_CHANNEL_MIX, 0, true);
     }
 
-    if (!_hasBoundAddress[TEMP_CHANNEL_FISH] && _deviceCount > 1) {
+    if (!_hasBoundAddress[TEMP_CHANNEL_FISH] && _scannedCount > 1) {
         uint8_t fishIndex = 1;
-        DeviceAddress candidate;
-        for (uint8_t i = 0; i < _deviceCount; i++) {
-            if (_sensors.getAddress(candidate, i) &&
-                (!_hasBoundAddress[TEMP_CHANNEL_MIX] ||
-                 !_addressEquals(candidate, _boundAddresses[TEMP_CHANNEL_MIX]))) {
-                fishIndex = i;
+        for (int i = 0; i < _scannedCount; i++) {
+            if (!_hasBoundAddress[TEMP_CHANNEL_MIX] ||
+                !_addressEquals(_scannedAddresses[i], _boundAddresses[TEMP_CHANNEL_MIX])) {
+                fishIndex = (uint8_t)i;
                 break;
             }
         }
@@ -127,13 +155,9 @@ static bool _isInvalidTemp(float temp) {
 // ============================================================================
 
 void tempSetup(void) {
-    _sensors.begin();
-    
-    // ⭐ เปิด Async mode - ไม่ต้องรอ conversion
-    _sensors.setWaitForConversion(false);
-    
-    // Check if sensor is present
-    _deviceCount = _sensors.getDeviceCount();
+    // _performScan() จะเรียก begin() + ตั้ง Async mode + cache scanned addresses
+    _performScan();
+
     _loadAddress(TEMP_CHANNEL_MIX);
     _loadAddress(TEMP_CHANNEL_FISH);
     _autoBindMissingAddresses();
@@ -174,15 +198,18 @@ int tempGetDeviceCount(void) {
     return _deviceCount;
 }
 
+int tempRefreshScan(void) {
+    // ไม่แตะบัสจาก command task — ขอให้ TaskSensors ทำ rescan ในรอบถัดไป
+    // (บัส OneWire ไม่มี mutex; ถ้า scan ที่นี่จะชนกับ requestTemperatures/getTempC ใน tempLoop)
+    _rescanRequested = true;
+    return _deviceCount;
+}
+
 bool tempGetScannedAddressHex(uint8_t index, char* out, size_t outSize) {
-    if (index >= _deviceCount) {
+    if ((int)index >= _scannedCount) {
         return false;
     }
-    DeviceAddress addr;
-    if (!_sensors.getAddress(addr, index)) {
-        return false;
-    }
-    _formatAddress(addr, out, outSize);
+    _formatAddress(_scannedAddresses[index], out, outSize);
     return true;
 }
 
@@ -223,6 +250,12 @@ void tempLoop(void) {
     
     switch (_tempState) {
         case TEMP_IDLE:
+            // ทำ rescan ที่ command task ร้องขอ — ทำตอน IDLE เพื่อไม่ชน conversion
+            if (_rescanRequested) {
+                _rescanRequested = false;
+                _performScan();
+                _autoBindMissingAddresses();
+            }
             // ถึงเวลาอ่านค่าใหม่หรือยัง?
             if (currentTime - _tempLastReadTime >= TEMP_READ_INTERVAL) {
                 // ⭐ สั่ง request - ไม่ block เพราะ setWaitForConversion(false)

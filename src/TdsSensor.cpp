@@ -459,14 +459,15 @@ float tdsGetLastValue(void) {
     return tdsGetLastValueForChannel(TDS_CHANNEL_MIX);
 }
 
-void tdsSetCalibration(float lowPpm,
-                       float lowVoltage,
-                       float lowTemperature,
-                       float highPpm,
-                       float highVoltage,
-                       float highTemperature,
-                       bool rawVoltageInput) {
-    TdsChannelState* st = _state(TDS_CHANNEL_MIX);
+void tdsSetCalibrationForChannel(TdsChannel channel,
+                                 float lowPpm,
+                                 float lowVoltage,
+                                 float lowTemperature,
+                                 float highPpm,
+                                 float highVoltage,
+                                 float highTemperature,
+                                 bool rawVoltageInput) {
+    TdsChannelState* st = _state(channel);
     st->calLowPpm = lowPpm;
     st->calLowVoltage = lowVoltage;
     st->calLowTemperature = isfinite(lowTemperature) ? lowTemperature : 25.0f;
@@ -504,6 +505,23 @@ void tdsSetCalibration(float lowPpm,
                   TDS_MIN_CALIBRATION_SPAN_V);
         st->isCalibrated = false;
     }
+}
+
+void tdsSetCalibration(float lowPpm,
+                       float lowVoltage,
+                       float lowTemperature,
+                       float highPpm,
+                       float highVoltage,
+                       float highTemperature,
+                       bool rawVoltageInput) {
+    tdsSetCalibrationForChannel(TDS_CHANNEL_MIX,
+                                lowPpm,
+                                lowVoltage,
+                                lowTemperature,
+                                highPpm,
+                                highVoltage,
+                                highTemperature,
+                                rawVoltageInput);
 }
 
 void tdsLoop(float temperature) {
