@@ -4,6 +4,7 @@
  */
 
 #include "phSensor.h"
+#include "adcBus.h"
 #include "config.h"
 #include "logger.h"
 #include <Preferences.h>
@@ -48,11 +49,12 @@ typedef struct {
     bool hasCalib401;
     bool hasCalib686;
     bool hasCalib918;
+    float waterTemperature;         // อุณหภูมิชดเชย slope ต่อ channel (°C)
 } PhChannelState;
 
 static Preferences _prefs;
 static PhChannelState _channels[PH_CHANNEL_COUNT];
-static float _waterTemperature = 25.0f;     // shared compensation temperature
+static uint8_t _phNextChannelIndex = 0;
 
 // ============================================================================
 // PRIVATE HELPERS
@@ -91,6 +93,7 @@ static void _initChannelDefaults(PhChannelState* st,
     st->hasCalib401 = false;
     st->hasCalib686 = false;
     st->hasCalib918 = false;
+    st->waterTemperature = 25.0f;
     (void)channel;
 }
 
@@ -151,16 +154,10 @@ static float _limitStep(float previousValue, float candidateValue, float maxStep
 }
 
 static int _readOversampledAdc(uint8_t pin) {
-    long sum = 0;
-    for (int i = 0; i < PH_ADC_DUMMY_READS; i++) {
-        delayMicroseconds(PH_ADC_SETTLE_US);
-        (void)analogRead(pin);
-    }
-    for (int i = 0; i < PH_OVERSAMPLE_COUNT; i++) {
-        delayMicroseconds(PH_ADC_SETTLE_US);
-        sum += analogRead(pin);
-    }
-    return static_cast<int>(sum / PH_OVERSAMPLE_COUNT);
+    return adcBusReadOversampled(pin,
+                                 PH_ADC_DUMMY_READS,
+                                 PH_OVERSAMPLE_COUNT,
+                                 PH_ADC_SETTLE_US);
 }
 
 static void _sortCalibrationPoints(PhCalibrationPoint points[], int count) {
@@ -182,8 +179,9 @@ static float _compensateSlope(float slope, float temperature) {
 static float _calculatePhFromSegment(float voltage,
                                      float referenceVoltage,
                                      float referencePh,
-                                     float slope) {
-    float compensatedSlope = _compensateSlope(slope, _waterTemperature);
+                                     float slope,
+                                     float temperature) {
+    float compensatedSlope = _compensateSlope(slope, temperature);
     return referencePh + ((voltage - referenceVoltage) / compensatedSlope);
 }
 
@@ -223,14 +221,15 @@ static float _millivoltsToPh(const PhChannelState* st, float voltage) {
         float slope = _calculateSlope(points[startIndex].voltage, points[startIndex].ph,
                                       points[startIndex + 1].voltage, points[startIndex + 1].ph);
         ph = _calculatePhFromSegment(voltage, points[startIndex].voltage,
-                                     points[startIndex].ph, slope);
+                                     points[startIndex].ph, slope, st->waterTemperature);
     } else if (pointCount == 2) {
         float slope = _calculateSlope(points[0].voltage, points[0].ph,
                                       points[1].voltage, points[1].ph);
-        ph = _calculatePhFromSegment(voltage, points[0].voltage, points[0].ph, slope);
+        ph = _calculatePhFromSegment(voltage, points[0].voltage, points[0].ph, slope,
+                                     st->waterTemperature);
     } else {
         float referenceVoltage = _adcToMillivolts(st->calibVoltage686);
-        float slope = _getTemperatureCompensatedSlope(_waterTemperature);
+        float slope = _getTemperatureCompensatedSlope(st->waterTemperature);
         ph = PH_CAL_POINT_686 + ((voltage - referenceVoltage) / slope);
     }
 
@@ -470,7 +469,7 @@ static void _calibratePoint(PhChannelState* st,
     LOG_INFO("ADC Value: %d", *storage);
     LOG_INFO("Voltage: %.1f mV", voltage);
     LOG_INFO("Target pH: %.2f", targetPh);
-    LOG_INFO("Temperature: %.1f °C", _waterTemperature);
+    LOG_INFO("Temperature: %.1f °C", st->waterTemperature);
 
     _saveCalibrationToNVS(st);
     st->resetEmaRequested = true;
@@ -483,6 +482,9 @@ static void _calibratePoint(PhChannelState* st,
 
 void phSetup(void) {
     Serial.println(F("[PH] Initializing pH Sensors (multi-channel)..."));
+
+    _phNextChannelIndex = 0;
+    adcBusSetup();
 
     _initChannelDefaults(&_channels[PH_CHANNEL_MIX],  PH_CHANNEL_MIX,
                          PH_SENSOR_MIX_PIN,  "mix",  "mix");
@@ -497,19 +499,23 @@ void phSetup(void) {
                  st->name, st->pin, PH_SAMPLE_COUNT);
     }
 
-#if defined(ESP32)
-    analogSetAttenuation(ADC_11db);
-#endif
 }
 
 void phLoop(void) {
     unsigned long now = millis();
-    for (int ch = 0; ch < PH_CHANNEL_COUNT; ch++) {
+
+    // อ่านทีละ channel ต่อรอบ + adcBus settle ร่วมกับ TDS — ลด ADC crosstalk
+    for (int offset = 0; offset < PH_CHANNEL_COUNT; offset++) {
+        int ch = (_phNextChannelIndex + offset) % PH_CHANNEL_COUNT;
         PhChannelState* st = &_channels[ch];
-        if (now - st->lastReadTime >= PH_READ_INTERVAL) {
-            st->lastReadTime = now;
-            _processSample(st);
+        if (now - st->lastReadTime < PH_READ_INTERVAL) {
+            continue;
         }
+
+        st->lastReadTime = now;
+        _processSample(st);
+        _phNextChannelIndex = (ch + 1) % PH_CHANNEL_COUNT;
+        break;
     }
 }
 
@@ -528,10 +534,15 @@ bool phIsReadyChannel(PhChannel channel) {
     return _state(channel)->sensorReady;
 }
 
-void phSetTemperature(float temperature) {
-    if (temperature >= 0 && temperature <= 100) {
-        _waterTemperature = temperature;
+void phSetTemperatureChannel(PhChannel channel, float temperature) {
+    PhChannelState* st = _state(channel);
+    if (temperature >= 0.0f && temperature <= 100.0f) {
+        st->waterTemperature = temperature;
     }
+}
+
+void phSetTemperature(float temperature) {
+    phSetTemperatureChannel(PH_CHANNEL_MIX, temperature);
 }
 
 void phCalibratePh686Channel(PhChannel channel) {

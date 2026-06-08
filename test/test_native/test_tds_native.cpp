@@ -137,13 +137,30 @@ static int _adcFromVoltage(float voltage) {
 }
 
 // ========== Include real TDS source ==========
+#include "adcBus.h"
 #include "../../src/TdsSensor.cpp"
 
 // ========== Helper: feed samples to warm up ==========
+static int _tdsWarmupLoopCount() {
+#if TDS_FISH_CHANNEL_ENABLED
+    return TDS_SAMPLE_COUNT * TDS_CHANNEL_COUNT;
+#else
+    return TDS_SAMPLE_COUNT;
+#endif
+}
+
+static int _tdsLoopsBeforeReady() {
+#if TDS_FISH_CHANNEL_ENABLED
+    return (TDS_SAMPLE_COUNT * TDS_CHANNEL_COUNT) - 2;
+#else
+    return TDS_SAMPLE_COUNT - 1;
+#endif
+}
+
 static void _fastWarmup(float temperature = 25.0f) {
     tdsSetup();
-    // Feed exactly TDS_SAMPLE_COUNT samples
-    for (int i = 0; i < TDS_SAMPLE_COUNT; i++) {
+    // Round-robin reads one channel per loop — mix needs TDS_SAMPLE_COUNT mix reads
+    for (int i = 0; i < _tdsWarmupLoopCount(); i++) {
         _mockMillis += TDS_READ_INTERVAL;
         tdsLoop(temperature);
     }
@@ -166,7 +183,8 @@ void test_tds_init_not_ready() {
 void test_tds_warmup_becomes_ready() {
     Preferences::resetAll();
     tdsSetup();
-    for (int i = 0; i < TDS_SAMPLE_COUNT - 1; i++) {
+    const int loopsBeforeReady = _tdsLoopsBeforeReady();
+    for (int i = 0; i < loopsBeforeReady; i++) {
         _mockMillis += TDS_READ_INTERVAL;
         tdsLoop(25.0f);
         TEST_ASSERT_FALSE(tdsIsReady());
@@ -335,7 +353,7 @@ void test_tds_moving_average_smoothing() {
 
     // Stabilization layer should prevent a single noisy sample from jumping too far.
     float delta = fabsf(afterOneSample - stableVal);
-    TEST_ASSERT_TRUE(delta <= (TDS_VALUE_MAX_STEP_PPM + 0.01f));
+    TEST_ASSERT_TRUE(delta <= (TDS_MIX_VALUE_MAX_STEP_PPM + 0.01f)); // config.h mix max step
 }
 
 // --- 11. TDS clamped to valid range ---
@@ -381,7 +399,7 @@ void test_tds_loop_interval_respect() {
     tdsSetup();
 
     // Feed samples through tdsLoop with proper intervals
-    for (int i = 0; i < TDS_SAMPLE_COUNT; i++) {
+    for (int i = 0; i < _tdsWarmupLoopCount(); i++) {
         _mockMillis += TDS_READ_INTERVAL;
         tdsLoop(25.0f);
     }

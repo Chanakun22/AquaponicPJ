@@ -4,6 +4,7 @@
  */
 
 #include "TdsSensor.h"
+#include "adcBus.h"
 #include "logger.h"
 #include "config.h"
 #include <Preferences.h>
@@ -40,6 +41,7 @@ typedef struct {
 } TdsChannelState;
 
 static Preferences _tdsPrefs;
+static uint8_t _tdsNextChannelIndex = 0;
 static TdsChannelState _channels[TDS_CHANNEL_COUNT] = {
     { TDS_MIX_PIN,  "mix",  "mix",  0, {0}, 0, 0, false, -1.0f, -1.0f, -1.0f, -1.0f,
       1.0f, 0.0f, false, 0.0f, 0.0f, 25.0f, 0.0f, 0.0f, 25.0f, false },
@@ -138,20 +140,54 @@ static float _limitStep(float previousValue, float candidateValue, float maxStep
     return candidateValue;
 }
 
-static int _readOversampledAdc(uint8_t pin) {
-    long sum = 0;
+static float _channelVoltageFilterAlpha(TdsChannel channel) {
+    return (channel == TDS_CHANNEL_MIX) ? TDS_MIX_VOLTAGE_FILTER_ALPHA : TDS_VOLTAGE_FILTER_ALPHA;
+}
 
-    for (int i = 0; i < TDS_ADC_DUMMY_READS; i++) {
-        delayMicroseconds(TDS_ADC_SETTLE_US);
-        (void)analogRead(pin);
+static float _channelVoltageDeadband(TdsChannel channel) {
+    return (channel == TDS_CHANNEL_MIX) ? TDS_MIX_VOLTAGE_DEADBAND_V : TDS_VOLTAGE_DEADBAND_V;
+}
+
+static float _channelValueFilterAlpha(TdsChannel channel) {
+    return (channel == TDS_CHANNEL_MIX) ? TDS_MIX_VALUE_FILTER_ALPHA : TDS_VALUE_FILTER_ALPHA;
+}
+
+static float _channelValueDeadband(TdsChannel channel) {
+    return (channel == TDS_CHANNEL_MIX) ? TDS_MIX_VALUE_DEADBAND_PPM : TDS_VALUE_DEADBAND_PPM;
+}
+
+static float _channelValueMaxStep(TdsChannel channel) {
+    return (channel == TDS_CHANNEL_MIX) ? TDS_MIX_VALUE_MAX_STEP_PPM : TDS_VALUE_MAX_STEP_PPM;
+}
+
+static bool _shouldSampleChannel(TdsChannel channel) {
+    if (channel != TDS_CHANNEL_FISH) {
+        return true;
     }
 
-    for (int i = 0; i < TDS_OVERSAMPLE_COUNT; i++) {
-        delayMicroseconds(TDS_ADC_SETTLE_US);
-        sum += analogRead(pin);
+    TdsChannelState* st = &_channels[TDS_CHANNEL_FISH];
+    if (!st->ready) {
+        return true;
     }
 
-    return static_cast<int>(sum / TDS_OVERSAMPLE_COUNT);
+    float voltage = st->lastVoltage;
+    if (voltage < 0.0f) {
+        return true;
+    }
+
+    // ข้าม fish probe ที่ลอย/ไม่ต่อ — ลด ADC noise ที่รบกวน mix
+    return voltage >= 0.05f && voltage <= (TDS_VREF - 0.05f);
+}
+
+static int _oversampleCountForChannel(TdsChannel channel) {
+    return (channel == TDS_CHANNEL_MIX) ? TDS_MIX_OVERSAMPLE_COUNT : TDS_FISH_OVERSAMPLE_COUNT;
+}
+
+static int _readOversampledAdc(TdsChannel channel, uint8_t pin) {
+    return adcBusReadOversampled(pin,
+                                 TDS_ADC_DUMMY_READS,
+                                 _oversampleCountForChannel(channel),
+                                 TDS_ADC_SETTLE_US);
 }
 
 static int _getMedian(int* bArray, int iFilterLen) {
@@ -291,15 +327,18 @@ static float _calculateFilteredVoltage(TdsChannel channel) {
 
     float rawVoltage = _getMedian(tempBuffer, TDS_SAMPLE_COUNT) * TDS_VREF / TDS_ADC_RESOLUTION;
 
+    float voltageAlpha = _channelVoltageFilterAlpha(channel);
+    float voltageDeadband = _channelVoltageDeadband(channel);
+
     if (st->voltageMovingAverage < 0 || isnan(st->voltageMovingAverage)) {
         st->voltageMovingAverage = rawVoltage;
     } else {
         st->voltageMovingAverage =
-            (rawVoltage * TDS_VOLTAGE_FILTER_ALPHA) +
-            (st->voltageMovingAverage * (1.0f - TDS_VOLTAGE_FILTER_ALPHA));
+            (rawVoltage * voltageAlpha) +
+            (st->voltageMovingAverage * (1.0f - voltageAlpha));
     }
 
-    return _applyDeadband(previousVoltage, st->voltageMovingAverage, TDS_VOLTAGE_DEADBAND_V);
+    return _applyDeadband(previousVoltage, st->voltageMovingAverage, voltageDeadband);
 }
 
 static void _resetRuntimeState(TdsChannelState* st) {
@@ -321,6 +360,9 @@ static float _tdsReadChannel(TdsChannel channel, float temperature);
 // ============================================================================
 
 void tdsSetup(void) {
+    _tdsNextChannelIndex = 0;
+    adcBusSetup();
+
     for (int ch = 0; ch < TDS_CHANNEL_COUNT; ch++) {
         TdsChannelState* st = &_channels[ch];
         pinMode(st->pin, INPUT);
@@ -340,9 +382,6 @@ void tdsSetup(void) {
         }
     }
 
-#if defined(ESP32)
-    analogSetAttenuation(ADC_11db);
-#endif
 }
 
 float tdsGetVoltageForChannel(TdsChannel channel) {
@@ -359,9 +398,14 @@ float tdsGetVoltage(void) {
 }
 
 bool tdsIsReady(void) {
+    return tdsIsReadyForChannel(TDS_CHANNEL_MIX);
+}
+
+bool tdsIsReadyForChannel(TdsChannel channel) {
+    TdsChannelState* st = _state(channel);
     bool ready = false;
     TDS_LOCK();
-    ready = _channels[TDS_CHANNEL_MIX].ready;
+    ready = st->ready;
     TDS_UNLOCK();
     return ready;
 }
@@ -380,7 +424,7 @@ float tdsRead(float temperature) {
 
 static float _tdsReadChannel(TdsChannel channel, float temperature) {
     TdsChannelState* st = _state(channel);
-    int sample = _readOversampledAdc(st->pin);
+    int sample = _readOversampledAdc(channel, st->pin);
     bool becameReady = false;
     float previousTds = -1.0f;
 
@@ -428,16 +472,18 @@ static float _tdsReadChannel(TdsChannel channel, float temperature) {
     if (tdsValue < TDS_MIN) tdsValue = TDS_MIN;
     if (tdsValue > TDS_MAX) tdsValue = TDS_MAX;
 
+    float valueAlpha = _channelValueFilterAlpha(channel);
+    float valueDeadband = _channelValueDeadband(channel);
+    float valueMaxStep = _channelValueMaxStep(channel);
+
     if (st->movingAverage < 0 || isnan(st->movingAverage)) {
         st->movingAverage = tdsValue;
     } else {
         st->movingAverage =
-            (tdsValue * TDS_VALUE_FILTER_ALPHA) +
-            (st->movingAverage * (1.0f - TDS_VALUE_FILTER_ALPHA));
-        float stabilizedTds = _applyDeadband(previousTds, st->movingAverage,
-                                             TDS_VALUE_DEADBAND_PPM);
-        st->movingAverage = _limitStep(previousTds, stabilizedTds,
-                                       TDS_VALUE_MAX_STEP_PPM);
+            (tdsValue * valueAlpha) +
+            (st->movingAverage * (1.0f - valueAlpha));
+        float stabilizedTds = _applyDeadband(previousTds, st->movingAverage, valueDeadband);
+        st->movingAverage = _limitStep(previousTds, stabilizedTds, valueMaxStep);
     }
 
     TDS_LOCK();
@@ -531,12 +577,32 @@ void tdsLoop(float temperature) {
 void tdsLoopChannels(float mixTemperature, float fishTemperature) {
     unsigned long now = millis();
 
-    for (int ch = 0; ch < TDS_CHANNEL_COUNT; ch++) {
-        TdsChannelState* st = &_channels[ch];
-        if (now - st->lastReadTime >= TDS_READ_INTERVAL) {
-            st->lastReadTime = now;
-            float channelTemp = (ch == TDS_CHANNEL_FISH) ? fishTemperature : mixTemperature;
-            _tdsReadChannel((TdsChannel)ch, channelTemp);
+#if !TDS_FISH_CHANNEL_ENABLED
+    TdsChannelState* mixState = &_channels[TDS_CHANNEL_MIX];
+    if (now - mixState->lastReadTime >= TDS_READ_INTERVAL) {
+        mixState->lastReadTime = now;
+        _tdsReadChannel(TDS_CHANNEL_MIX, mixTemperature);
+    }
+    return;
+#endif
+
+    // อ่านทีละ channel ต่อรอบ เพื่อลด ADC crosstalk ระหว่าง mix (GPIO5) กับ fish (GPIO7)
+    for (int offset = 0; offset < TDS_CHANNEL_COUNT; offset++) {
+        int ch = (_tdsNextChannelIndex + offset) % TDS_CHANNEL_COUNT;
+        TdsChannel channel = (TdsChannel)ch;
+        if (!_shouldSampleChannel(channel)) {
+            continue;
         }
+
+        TdsChannelState* st = &_channels[ch];
+        if (now - st->lastReadTime < TDS_READ_INTERVAL) {
+            continue;
+        }
+
+        st->lastReadTime = now;
+        float channelTemp = (ch == TDS_CHANNEL_FISH) ? fishTemperature : mixTemperature;
+        _tdsReadChannel((TdsChannel)ch, channelTemp);
+        _tdsNextChannelIndex = (ch + 1) % TDS_CHANNEL_COUNT;
+        break;
     }
 }

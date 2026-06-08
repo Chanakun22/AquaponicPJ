@@ -46,6 +46,7 @@ void tdsLoopChannels(float mixTemperature, float fishTemperature);
  * @return true ถ้าพร้อมแสดงผล, false ถ้ายังเก็บไม่ครบ
  */
 bool tdsIsReady(void);
+bool tdsIsReadyForChannel(TdsChannel channel);
 
 /**
  * @brief อ่าน voltage ปัจจุบันของ TDS sensor (สำหรับ calibration)

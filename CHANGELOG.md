@@ -2,6 +2,44 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-06-05] - Sensor Accuracy & ADC Crosstalk Fix (Full Pass)
+
+### Added
+
+- **adcBus.h:** Shared ADC settle (`ADC_CHANNEL_SWITCH_SETTLE_US`) + oversampled read ข้าม TDS/pH — ลด crosstalk GPIO 1/5/6/7
+
+### Changed
+
+- **ph:** Round-robin อ่านทีละ channel ต่อรอบ + oversample 16 ครั้ง + ใช้ adcBus
+- **tds:** ใช้ adcBus ร่วมกับ pH; fish oversample 16; ชดเชยอุณหภูมิ fish ผ่าน `TDS_FISH_TEMP_FILTER_ALPHA`
+- **main:** ลบ TDS/pH alternation (`preferTdsThisPass`); cache `currentPhFish`; ส่ง temp ชดเชยแยก channel ทุกรอบ
+- **system health:** ตรวจ mix + fish สำหรับ pH, TDS, water temp
+- **tune:** ลด TDS mix deadband 20→12 ppm เพื่อค่าใกล้จริงมากขึ้น; เพิ่ม `tdsIsReadyForChannel()`
+
+## [2026-06-05] - pH Per-Channel Temperature Compensation
+
+### Fixed
+
+- **fix:** pH fish ใช้ `water_temp_fish` ชดเชย slope แยกจาก mix — เพิ่ม `phSetTemperatureChannel()`, เก็บ `waterTemperature` ต่อ channel ใน `PhChannelState`, `main.cpp` ส่ง mix/fish temp ก่อน `phLoop()` (fish fallback → mix → 25°C)
+
+## [2026-06-05] - TDS Fish Channel Enabled (Hardware Wired)
+
+### Changed
+
+- **config:** เปิด `TDS_FISH_CHANNEL_ENABLED` เป็น `1` หลังต่อ probe TDS fish (GPIO7) ครบแล้ว — firmware อ่าน mix/fish แบบ round-robin พร้อม filter แยก channel
+
+## [2026-06-05] - TDS Mix Stability Tuning
+
+### Changed
+
+- **fix:** ลดอาการ TDS Mix แกว่งจาก ADC crosstalk หลังเพิ่ม fish channel — `tdsLoopChannels()` อ่านทีละ channel ต่อรอบ พร้อม `TDS_CHANNEL_SWITCH_SETTLE_US` ก่อนสลับ pin
+- **tune:** ปรับ `TDS_VALUE_FILTER_ALPHA` 0.10→0.08, `TDS_VALUE_DEADBAND_PPM` 5→8, `TDS_VALUE_MAX_STEP_PPM` 20→12 ให้ค่า TDS บน dashboard นิ่งขึ้นโดยยังตามการเปลี่ยนจริงได้
+- **fix:** เพิ่ม filter แยกสำหรับ **Mix tank** (`TDS_MIX_*`) — deadband 15 ppm, max step 8 ppm/รอบ, EMA ช้ากว่า fish
+- **fix:** กรองอุณหภูมิ mix ก่อนชดเชย TDS (`TDS_MIX_TEMP_FILTER_ALPHA`) ลดอาการแกว่งจาก temp เปลี่ยนทีละนิด
+- **fix:** ข้ามการอ่าน TDS fish ถ้า probe ลอย/ไม่ต่อ เพื่อลด noise ที่รบกวน mix
+- **fix:** เพิ่ม `TDS_FISH_CHANNEL_ENABLED` (default `0`) — ปิด ADC fish จนกว่าจะต่อ probe จริง ลด crosstalk กับ mix
+- **tune:** Mix oversample 16 ครั้ง/รอบ (`TDS_MIX_OVERSAMPLE_COUNT`), deadband 20 ppm, `analogReadResolution(12)` ใน `tdsSetup()`
+
 ## [2026-06-05] - Admin History Graph Fix Page (/fix)
 
 ### Added

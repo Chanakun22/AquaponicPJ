@@ -275,27 +275,47 @@ void systemGetHealth(SystemHealth_t* health) {
     // Check if sensors are OK
     bool sensorsOk = true;
     
-    // Check pH Sensor
+    // Check pH Sensor (mix + fish)
     if (systemGetSensorEnabled(SENSOR_PH)) {
-        if (!phIsReady() || isnan(phRead())) {
+        if (!phIsReadyChannel(PH_CHANNEL_MIX) || isnan(phReadChannel(PH_CHANNEL_MIX))) {
             sensorsOk = false;
-            LOG_DEBUG("Health: pH sensor not ready or NAN");
+            LOG_DEBUG("Health: pH mix not ready or NAN");
+        }
+        if (!phIsReadyChannel(PH_CHANNEL_FISH) || isnan(phReadChannel(PH_CHANNEL_FISH))) {
+            sensorsOk = false;
+            LOG_DEBUG("Health: pH fish not ready or NAN");
         }
     }
     
-    // Check TDS Sensor
+    // Check TDS Sensor (mix + fish)
     if (systemGetSensorEnabled(SENSOR_TDS)) {
         if (!tdsIsReady() || tdsGetLastValue() < 0) {
             sensorsOk = false;
-            LOG_DEBUG("Health: TDS sensor not ready or invalid");
+            LOG_DEBUG("Health: TDS mix not ready or invalid");
         }
+#if TDS_FISH_CHANNEL_ENABLED
+        if (!tdsIsReadyForChannel(TDS_CHANNEL_FISH)) {
+            sensorsOk = false;
+            LOG_DEBUG("Health: TDS fish not ready");
+        } else {
+            float fishTds = tdsGetLastValueForChannel(TDS_CHANNEL_FISH);
+            if (fishTds < 0 || isnan(fishTds)) {
+                sensorsOk = false;
+                LOG_DEBUG("Health: TDS fish invalid");
+            }
+        }
+#endif
     }
     
-    // Check Water Temp (DS18B20)
+    // Check Water Temp (DS18B20 mix + fish)
     if (systemGetSensorEnabled(SENSOR_WATER_TEMP)) {
-        if (isnan(tempRead())) {
+        if (isnan(tempGetTemperature(TEMP_CHANNEL_MIX))) {
             sensorsOk = false;
-            LOG_DEBUG("Health: Water temp sensor NAN");
+            LOG_DEBUG("Health: Water temp mix NAN");
+        }
+        if (isnan(tempGetTemperature(TEMP_CHANNEL_FISH))) {
+            sensorsOk = false;
+            LOG_DEBUG("Health: Water temp fish NAN");
         }
     }
     

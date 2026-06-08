@@ -21,10 +21,11 @@
  * @brief กำหนดขา GPIO สำหรับเซ็นเซอร์ต่างๆ
  */
 
-// TDS Sensor
+// TDS Sensor (DFRobot TDS Meter V1.0: แดง=VCC, ดำ=GND, เหลือง=Analog)
 #define TDS_PIN             5       // ขา Analog สำหรับ TDS Sensor เดิม (mix tank)
 #define TDS_MIX_PIN         TDS_PIN // alias สำหรับ multi-channel refactor
 #define TDS_FISH_PIN        7       // ขา Analog สำหรับ TDS Sensor ตู้ปลา
+#define TDS_FISH_CHANNEL_ENABLED 1   // 1=อ่าน TDS fish (GPIO7) — ตั้ง 0 ถ้ายังไม่ได้ต่อ probe
 
 // DHT22 Sensor (Temperature & Humidity)
 #define DHT_PIN             15      // ขา Digital สำหรับ DHT22
@@ -140,21 +141,37 @@
 // ============================================================================
 
 /**
+ * @section Shared ADC (TDS + pH analog probes)
+ */
+#define ADC_CHANNEL_SWITCH_SETTLE_US 400 // รอ MUX settle ก่อนสลับ GPIO ระหว่าง TDS/pH
+#define ADC_SAMPLE_SETTLE_US         250 // quiet time ก่อนแต่ละ analogRead
+
+/**
  * @section TDS Sensor Settings
  */
 #define TDS_VREF            3.3     // แรงดันอ้างอิง ADC ของ ESP32 (ไม่ใช่ไฟเลี้ยง sensor)
 #define TDS_ADC_RESOLUTION  4096.0  // ความละเอียด ADC (12-bit = 4096)
 #define TDS_SAMPLE_COUNT    30      // จำนวนจุด sampling
-#define TDS_OVERSAMPLE_COUNT 8      // จำนวน analogRead ต่อ 1 รอบ sampling เพื่อลด noise
-#define TDS_ADC_SETTLE_US   250     // Quiet time หลัง analog channel activity ก่อนเก็บ sample
+#define TDS_OVERSAMPLE_COUNT 16     // legacy alias = mix oversample
+#define TDS_MIX_OVERSAMPLE_COUNT 16 // oversample ต่อรอบอ่าน (mix)
+#define TDS_FISH_OVERSAMPLE_COUNT 16 // oversample ต่อรอบอ่าน (fish)
+#define TDS_ADC_SETTLE_US   ADC_SAMPLE_SETTLE_US
 #define TDS_ADC_DUMMY_READS 2       // ทิ้ง sample แรก ๆ เพื่อให้ ADC settle ก่อนอ่านจริง
 #define TDS_CONVERSION_FACTOR 0.695f // แปลง EC25 -> TDS ให้ใกล้ handheld meter ที่อ่าน 1413 uS/cm ≈ 982 ppm
 #define TDS_MIN_CALIBRATION_SPAN_V 0.050f // calibration 2 จุดต้องต่างกันพอ ไม่งั้นจะขยาย noise จาก ADC มากเกินไป
-#define TDS_VOLTAGE_FILTER_ALPHA 0.15f // EMA สำหรับแรงดันดิบหลัง median
-#define TDS_VOLTAGE_DEADBAND_V 0.003f  // กันแรงดันแกว่งเล็กน้อยไม่ให้โชว์สั่น
-#define TDS_VALUE_FILTER_ALPHA 0.10f   // EMA สำหรับค่า TDS หลังชดเชยอุณหภูมิ
-#define TDS_VALUE_DEADBAND_PPM 5.0f    // กันค่า TDS แกว่งเล็กน้อยไม่ให้เปลี่ยนผลลัพธ์ทันที
-#define TDS_VALUE_MAX_STEP_PPM 20.0f   // จำกัดการกระโดดต่อรอบเพื่อให้ค่าดูนิ่งขึ้น
+#define TDS_VOLTAGE_FILTER_ALPHA 0.15f // EMA สำหรับแรงดันดิบหลัง median (fish / default)
+#define TDS_VOLTAGE_DEADBAND_V 0.003f  // กันแรงดันแกว่งเล็กน้อยไม่ให้โชว์สั่น (fish / default)
+#define TDS_VALUE_FILTER_ALPHA 0.08f   // EMA สำหรับค่า TDS หลังชดเชยอุณหภูมิ (fish / default)
+#define TDS_VALUE_DEADBAND_PPM 8.0f    // กันค่า TDS แกว่งเล็กน้อย (fish / default)
+#define TDS_VALUE_MAX_STEP_PPM 12.0f   // จำกัดการกระโดดต่อรอบ (fish / default)
+#define TDS_MIX_VOLTAGE_FILTER_ALPHA 0.08f // Mix tank: EMA แรงดัน — นิ่งกว่า fish
+#define TDS_MIX_VOLTAGE_DEADBAND_V 0.006f  // Mix tank: deadband แรงดันกว้างขึ้น
+#define TDS_MIX_VALUE_FILTER_ALPHA 0.05f   // Mix tank: EMA ppm ช้าลง
+#define TDS_MIX_VALUE_DEADBAND_PPM 12.0f   // Mix tank: deadband แสดงผล (ลดลงเพื่อความตรง)
+#define TDS_MIX_VALUE_MAX_STEP_PPM 10.0f   // Mix tank: กระโดดสูงสุด 10 ppm/รอบ
+#define TDS_MIX_TEMP_FILTER_ALPHA 0.10f    // EMA อุณหภูมิก่อนชดเชย TDS mix
+#define TDS_FISH_TEMP_FILTER_ALPHA 0.10f   // EMA อุณหภูมิก่อนชดเชย TDS fish
+#define TDS_CHANNEL_SWITCH_SETTLE_US ADC_CHANNEL_SWITCH_SETTLE_US
 
 /**
  * @section Sensor Value Validation Ranges

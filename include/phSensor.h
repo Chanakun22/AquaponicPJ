@@ -16,7 +16,7 @@
 
 #define PH_SAMPLE_COUNT     30      // จำนวน sample สำหรับ averaging
 #define PH_READ_INTERVAL    1000    // อ่านค่าทุก (ms)
-#define PH_OVERSAMPLE_COUNT 8       // จำนวน analogRead ต่อ 1 รอบ sampling
+#define PH_OVERSAMPLE_COUNT 16      // จำนวน analogRead ต่อ 1 รอบ sampling
 #define PH_INVALID_STREAK_LIMIT 3   // ต้อง invalid ติดต่อกันกี่รอบจึง mark ว่าหลุดช่วง
 #define PH_VOLTAGE_FILTER_ALPHA 0.18f // Processing EMA for pH calculation: faster but still damped
 #define PH_VOLTAGE_DISPLAY_FILTER_ALPHA 0.06f // Extra smoothing just for displayed voltage (mV)
@@ -25,7 +25,8 @@
 #define PH_VOLTAGE_DISPLAY_DEADBAND_MV 8.0f // Larger display deadband so calibration voltage looks steadier
 #define PH_PH_DEADBAND        0.01f // Allow smaller visible pH movement before holding value
 #define PH_PH_MAX_STEP        0.12f // Let pH catch up faster per cycle while still limiting jumps
-#define PH_ADC_SETTLE_US      250   // Quiet time before each pH ADC sample after analog channel activity
+#define PH_ADC_SETTLE_US      ADC_SAMPLE_SETTLE_US
+#define PH_CHANNEL_SWITCH_SETTLE_US ADC_CHANNEL_SWITCH_SETTLE_US
 #define PH_ADC_DUMMY_READS    2     // Discard initial ADC reads so pH sampling starts after channel settles
 
 // Calibration values (ต้อง calibrate ใหม่ตาม sensor จริง)
@@ -63,7 +64,8 @@ bool phHasCalibration918Channel(PhChannel channel);
 
 void phClearCalibrationChannel(PhChannel channel);
 
-void phSetTemperature(float temperature);   // shared across all channels (water temp compensation)
+void phSetTemperature(float temperature);   // backward compat: sets mix channel only
+void phSetTemperatureChannel(PhChannel channel, float temperature);
 
 // ============================================================================
 // BACKWARD-COMPAT SHIMS — default = MIX channel

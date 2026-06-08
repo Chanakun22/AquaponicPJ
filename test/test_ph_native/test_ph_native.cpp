@@ -71,18 +71,30 @@ void setUp(void) {}
 void tearDown(void) {}
 
 // ==================== Include the real pH source ====================
-// We include the .cpp directly for native testing (PlatformIO native does not have Arduino build chain)
+#include "adcBus.h"
 #include "../../src/phSensor.cpp"
 
 // ==================== Helper ====================
 
-static void _fastWarmup() {
-    phSetup();
-    // Feed exactly PH_SAMPLE_COUNT samples to fill buffer + trigger ready
-    for (int i = 0; i < PH_SAMPLE_COUNT; i++) {
-        _mockMillis += (unsigned long)(PH_READ_INTERVAL); // need capital case read interval...wait...PH_READ_INTERVAL was #define'd in header.
+static int _phWarmupLoopCount() {
+    return PH_SAMPLE_COUNT * PH_CHANNEL_COUNT;
+}
+
+static int _phLoopsBeforeReady() {
+    return (PH_SAMPLE_COUNT * PH_CHANNEL_COUNT) - 2;
+}
+
+static void _advancePhLoops(int count) {
+    for (int i = 0; i < count; i++) {
+        _mockMillis += (unsigned long)PH_READ_INTERVAL;
         phLoop();
     }
+}
+
+static void _fastWarmup() {
+    phSetup();
+    adcBusResetForTest();
+    _advancePhLoops(_phWarmupLoopCount());
 }
 
 // ==================== Test Cases ====================
@@ -103,14 +115,14 @@ void test_ph_warmup_becomes_ready() {
     phSetup();
     TEST_ASSERT_FALSE(phIsReady());
 
-    // Feed samples; ready after PH_SAMPLE_COUNT
-    for (int i = 0; i < PH_SAMPLE_COUNT - 1; i++) {
+    const int loopsBeforeReady = _phLoopsBeforeReady();
+    for (int i = 0; i < loopsBeforeReady; i++) {
         _mockMillis += 1000;
         phLoop();
         TEST_ASSERT_FALSE_MESSAGE(phIsReady(), "Should not be ready before buffer full");
     }
     _mockMillis += 1000;
-    phLoop(); // This call fills the last slot and wraps index to 0 → ready
+    phLoop();
     TEST_ASSERT_TRUE_MESSAGE(phIsReady(), "Should be ready after buffer full");
 }
 
@@ -129,18 +141,36 @@ void test_ph_default_conversion_neutral() {
 // --- 4. Temperature compensation ---
 
 void test_ph_temperature_compensation_effect() {
-    _mockAdcValue = 2048;
+    // ใช้ ADC ที่ต่างจากจุดอ้างอิง 6.86 — ถ้าใกล้ reference มาก temp จะไม่เปลี่ยน pH
+    _mockAdcValue = 2300;
     _fastWarmup();
 
     phSetTemperature(25.0f);
+    _advancePhLoops(PH_CHANNEL_COUNT);
     float ph25 = phRead();
 
     phSetTemperature(35.0f);
+    _advancePhLoops(PH_CHANNEL_COUNT);
     float ph35 = phRead();
 
     // pH reading should differ because Nernst slope changes with temperature
     TEST_ASSERT_TRUE_MESSAGE(fabsf(ph25 - ph35) > 0.001f,
         "Temperature compensation should affect pH reading");
+}
+
+void test_ph_temperature_compensation_per_channel() {
+    _mockAdcValue = 2300;
+    _fastWarmup();
+
+    phSetTemperatureChannel(PH_CHANNEL_MIX, 25.0f);
+    phSetTemperatureChannel(PH_CHANNEL_FISH, 35.0f);
+    _advancePhLoops(PH_CHANNEL_COUNT);
+
+    float phMix = phReadChannel(PH_CHANNEL_MIX);
+    float phFish = phReadChannel(PH_CHANNEL_FISH);
+
+    TEST_ASSERT_TRUE_MESSAGE(fabsf(phMix - phFish) > 0.001f,
+        "Mix and fish channels should use separate compensation temperatures");
 }
 
 // --- 5. NaN handling (invalid ADC) ---
@@ -276,6 +306,7 @@ int main(int, char**) {
     RUN_TEST(test_ph_warmup_becomes_ready);
     RUN_TEST(test_ph_default_conversion_neutral);
     RUN_TEST(test_ph_temperature_compensation_effect);
+    RUN_TEST(test_ph_temperature_compensation_per_channel);
     RUN_TEST(test_ph_nan_on_invalid_adc);
     RUN_TEST(test_ph_step_limiter);
     RUN_TEST(test_ph_calibration_save_load);

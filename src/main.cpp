@@ -42,7 +42,20 @@ static float currentHumidity = NAN;   // ความชื้น (%)
 static float currentTds = -1;         // legacy/mix tank TDS (ppm)
 static float currentTdsFish = -1;     // fish tank TDS (ppm)
 static float currentLight = -1;       // ความเข้มแสง (lux)
-static float currentPh = -1;          // ค่า pH
+static float currentPh = -1;          // legacy/mix tank pH
+static float currentPhFish = -1;      // fish tank pH
+static float _tdsMixTempFiltered = NAN;
+static float _tdsFishTempFiltered = NAN;
+
+static float _phCompensationTemperature(float primary, float fallback) {
+    if (!isnan(primary) && primary >= 0.0f && primary <= 100.0f) {
+        return primary;
+    }
+    if (!isnan(fallback) && fallback >= 0.0f && fallback <= 100.0f) {
+        return fallback;
+    }
+    return 25.0f;
+}
 
 static void taskCheckpoint(TaskId_t taskId, const char* stage) {
     systemSetTaskProgress(taskId, stage);
@@ -182,8 +195,7 @@ void TaskNetworking(void *pvParameters) {
 
 void TaskSensors(void *pvParameters) {
     (void) pvParameters;
-    static bool preferTdsThisPass = true;
-    
+
     #if defined(ESP32) && WATCHDOG_ENABLED
     esp_task_wdt_add(NULL); // Subscribe this task to Watchdog Timer
     #endif
@@ -220,22 +232,52 @@ void TaskSensors(void *pvParameters) {
         
         bool tdsEnabled = systemGetSensorEnabled(SENSOR_TDS);
         bool phEnabled = systemGetSensorEnabled(SENSOR_PH);
-        bool runTdsThisPass = tdsEnabled && (!phEnabled || preferTdsThisPass);
-        bool runPhThisPass = phEnabled;
 
-        // TDS (Average/Filtering)
-        // ถ้า pH อยู่ถังเดียวกับ TDS จะลดความถี่ TDS ลง แต่ยังปล่อยให้ pH วิ่งทุก pass
-        // เพื่อไม่ให้ค่า pH ดูค้างจากการข้ามรอบอ่านของ pH เอง
-        if (runTdsThisPass) {
+        // TDS — tdsLoopChannels() rate-limit ภายใน; adcBus จัดการ settle ร่วมกับ pH
+        if (tdsEnabled) {
             taskCheckpoint(TASK_SENSORS, "tds");
-            tdsLoopChannels(currentWaterTemp, currentWaterTempFish);
+            float tdsMixTemp = currentWaterTemp;
+            float tdsFishTemp = currentWaterTempFish;
+
+            if (!isnan(currentWaterTemp)) {
+                if (isnan(_tdsMixTempFiltered)) {
+                    _tdsMixTempFiltered = currentWaterTemp;
+                } else {
+                    _tdsMixTempFiltered +=
+                        TDS_MIX_TEMP_FILTER_ALPHA * (currentWaterTemp - _tdsMixTempFiltered);
+                }
+                tdsMixTemp = _tdsMixTempFiltered;
+            } else {
+                _tdsMixTempFiltered = NAN;
+            }
+
+            if (!isnan(currentWaterTempFish)) {
+                if (isnan(_tdsFishTempFiltered)) {
+                    _tdsFishTempFiltered = currentWaterTempFish;
+                } else {
+                    _tdsFishTempFiltered +=
+                        TDS_FISH_TEMP_FILTER_ALPHA * (currentWaterTempFish - _tdsFishTempFiltered);
+                }
+                tdsFishTemp = _tdsFishTempFiltered;
+            } else {
+                _tdsFishTempFiltered = NAN;
+                tdsFishTemp = tdsMixTemp;
+            }
+
+            tdsLoopChannels(tdsMixTemp, tdsFishTemp);
             if (tdsIsReady()) {
                 currentTds = validateTds(tdsGetLastValue());
+            }
+#if TDS_FISH_CHANNEL_ENABLED
+            if (tdsIsReadyForChannel(TDS_CHANNEL_FISH)) {
                 currentTdsFish = validateTds(tdsGetLastValueForChannel(TDS_CHANNEL_FISH));
             }
-        } else if (!tdsEnabled) {
+#endif
+        } else {
             currentTds = -1;
             currentTdsFish = -1;
+            _tdsMixTempFiltered = NAN;
+            _tdsFishTempFiltered = NAN;
         }
         
         // Light
@@ -250,21 +292,23 @@ void TaskSensors(void *pvParameters) {
         }
         
         // pH
-        if (runPhThisPass) {
+        if (phEnabled) {
             taskCheckpoint(TASK_SENSORS, "ph");
-            if (!isnan(currentWaterTemp)) {
-                phSetTemperature(currentWaterTemp);
-            }
+            phSetTemperatureChannel(PH_CHANNEL_MIX,
+                                    _phCompensationTemperature(currentWaterTemp, NAN));
+            phSetTemperatureChannel(PH_CHANNEL_FISH,
+                                    _phCompensationTemperature(currentWaterTempFish,
+                                                               currentWaterTemp));
             phLoop();
-            if (phIsReady()) {
-                currentPh = validatePh(phRead());
+            if (phIsReadyChannel(PH_CHANNEL_MIX)) {
+                currentPh = validatePh(phReadChannel(PH_CHANNEL_MIX));
             }
-        } else if (!phEnabled) {
+            if (phIsReadyChannel(PH_CHANNEL_FISH)) {
+                currentPhFish = validatePh(phReadChannel(PH_CHANNEL_FISH));
+            }
+        } else {
             currentPh = -1;
-        }
-
-        if (tdsEnabled && phEnabled) {
-            preferTdsThisPass = !preferTdsThisPass;
+            currentPhFish = -1;
         }
         
         taskCheckpoint(TASK_SENSORS, "idle_delay");
