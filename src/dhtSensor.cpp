@@ -5,6 +5,12 @@
 
 #include "dhtSensor.h"
 #include "logger.h"
+#include "system.h"
+#include "config.h"
+
+#if defined(ESP32) && WATCHDOG_ENABLED
+#include "esp_task_wdt.h"
+#endif
 
 // ============================================================================
 // PRIVATE VARIABLES
@@ -16,6 +22,19 @@ static unsigned long _dhtBackoffUntil = 0;
 static float _lastTemperature = NAN;
 static float _lastHumidity = NAN;
 static uint8_t _dhtFailureCount = 0;
+
+// ============================================================================
+// PRIVATE HELPERS
+// ============================================================================
+
+static void _dhtKickWatchdog(const char* stage) {
+    systemSetTaskProgress(TASK_SENSORS, stage);
+    systemTaskHeartbeat(TASK_SENSORS);
+
+#if defined(ESP32) && WATCHDOG_ENABLED
+    esp_task_wdt_reset();
+#endif
+}
 
 // ============================================================================
 // PUBLIC FUNCTIONS
@@ -50,20 +69,26 @@ void dhtLoop(void) {
     // ตรวจสอบเวลา (Non-blocking delay)
     if (currentTime - _dhtLastReadTime >= DHT_READ_INTERVAL) {
         _dhtLastReadTime = currentTime;
-        
-        // Read new values
+
+        _dhtKickWatchdog("dht_read");
+
+        // อ่านครั้งเดียว: readTemperature() ทำ bus transaction, readHumidity() ใช้ cache ทันที
         unsigned long readStart = millis();
-        float humidity = _dht.readHumidity();
         float temperature = _dht.readTemperature();
+        _dhtKickWatchdog("dht_humidity");
+        float humidity = _dht.readHumidity();
+        _dhtKickWatchdog("dht_done");
+
         unsigned long readElapsed = millis() - readStart;
         if (readElapsed > DHT_SLOW_READ_WARN_MS) {
             LOG_WARN("DHT22 read took %lu ms", readElapsed);
+            if (readElapsed > (DHT_SLOW_READ_WARN_MS * 4)) {
+                _dhtBackoffUntil = currentTime + DHT_SLOW_READ_BACKOFF_MS;
+                LOG_WARN("DHT22 read abnormally slow; backing off for %lu ms",
+                         (unsigned long)DHT_SLOW_READ_BACKOFF_MS);
+            }
         }
-        
-        // ตรวจสอบค่าที่อ่านได้ (Nano-second check logic handled by library, but if NAN we keep old value or update?)
-        // Standard practice: if read fails (NAN), keep old value OR return NAN.
-        // But since we use cached value for main loop, let's only update if valid.
-        
+
         if (isnan(humidity) || isnan(temperature)) {
             _dhtFailureCount++;
             _lastTemperature = NAN;

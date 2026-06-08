@@ -12,9 +12,10 @@
 #include <cstring>
 #include <cstdint>
 
+static std::map<std::string, std::map<std::string, std::string>> _prefStore;
+
 class Preferences {
 private:
-    std::map<std::string, std::map<std::string, std::string>> _store;
     std::string _currentNamespace;
     bool _opened = false;
 
@@ -31,17 +32,17 @@ public:
     }
 
     bool clear() {
-        auto it = _store.find(_currentNamespace);
-        if (it != _store.end()) {
-            _store.erase(it);
+        auto it = _prefStore.find(_currentNamespace);
+        if (it != _prefStore.end()) {
+            _prefStore.erase(it);
         }
         return true;
     }
 
     bool remove(const char* key) {
         if (!_opened) return false;
-        auto ns = _store.find(_currentNamespace);
-        if (ns != _store.end()) {
+        auto ns = _prefStore.find(_currentNamespace);
+        if (ns != _prefStore.end()) {
             ns->second.erase(key);
         }
         return true;
@@ -49,8 +50,8 @@ public:
 
     bool isKey(const char* key) {
         if (!_opened) return false;
-        auto ns = _store.find(_currentNamespace);
-        if (ns == _store.end()) return false;
+        auto ns = _prefStore.find(_currentNamespace);
+        if (ns == _prefStore.end()) return false;
         return ns->second.find(key) != ns->second.end();
     }
 
@@ -58,8 +59,8 @@ public:
 
     int getInt(const char* key, int defaultValue = 0) {
         if (!_opened) return defaultValue;
-        auto ns = _store.find(_currentNamespace);
-        if (ns == _store.end()) return defaultValue;
+        auto ns = _prefStore.find(_currentNamespace);
+        if (ns == _prefStore.end()) return defaultValue;
         auto kv = ns->second.find(key);
         if (kv == ns->second.end()) return defaultValue;
         return std::stoi(kv->second);
@@ -67,8 +68,8 @@ public:
 
     float getFloat(const char* key, float defaultValue = 0.0f) {
         if (!_opened) return defaultValue;
-        auto ns = _store.find(_currentNamespace);
-        if (ns == _store.end()) return defaultValue;
+        auto ns = _prefStore.find(_currentNamespace);
+        if (ns == _prefStore.end()) return defaultValue;
         auto kv = ns->second.find(key);
         if (kv == ns->second.end()) return defaultValue;
         return std::stof(kv->second);
@@ -76,8 +77,8 @@ public:
 
     bool getBool(const char* key, bool defaultValue = false) {
         if (!_opened) return defaultValue;
-        auto ns = _store.find(_currentNamespace);
-        if (ns == _store.end()) return defaultValue;
+        auto ns = _prefStore.find(_currentNamespace);
+        if (ns == _prefStore.end()) return defaultValue;
         auto kv = ns->second.find(key);
         if (kv == ns->second.end()) return defaultValue;
         return kv->second == "1" || kv->second == "true";
@@ -87,19 +88,19 @@ public:
 
     size_t putInt(const char* key, int value) {
         if (!_opened) return 0;
-        _store[_currentNamespace][key] = std::to_string(value);
+        _prefStore[_currentNamespace][key] = std::to_string(value);
         return sizeof(int);
     }
 
     size_t putFloat(const char* key, float value) {
         if (!_opened) return 0;
-        _store[_currentNamespace][key] = std::to_string(value);
+        _prefStore[_currentNamespace][key] = std::to_string(value);
         return sizeof(float);
     }
 
     size_t putBool(const char* key, bool value) {
         if (!_opened) return 0;
-        _store[_currentNamespace][key] = value ? "1" : "0";
+        _prefStore[_currentNamespace][key] = value ? "1" : "0";
         return sizeof(bool);
     }
 };

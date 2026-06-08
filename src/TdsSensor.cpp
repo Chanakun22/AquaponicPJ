@@ -253,6 +253,64 @@ static void _calculateCalibrationFactors(TdsChannelState* st) {
     LOG_INFO("TDS %s calibrated K: %.4f, Offset: %.4f", st->name, st->kValue, st->offset);
 }
 
+static bool _validateCalibrationDirection(TdsChannelState* st,
+                                          float normalizedLowVoltage,
+                                          float normalizedHighVoltage) {
+    if (st->calHighPpm <= st->calLowPpm) {
+        LOG_ERROR("TDS %s calibration rejected: high ppm %.1f must be > low ppm %.1f",
+                  st->name, st->calHighPpm, st->calLowPpm);
+        return false;
+    }
+
+    if (normalizedHighVoltage <= normalizedLowVoltage) {
+        LOG_ERROR("TDS %s calibration rejected: high voltage %.3fV must be > low voltage %.3fV",
+                  st->name, normalizedHighVoltage, normalizedLowVoltage);
+        return false;
+    }
+
+    return true;
+}
+
+static bool _validateCalibrationQuality(TdsChannelState* st, bool rejectOnSave) {
+    if (st->kValue <= 0.0f) {
+        LOG_ERROR("TDS %s calibration rejected: K=%.4f (must be > 0)",
+                  st->name, st->kValue);
+        return false;
+    }
+
+    if (st->kValue > TDS_CAL_K_REJECT_MAX) {
+        LOG_ERROR("TDS %s calibration %s: K=%.4f is too high (max %.2f). "
+                  "Signal too weak — use stronger board output or wider cal points.",
+                  st->name,
+                  rejectOnSave ? "rejected" : "untrusted",
+                  st->kValue,
+                  TDS_CAL_K_REJECT_MAX);
+        return rejectOnSave ? false : true;
+    }
+
+    if (st->kValue > TDS_CAL_K_WARN_MAX) {
+        LOG_WARN("TDS %s calibration warning: K=%.4f > %.2f (ideal ~1.0). "
+                 "Saved but automator may block until recalibrated.",
+                 st->name, st->kValue, TDS_CAL_K_WARN_MAX);
+    }
+
+    return true;
+}
+
+static void _warnLoadedCalibrationQuality(TdsChannelState* st) {
+    if (!st->isCalibrated) {
+        return;
+    }
+
+    if (st->kValue <= 0.0f || st->kValue > TDS_CAL_K_REJECT_MAX) {
+        LOG_WARN("TDS %s loaded cal K=%.4f is untrusted — recalibrate before automator dosing",
+                 st->name, st->kValue);
+    } else if (st->kValue > TDS_CAL_K_WARN_MAX) {
+        LOG_WARN("TDS %s loaded cal K=%.4f is high — consider recalibrating with wider voltage span",
+                 st->name, st->kValue);
+    }
+}
+
 static void _loadCalibrationFromNVS(TdsChannelState* st) {
     char key[20];
     _tdsPrefs.begin("tdsSensor", true);
@@ -277,6 +335,7 @@ static void _loadCalibrationFromNVS(TdsChannelState* st) {
         _makeKey(st, "rawV", key, sizeof(key));
         st->calibrationUsesRawVoltage = _tdsPrefs.getBool(key, st == &_channels[TDS_CHANNEL_MIX] ? _tdsPrefs.getBool("rawV", false) : false);
         _calculateCalibrationFactors(st);
+        _warnLoadedCalibrationQuality(st);
     }
     _tdsPrefs.end();
 }
@@ -478,18 +537,19 @@ static float _tdsReadChannel(TdsChannel channel, float temperature) {
 
     if (st->movingAverage < 0 || isnan(st->movingAverage)) {
         st->movingAverage = tdsValue;
+        st->lastResult = tdsValue;
     } else {
         st->movingAverage =
             (tdsValue * valueAlpha) +
             (st->movingAverage * (1.0f - valueAlpha));
         float stabilizedTds = _applyDeadband(previousTds, st->movingAverage, valueDeadband);
-        st->movingAverage = _limitStep(previousTds, stabilizedTds, valueMaxStep);
+        st->lastResult = _limitStep(previousTds, stabilizedTds, valueMaxStep);
     }
 
     TDS_LOCK();
-    st->lastResult = st->movingAverage;
+    // lastResult is already updated
     TDS_UNLOCK();
-    return st->movingAverage;
+    return st->lastResult;
 }
 
 float tdsGetLastValueForChannel(TdsChannel channel) {
@@ -505,7 +565,7 @@ float tdsGetLastValue(void) {
     return tdsGetLastValueForChannel(TDS_CHANNEL_MIX);
 }
 
-void tdsSetCalibrationForChannel(TdsChannel channel,
+bool tdsSetCalibrationForChannel(TdsChannel channel,
                                  float lowPpm,
                                  float lowVoltage,
                                  float lowTemperature,
@@ -522,23 +582,11 @@ void tdsSetCalibrationForChannel(TdsChannel channel,
     st->calHighTemperature = isfinite(highTemperature) ? highTemperature : 25.0f;
     st->calibrationUsesRawVoltage = rawVoltageInput;
 
-    if (_hasValidCalibrationSpan(st->calLowVoltage,
-                                 st->calLowTemperature,
-                                 st->calHighVoltage,
-                                 st->calHighTemperature,
-                                 st->calibrationUsesRawVoltage)) {
-        _calculateCalibrationFactors(st);
-        st->isCalibrated = true;
-        _saveCalibrationToNVS(st);
-
-        st->movingAverage = -1.0f;
-        st->voltageMovingAverage = -1.0f;
-
-        LOG_INFO("TDS %s calibration set (Hybrid Mode):", st->name);
-        LOG_INFO("  K: %.4f, Offset: %.4f, LowTemp: %.1fC, HighTemp: %.1fC, mode=%s",
-                 st->kValue, st->offset, st->calLowTemperature, st->calHighTemperature,
-                 st->calibrationUsesRawVoltage ? "raw" : "compensated");
-    } else {
+    if (!_hasValidCalibrationSpan(st->calLowVoltage,
+                                  st->calLowTemperature,
+                                  st->calHighVoltage,
+                                  st->calHighTemperature,
+                                  st->calibrationUsesRawVoltage)) {
         float normalizedLowVoltage = _normalizeCalibrationVoltage(st->calLowVoltage,
                                                                   st->calLowTemperature,
                                                                   st->calibrationUsesRawVoltage);
@@ -550,24 +598,88 @@ void tdsSetCalibrationForChannel(TdsChannel channel,
                   fabsf(normalizedHighVoltage - normalizedLowVoltage),
                   TDS_MIN_CALIBRATION_SPAN_V);
         st->isCalibrated = false;
+        return false;
     }
+
+    float normalizedLowVoltage = _normalizeCalibrationVoltage(st->calLowVoltage,
+                                                              st->calLowTemperature,
+                                                              st->calibrationUsesRawVoltage);
+    float normalizedHighVoltage = _normalizeCalibrationVoltage(st->calHighVoltage,
+                                                               st->calHighTemperature,
+                                                               st->calibrationUsesRawVoltage);
+
+    if (!_validateCalibrationDirection(st, normalizedLowVoltage, normalizedHighVoltage)) {
+        st->isCalibrated = false;
+        return false;
+    }
+
+    _calculateCalibrationFactors(st);
+
+    if (!_validateCalibrationQuality(st, true)) {
+        st->isCalibrated = false;
+        return false;
+    }
+
+    st->isCalibrated = true;
+    _saveCalibrationToNVS(st);
+
+    st->movingAverage = -1.0f;
+    st->voltageMovingAverage = -1.0f;
+
+    LOG_INFO("TDS %s calibration set (Hybrid Mode):", st->name);
+    LOG_INFO("  K: %.4f, Offset: %.4f, LowTemp: %.1fC, HighTemp: %.1fC, mode=%s",
+             st->kValue, st->offset, st->calLowTemperature, st->calHighTemperature,
+             st->calibrationUsesRawVoltage ? "raw" : "compensated");
+    return true;
 }
 
-void tdsSetCalibration(float lowPpm,
+bool tdsSetCalibration(float lowPpm,
                        float lowVoltage,
                        float lowTemperature,
                        float highPpm,
                        float highVoltage,
                        float highTemperature,
                        bool rawVoltageInput) {
-    tdsSetCalibrationForChannel(TDS_CHANNEL_MIX,
-                                lowPpm,
-                                lowVoltage,
-                                lowTemperature,
-                                highPpm,
-                                highVoltage,
-                                highTemperature,
-                                rawVoltageInput);
+    return tdsSetCalibrationForChannel(TDS_CHANNEL_MIX,
+                                       lowPpm,
+                                       lowVoltage,
+                                       lowTemperature,
+                                       highPpm,
+                                       highVoltage,
+                                       highTemperature,
+                                       rawVoltageInput);
+}
+
+bool tdsIsCalibrationQualityOkForChannel(TdsChannel channel) {
+    TdsChannelState* st = _state(channel);
+    return st->isCalibrated
+        && st->kValue > 0.0f
+        && st->kValue <= TDS_CAL_K_REJECT_MAX;
+}
+
+float tdsGetCalibrationKForChannel(TdsChannel channel) {
+    TdsChannelState* st = _state(channel);
+    return st->isCalibrated ? st->kValue : -1.0f;
+}
+
+bool tdsIsVoltageBelowCalibrationRangeForChannel(TdsChannel channel) {
+    TdsChannelState* st = _state(channel);
+    float voltage = -1.0f;
+
+    if (!st->isCalibrated || !st->ready) {
+        return false;
+    }
+
+    TDS_LOCK();
+    voltage = st->lastVoltage;
+    TDS_UNLOCK();
+
+    if (voltage < 0.0f || isnan(voltage)) {
+        return false;
+    }
+
+    float threshold = st->calLowVoltage - TDS_CAL_BELOW_RANGE_MARGIN_V;
+    return voltage < threshold;
 }
 
 void tdsLoop(float temperature) {

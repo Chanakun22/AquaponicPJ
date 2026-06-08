@@ -73,6 +73,15 @@ float BH1750::_mockLux = 500.0f;
 // ========== Include real light source ==========
 #include "../../src/lightSensor.cpp"
 
+extern "C" {
+void setUp(void) {
+    _lastLux = -1.0f;
+    _sensorReady = false;
+    _lightLastReadTime = 0;
+}
+void tearDown(void) {}
+}
+
 // ========== Test Cases ==========
 
 // --- 1. Initial state: not ready, reads -1 ---
@@ -96,6 +105,7 @@ void test_light_init_success() {
     lightSetup();
 
     TEST_ASSERT_TRUE_MESSAGE(lightIsReady(), "Sensor should be ready after successful init");
+    lightLoop();
     float lux = lightRead();
     TEST_ASSERT_TRUE(lux >= 0);
 }

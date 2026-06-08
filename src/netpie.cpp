@@ -474,22 +474,22 @@ void netpiePublishData(float waterTemp,
         data["humidity"] = round(humidity * 10) / 10.0;
     }
     if (tds >= 0) {
-        data["tds"] = round(tds * 10) / 10.0;
-        data["tds_mix"] = round(tds * 10) / 10.0;
+        data["tds"] = round(tds);
+        data["tds_mix"] = round(tds);
     }
     if (tdsFish >= 0) {
-        data["tds_fish"] = round(tdsFish * 10) / 10.0;
+        data["tds_fish"] = round(tdsFish);
     }
     if (light >= 0) {
         data["light"] = round(light * 10) / 10.0;
     }
     if (ph >= 0) {
-        data["ph"] = round(ph * 100) / 100.0;       // legacy alias = mix
-        data["ph_mix"] = round(ph * 100) / 100.0;
+        data["ph"] = round(ph * 10) / 10.0;       // legacy alias = mix
+        data["ph_mix"] = round(ph * 10) / 10.0;
     }
     float phFish = phReadChannel(PH_CHANNEL_FISH);
     if (phFish >= 0 && !isnan(phFish)) {
-        data["ph_fish"] = round(phFish * 100) / 100.0;
+        data["ph_fish"] = round(phFish * 10) / 10.0;
     }
     
     // เพิ่มสถานะไฟ

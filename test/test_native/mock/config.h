@@ -35,6 +35,11 @@
 #define TDS_READ_INTERVAL   1000
 #define TDS_MIN             0.0f
 #define TDS_MAX             2000.0f
+#define TDS_MIN_CALIBRATION_SPAN_V 0.050f
+#define TDS_CAL_K_WARN_MAX        1.5f
+#define TDS_CAL_K_REJECT_MAX      2.0f
+#define TDS_CAL_BELOW_RANGE_MARGIN_V 0.010f
+#define TDS_CONVERSION_FACTOR     0.695f
 
 // ==================== pH ====================
 #define PH_SAMPLE_COUNT             30

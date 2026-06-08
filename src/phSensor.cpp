@@ -447,7 +447,6 @@ static void _processSample(PhChannelState* st) {
                               (st->phMovingAverage * (1.0f - PH_PH_FILTER_ALPHA));
         float stabilizedPh = _applyDeadband(st->lastPh, st->phMovingAverage, PH_PH_DEADBAND);
         st->lastPh = _limitStep(st->lastPh, stabilizedPh, PH_PH_MAX_STEP);
-        st->phMovingAverage = st->lastPh;
     }
 }
 

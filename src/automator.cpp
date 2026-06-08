@@ -71,6 +71,38 @@ static bool _tdsNeedsDose(float tds) {
     return tds < triggerTds;
 }
 
+static bool _mixTdsBlockedForAutomator(const char** reasonOut) {
+    if (!tdsIsReady()) {
+        if (reasonOut) {
+            *reasonOut = "Mix tank TDS sensor not ready";
+        }
+        return true;
+    }
+
+    if (!tdsIsCalibratedForChannel(TDS_CHANNEL_MIX)) {
+        if (reasonOut) {
+            *reasonOut = "Mix tank TDS not calibrated";
+        }
+        return true;
+    }
+
+    if (tdsIsVoltageBelowCalibrationRangeForChannel(TDS_CHANNEL_MIX)) {
+        if (reasonOut) {
+            *reasonOut = "Blocked: mix TDS voltage below cal range (dry probe or weak signal)";
+        }
+        return true;
+    }
+
+    if (!tdsIsCalibrationQualityOkForChannel(TDS_CHANNEL_MIX)) {
+        if (reasonOut) {
+            *reasonOut = "Blocked: mix TDS cal K too high — recalibrate";
+        }
+        return true;
+    }
+
+    return false;
+}
+
 static bool _automatorBlockedByWaterSystem(const WaterSystemStatus* waterStatus, const char** reason, const char** nextState) {
     if (waterStatus == NULL) {
         return false;
@@ -266,6 +298,12 @@ const char* automatorGetNextStateString(void) {
             return "EVALUATING";
 
         case AUTO_STATE_EVALUATING: {
+            const char* blockedReason = NULL;
+            if (_mixTdsBlockedForAutomator(&blockedReason)) {
+                (void)blockedReason;
+                return "IDLE";
+            }
+
             float tds = tdsGetLastValue();
 
             if (isnan(tds) || tds <= 5.0f) {
@@ -398,6 +436,13 @@ void automatorLoop(void) {
             break;
 
         case AUTO_STATE_EVALUATING: {
+            const char* blockedReason = NULL;
+            if (_mixTdsBlockedForAutomator(&blockedReason)) {
+                _changeState(AUTO_STATE_IDLE,
+                              blockedReason ? blockedReason : "Mix tank TDS blocked for automator");
+                break;
+            }
+
             float tds = tdsGetLastValue();
             
             // Validate sensor read (don't act on NAN or 0)

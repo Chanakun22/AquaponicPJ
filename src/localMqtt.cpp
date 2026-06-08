@@ -461,7 +461,7 @@ static void _processDeferredAction(const LocalDeferredAction* action) {
         {
             TdsChannel channel = (action->data.tdsCal.channel == (uint8_t)TDS_CHANNEL_FISH)
                                     ? TDS_CHANNEL_FISH : TDS_CHANNEL_MIX;
-            tdsSetCalibrationForChannel(
+            bool calOk = tdsSetCalibrationForChannel(
                 channel,
                 action->data.tdsCal.lowPpm,
                 action->data.tdsCal.lowVoltage,
@@ -471,8 +471,13 @@ static void _processDeferredAction(const LocalDeferredAction* action) {
                 action->data.tdsCal.highTemperature,
                 action->data.tdsCal.rawVoltage
             );
-            LOG_INFO("TDS %s calibration received from Pi!",
-                     channel == TDS_CHANNEL_FISH ? "fish" : "mix");
+            if (calOk) {
+                LOG_INFO("TDS %s calibration received from Pi!",
+                         channel == TDS_CHANNEL_FISH ? "fish" : "mix");
+            } else {
+                LOG_ERROR("TDS %s calibration rejected from Pi (check K / voltage span)",
+                          channel == TDS_CHANNEL_FISH ? "fish" : "mix");
+            }
             break;
         }
 
@@ -1178,18 +1183,21 @@ void localMqttPublishData(float waterTemp,
     if (!isnan(airTemp)) _sensorPublishDoc["air_temp"] = round(airTemp * 10) / 10.0;
     if (!isnan(humidity)) _sensorPublishDoc["humidity"] = round(humidity * 10) / 10.0;
     if (tds >= 0) {
-        _sensorPublishDoc["tds"] = round(tds * 10) / 10.0;
-        _sensorPublishDoc["tds_mix"] = round(tds * 10) / 10.0;
+        _sensorPublishDoc["tds"] = round(tds);
+        _sensorPublishDoc["tds_mix"] = round(tds);
     }
-    if (tdsFish >= 0) _sensorPublishDoc["tds_fish"] = round(tdsFish * 10) / 10.0;
+    if (tdsFish >= 0) _sensorPublishDoc["tds_fish"] = round(tdsFish);
+    _sensorPublishDoc["tds_mix_cal_k"] = round(tdsGetCalibrationKForChannel(TDS_CHANNEL_MIX) * 1000) / 1000.0;
+    _sensorPublishDoc["tds_mix_cal_quality_ok"] = tdsIsCalibrationQualityOkForChannel(TDS_CHANNEL_MIX);
+    _sensorPublishDoc["tds_mix_below_cal_range"] = tdsIsVoltageBelowCalibrationRangeForChannel(TDS_CHANNEL_MIX);
     if (light >= 0) _sensorPublishDoc["light"] = round(light * 10) / 10.0;
     if (ph >= 0) {
-        _sensorPublishDoc["ph"] = round(ph * 100) / 100.0;
-        _sensorPublishDoc["ph_mix"] = round(ph * 100) / 100.0;
+        _sensorPublishDoc["ph"] = round(ph * 10) / 10.0;
+        _sensorPublishDoc["ph_mix"] = round(ph * 10) / 10.0;
     }
     float phFish = phReadChannel(PH_CHANNEL_FISH);
     if (phFish >= 0 && !isnan(phFish)) {
-        _sensorPublishDoc["ph_fish"] = round(phFish * 100) / 100.0;
+        _sensorPublishDoc["ph_fish"] = round(phFish * 10) / 10.0;
     }
     
     // Add TDS voltage for calibration
@@ -1208,7 +1216,7 @@ void localMqttPublishData(float waterTemp,
     if (phFishVoltage >= 0) {
         _sensorPublishDoc["ph_fish_voltage"] = round(phFishVoltage * 10) / 10.0;
     }
-    if (phIsReady()) _sensorPublishDoc["ph_value"] = round(phRead() * 100) / 100.0;
+    if (phIsReady()) _sensorPublishDoc["ph_value"] = round(phRead() * 10) / 10.0;
     
     // Add Network Connectivity Status
     _sensorPublishDoc["mqtt_connected"] = netpieIsConnected(); // Status for Dashboard

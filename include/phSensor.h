@@ -18,13 +18,13 @@
 #define PH_READ_INTERVAL    1000    // อ่านค่าทุก (ms)
 #define PH_OVERSAMPLE_COUNT 16      // จำนวน analogRead ต่อ 1 รอบ sampling
 #define PH_INVALID_STREAK_LIMIT 3   // ต้อง invalid ติดต่อกันกี่รอบจึง mark ว่าหลุดช่วง
-#define PH_VOLTAGE_FILTER_ALPHA 0.18f // Processing EMA for pH calculation: faster but still damped
-#define PH_VOLTAGE_DISPLAY_FILTER_ALPHA 0.06f // Extra smoothing just for displayed voltage (mV)
-#define PH_PH_FILTER_ALPHA    0.18f // Balanced pH EMA: quicker response without going fully raw
-#define PH_VOLTAGE_DEADBAND_MV 3.0f // Smaller process deadband so pH value moves sooner
-#define PH_VOLTAGE_DISPLAY_DEADBAND_MV 8.0f // Larger display deadband so calibration voltage looks steadier
-#define PH_PH_DEADBAND        0.01f // Allow smaller visible pH movement before holding value
-#define PH_PH_MAX_STEP        0.12f // Let pH catch up faster per cycle while still limiting jumps
+#define PH_VOLTAGE_FILTER_ALPHA 0.10f // EMA แรงดันก่อนคำนวณ pH — ช้าลง = นิ่งขึ้น
+#define PH_VOLTAGE_DISPLAY_FILTER_ALPHA 0.05f // EMA แรงดันที่โชว์บน dashboard/cal
+#define PH_PH_FILTER_ALPHA    0.08f // EMA pH — ช้าลงเพื่อลดอาการดีด
+#define PH_VOLTAGE_DEADBAND_MV 5.0f // แรงดันแกว่ง < 5 mV ไม่อัปเดต
+#define PH_VOLTAGE_DISPLAY_DEADBAND_MV 10.0f // แรงดันโชว์นิ่งขึ้นสำหรับ cal UI
+#define PH_PH_DEADBAND        0.01f // แกว่ง < 0.01 pH ไม่โชว์
+#define PH_PH_MAX_STEP        0.05f // กระโดดสูงสุด 0.05 pH ต่อรอบอ่าน
 #define PH_ADC_SETTLE_US      ADC_SAMPLE_SETTLE_US
 #define PH_CHANNEL_SWITCH_SETTLE_US ADC_CHANNEL_SWITCH_SETTLE_US
 #define PH_ADC_DUMMY_READS    2     // Discard initial ADC reads so pH sampling starts after channel settles

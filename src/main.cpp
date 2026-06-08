@@ -294,11 +294,16 @@ void TaskSensors(void *pvParameters) {
         // pH
         if (phEnabled) {
             taskCheckpoint(TASK_SENSORS, "ph");
+#if PH_USE_WATER_TEMP_COMPENSATION
             phSetTemperatureChannel(PH_CHANNEL_MIX,
                                     _phCompensationTemperature(currentWaterTemp, NAN));
             phSetTemperatureChannel(PH_CHANNEL_FISH,
                                     _phCompensationTemperature(currentWaterTempFish,
                                                                currentWaterTemp));
+#else
+            phSetTemperatureChannel(PH_CHANNEL_MIX, PH_REFERENCE_TEMP_C);
+            phSetTemperatureChannel(PH_CHANNEL_FISH, PH_REFERENCE_TEMP_C);
+#endif
             phLoop();
             if (phIsReadyChannel(PH_CHANNEL_MIX)) {
                 currentPh = validatePh(phReadChannel(PH_CHANNEL_MIX));

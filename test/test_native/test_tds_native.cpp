@@ -291,6 +291,37 @@ void test_tds_calibration_reject_small_voltage_span() {
     TEST_ASSERT_FALSE(tdsIsCalibrated());
 }
 
+void test_tds_calibration_reject_high_k() {
+    Preferences::resetAll();
+    tdsSetup();
+
+    // Reproduces weak-signal mix board cal (K ~= 5.3)
+    TEST_ASSERT_FALSE(tdsSetCalibration(58.0f, 0.145f, 25.0f, 982.0f, 0.484f, 25.0f, true));
+    TEST_ASSERT_FALSE(tdsIsCalibrated());
+}
+
+void test_tds_calibration_accepts_reasonable_k() {
+    Preferences::resetAll();
+    tdsSetup();
+
+    TEST_ASSERT_TRUE(tdsSetCalibration(58.0f, 0.50f, 25.0f, 982.0f, 1.60f, 25.0f, true));
+    TEST_ASSERT_TRUE(tdsIsCalibrated());
+    TEST_ASSERT_TRUE(tdsIsCalibrationQualityOkForChannel(TDS_CHANNEL_MIX));
+    TEST_ASSERT_TRUE(tdsGetCalibrationKForChannel(TDS_CHANNEL_MIX) > 0.0f);
+    TEST_ASSERT_TRUE(tdsGetCalibrationKForChannel(TDS_CHANNEL_MIX) <= 2.0f);
+}
+
+void test_tds_below_calibration_range_detection() {
+    Preferences::resetAll();
+    tdsSetup();
+    TEST_ASSERT_TRUE(tdsSetCalibration(58.0f, 0.50f, 25.0f, 982.0f, 1.60f, 25.0f, true));
+
+    _mockAnalogValues[TDS_PIN] = _adcFromVoltage(0.127f);
+    _fastWarmup(25.0f);
+
+    TEST_ASSERT_TRUE(tdsIsVoltageBelowCalibrationRangeForChannel(TDS_CHANNEL_MIX));
+}
+
 void test_tds_calibration_normalizes_standard_temperature() {
     Preferences::resetAll();
 
@@ -427,6 +458,9 @@ int main() {
     RUN_TEST(test_tds_calibration_save_load);
     RUN_TEST(test_tds_calibration_reject_equal_voltage);
     RUN_TEST(test_tds_calibration_reject_small_voltage_span);
+    RUN_TEST(test_tds_calibration_reject_high_k);
+    RUN_TEST(test_tds_calibration_accepts_reasonable_k);
+    RUN_TEST(test_tds_below_calibration_range_detection);
     RUN_TEST(test_tds_calibration_normalizes_standard_temperature);
     RUN_TEST(test_tds_moving_average_smoothing);
     RUN_TEST(test_tds_clamped_to_range);

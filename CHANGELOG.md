@@ -2,6 +2,53 @@
 
 All notable changes to the **Smart Aquaponics AI** project will be documented in this file.
 
+## [2026-06-08] - DHT22 WDT Hardening
+
+### Fixed
+
+- **fix:** Feed Task WDT + heartbeat ระหว่าง DHT22 read (`dht_read` / `dht_humidity` / `dht_done`) เพื่อลด Task WDT reset ที่ stage `dht_loop`
+- **fix:** อ่าน DHT22 แบบ single bus transaction (`readTemperature` แล้ว `readHumidity` จาก cache) ลดเวลา block ~278ms → ~140ms
+- **fix:** Backoff 30s เมื่อ DHT read ช้าผิดปกติมาก (`DHT_SLOW_READ_BACKOFF_MS`)
+
+## [2026-06-08] - TDS Cal Validation & Automator Safety Guards
+
+### Added
+
+- **feat:** TDS calibration validation — ปฏิเสธ cal ใหม่เมื่อ K > 2.0, K ≤ 0, หรือ high/low voltage/ppm ผิดทิศ; เตือนเมื่อ K > 1.5
+- **feat:** `tdsIsVoltageBelowCalibrationRangeForChannel()`, `tdsIsCalibrationQualityOkForChannel()`, `tdsGetCalibrationKForChannel()`
+- **feat:** Automator บล็อก dosing เมื่อ mix TDS voltage ต่ำกว่าช่วง cal หรือ cal K ไม่น่าเชื่อถือ
+- **mqtt:** เผยแพร่ `tds_mix_cal_k`, `tds_mix_cal_quality_ok`, `tds_mix_below_cal_range`
+
+### Fixed
+
+- **fix:** กัน automator dose A&B ซ้ำเมื่อ TDS แสดง 0 ppm จากแรงดันต่ำกว่าจุด cal ต่ำ
+
+## [2026-06-08] - Fix Sensor Sticking Bug & Enable pH Temp Compensation
+
+### Changed
+
+- **config:** `PH_USE_WATER_TEMP_COMPENSATION = 1` — เปิดใช้งานการชดเชยอุณหภูมิน้ำสำหรับเซ็นเซอร์ pH แบบ Real-time
+- **tune:** ปรับลด `PH_PH_DEADBAND` จาก `0.03f` เป็น `0.01f` และ `TDS_MIX_VALUE_DEADBAND_PPM` จาก `20.0f` เป็น `10.0f` เพื่อให้การอัปเดตบนแดชบอร์ดมีความนิ่งและลื่นไหลมากขึ้นโดยไม่เกิดอาการดีด (ค่าดีด)
+
+### Fixed
+
+- **fix:** แก้ไขบั๊กตัวกรองติดขัด (Filter Sticking Bug) ใน `phSensor.cpp` และ `TdsSensor.cpp` ที่ทำให้ตัวกรอง EMA ไปเขียนทับด้วยค่าที่มี deadband/step limit ในแต่ละรอบ ทำให้อัปเดตติดขัดและดีดตัวเมื่อค่าเปลี่ยนแปลงมาก
+- **test:** เพิ่ม `-DNATIVE_TEST` ใน `platformio.ini` และแก้ไขระบบตัวแปร `static` ใน `test_light_native.cpp` ให้ผ่านการทดสอบ 100%
+
+## [2026-06-05] - Sensor Display Stability (Anti-Bounce)
+
+### Changed
+
+- **tune:** เข้ม filter pH — deadband 0.03, max step 0.05/รอบ, EMA ช้าลง
+- **tune:** เข้ม filter TDS — mix deadband 20 ppm / max step 6; fish deadband 18 ppm
+- **mqtt:** ปัด TDS เป็นจำนวนเต็ม ppm, pH ทศนิยม 1 ตำแหน่งก่อนส่ง dashboard
+
+## [2026-06-05] - pH Fixed 25°C Reference (No DS18B20)
+
+### Changed
+
+- **config:** `PH_USE_WATER_TEMP_COMPENSATION = 0` — pH mix/fish ใช้ `PH_REFERENCE_TEMP_C` (25°C) คงที่ ไม่พึ่ง DS18B20 สำหรับ slope compensation
+
 ## [2026-06-05] - Sensor Accuracy & ADC Crosstalk Fix (Full Pass)
 
 ### Added

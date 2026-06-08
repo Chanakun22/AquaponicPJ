@@ -64,14 +64,14 @@ float tdsGetVoltageForChannel(TdsChannel channel);
  * @param highVoltage voltage ที่อ่านได้ที่จุดสูง
  * @param highTemperature อุณหภูมิของน้ำยามาตรฐานจุดสูง (°C)
  */
-void tdsSetCalibration(float lowPpm,
+bool tdsSetCalibration(float lowPpm,
 					   float lowVoltage,
 					   float lowTemperature,
 					   float highPpm,
 					   float highVoltage,
 					   float highTemperature,
 					   bool rawVoltageInput);
-void tdsSetCalibrationForChannel(TdsChannel channel,
+bool tdsSetCalibrationForChannel(TdsChannel channel,
 								 float lowPpm,
 								 float lowVoltage,
 								 float lowTemperature,
@@ -93,5 +93,20 @@ bool tdsIsCalibratedForChannel(TdsChannel channel);
  */
 float tdsGetLastValue(void);
 float tdsGetLastValueForChannel(TdsChannel channel);
+
+/**
+ * @brief ตรวจว่า K จาก cal อยู่ในช่วงที่เชื่อถือได้ (0 < K <= TDS_CAL_K_REJECT_MAX)
+ */
+bool tdsIsCalibrationQualityOkForChannel(TdsChannel channel);
+
+/**
+ * @brief ดึงค่า K จาก cal ปัจจุบัน (-1 ถ้ายังไม่ cal)
+ */
+float tdsGetCalibrationKForChannel(TdsChannel channel);
+
+/**
+ * @brief ตรวจว่าแรงดันล่าสุดต่ำกว่าจุด cal ต่ำ (เสี่ยง ppm ติด 0 / probe แห้ง)
+ */
+bool tdsIsVoltageBelowCalibrationRangeForChannel(TdsChannel channel);
 
 #endif // TDS_SENSOR_H

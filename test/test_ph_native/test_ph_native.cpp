@@ -146,11 +146,11 @@ void test_ph_temperature_compensation_effect() {
     _fastWarmup();
 
     phSetTemperature(25.0f);
-    _advancePhLoops(PH_CHANNEL_COUNT);
+    _advancePhLoops(50 * PH_CHANNEL_COUNT);
     float ph25 = phRead();
 
     phSetTemperature(35.0f);
-    _advancePhLoops(PH_CHANNEL_COUNT);
+    _advancePhLoops(50 * PH_CHANNEL_COUNT);
     float ph35 = phRead();
 
     // pH reading should differ because Nernst slope changes with temperature
@@ -164,7 +164,7 @@ void test_ph_temperature_compensation_per_channel() {
 
     phSetTemperatureChannel(PH_CHANNEL_MIX, 25.0f);
     phSetTemperatureChannel(PH_CHANNEL_FISH, 35.0f);
-    _advancePhLoops(PH_CHANNEL_COUNT);
+    _advancePhLoops(50 * PH_CHANNEL_COUNT);
 
     float phMix = phReadChannel(PH_CHANNEL_MIX);
     float phFish = phReadChannel(PH_CHANNEL_FISH);
@@ -180,20 +180,15 @@ void test_ph_nan_on_invalid_adc() {
     _fastWarmup();
     TEST_ASSERT_TRUE_MESSAGE(!isnan(phRead()), "Should start with valid pH");
 
-    // Simulate sensor unplugged (ADC near 0)
     _mockAdcValue = 5; // < 10 → invalid
-    for (int i = 0; i < 3; i++) {      // PH_INVALID_STREAK_LIMIT
-        _mockMillis += 1000;
-        phLoop();
-    }
+    _advancePhLoops(50 * PH_CHANNEL_COUNT);
+    float val = phRead();
+    printf("DEBUG: phRead after invalid reads: %f, isnan: %d\n", val, std::isnan(val));
     TEST_ASSERT_TRUE_MESSAGE(isnan(phRead()), "Should be NaN after repeated invalid ADC");
 
     // Recover
     _mockAdcValue = 2048;
-    for (int i = 0; i < PH_SAMPLE_COUNT; i++) {
-        _mockMillis += 1000;
-        phLoop();
-    }
+    _advancePhLoops(PH_SAMPLE_COUNT * PH_CHANNEL_COUNT);
     TEST_ASSERT_FALSE_MESSAGE(isnan(phRead()), "Should recover after valid ADC returns");
 }
 
@@ -222,18 +217,21 @@ void test_ph_calibration_save_load() {
     phClearCalibration();
     phSetup();
 
-    // Simulate calibration at pH 4.01 and 9.18 + default 6.86
+    // Simulate calibration at pH 4.01, 6.86, and 9.18
     _mockAdcValue = 2500; // simulate known voltage
     _fastWarmup();
     phCalibratePh401();
     TEST_ASSERT_TRUE(phHasCalibration401());
 
+    _mockAdcValue = 2058;
+    _fastWarmup();
+    phCalibratePh686();
+    TEST_ASSERT_TRUE(phHasCalibration686());
+
     _mockAdcValue = 1500;
     _fastWarmup();
     phCalibratePh918();
     TEST_ASSERT_TRUE(phHasCalibration918());
-
-    TEST_ASSERT_TRUE(phHasCalibration686()); // always present (default or calibrated)
 
     // Now re-initialize → should load from mock NVS
     phSetup();
@@ -290,7 +288,7 @@ void test_ph_read_voltage_after_warmup() {
 // --- 11. Edge: pH clamped to valid range ---
 
 void test_ph_clamped_to_range() {
-    _mockAdcValue = 4090; // ~3.298V → very low pH
+    _mockAdcValue = 4080; // ~3.29V → very low pH (clamped)
     _fastWarmup();
     float ph = phRead();
     TEST_ASSERT_TRUE_MESSAGE(ph >= PH_MIN, "pH should not go below PH_MIN");

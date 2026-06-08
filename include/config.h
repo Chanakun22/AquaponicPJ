@@ -37,6 +37,8 @@
 #define PH_SENSOR_PIN       6       // legacy alias = mix tank probe (kept for backward compat)
 #define PH_SENSOR_MIX_PIN   6       // ขา Analog สำหรับ pH Sensor ถังผสม
 #define PH_SENSOR_FISH_PIN  1       // ขา Analog สำหรับ pH Sensor ตู้ปลา (ADC1_CH0)
+#define PH_USE_WATER_TEMP_COMPENSATION 1 // 0=อ้างอิง 25°C คงที่ (ไม่พึ่ง DS18B20), 1=ชดเชย slope ตาม water temp
+#define PH_REFERENCE_TEMP_C   25.0f   // อุณหภูมิอ้างอิงเมื่อ PH_USE_WATER_TEMP_COMPENSATION=0
 
 // LED
 #define STATUS_LED_PIN      LED_BUILTIN  // ขา LED แสดงสถานะ
@@ -159,16 +161,19 @@
 #define TDS_ADC_DUMMY_READS 2       // ทิ้ง sample แรก ๆ เพื่อให้ ADC settle ก่อนอ่านจริง
 #define TDS_CONVERSION_FACTOR 0.695f // แปลง EC25 -> TDS ให้ใกล้ handheld meter ที่อ่าน 1413 uS/cm ≈ 982 ppm
 #define TDS_MIN_CALIBRATION_SPAN_V 0.050f // calibration 2 จุดต้องต่างกันพอ ไม่งั้นจะขยาย noise จาก ADC มากเกินไป
-#define TDS_VOLTAGE_FILTER_ALPHA 0.15f // EMA สำหรับแรงดันดิบหลัง median (fish / default)
-#define TDS_VOLTAGE_DEADBAND_V 0.003f  // กันแรงดันแกว่งเล็กน้อยไม่ให้โชว์สั่น (fish / default)
-#define TDS_VALUE_FILTER_ALPHA 0.08f   // EMA สำหรับค่า TDS หลังชดเชยอุณหภูมิ (fish / default)
-#define TDS_VALUE_DEADBAND_PPM 8.0f    // กันค่า TDS แกว่งเล็กน้อย (fish / default)
-#define TDS_VALUE_MAX_STEP_PPM 12.0f   // จำกัดการกระโดดต่อรอบ (fish / default)
-#define TDS_MIX_VOLTAGE_FILTER_ALPHA 0.08f // Mix tank: EMA แรงดัน — นิ่งกว่า fish
-#define TDS_MIX_VOLTAGE_DEADBAND_V 0.006f  // Mix tank: deadband แรงดันกว้างขึ้น
-#define TDS_MIX_VALUE_FILTER_ALPHA 0.05f   // Mix tank: EMA ppm ช้าลง
-#define TDS_MIX_VALUE_DEADBAND_PPM 12.0f   // Mix tank: deadband แสดงผล (ลดลงเพื่อความตรง)
-#define TDS_MIX_VALUE_MAX_STEP_PPM 10.0f   // Mix tank: กระโดดสูงสุด 10 ppm/รอบ
+#define TDS_CAL_K_WARN_MAX        1.5f   // K สูงกว่านี้ = สัญญาณ analog เบา — แนะนำ cal ใหม่
+#define TDS_CAL_K_REJECT_MAX      2.0f   // K สูงกว่านี้ = ปฏิเสธ cal ใหม่ (เสี่ยง ppm ติด 0)
+#define TDS_CAL_BELOW_RANGE_MARGIN_V 0.010f // แรงดันต่ำกว่า cal low เกิน margin = ต่ำกว่าช่วง cal
+#define TDS_VOLTAGE_FILTER_ALPHA 0.08f // EMA แรงดัน (fish)
+#define TDS_VOLTAGE_DEADBAND_V 0.006f  // deadband แรงดัน (fish)
+#define TDS_VALUE_FILTER_ALPHA 0.04f   // EMA ppm (fish)
+#define TDS_VALUE_DEADBAND_PPM 18.0f   // แกว่ง < 18 ppm ไม่โชว์ (fish)
+#define TDS_VALUE_MAX_STEP_PPM 6.0f    // กระโดดสูงสุด 6 ppm/รอบ (fish)
+#define TDS_MIX_VOLTAGE_FILTER_ALPHA 0.06f
+#define TDS_MIX_VOLTAGE_DEADBAND_V 0.008f
+#define TDS_MIX_VALUE_FILTER_ALPHA 0.04f
+#define TDS_MIX_VALUE_DEADBAND_PPM 10.0f // แกว่ง < 10 ppm ไม่โชว์ (mix)
+#define TDS_MIX_VALUE_MAX_STEP_PPM 6.0f  // กระโดดสูงสุด 6 ppm/รอบ (mix)
 #define TDS_MIX_TEMP_FILTER_ALPHA 0.10f    // EMA อุณหภูมิก่อนชดเชย TDS mix
 #define TDS_FISH_TEMP_FILTER_ALPHA 0.10f   // EMA อุณหภูมิก่อนชดเชย TDS fish
 #define TDS_CHANNEL_SWITCH_SETTLE_US ADC_CHANNEL_SWITCH_SETTLE_US
@@ -201,6 +206,7 @@
 #define DHT_TYPE            DHT22   // ชนิดเซ็นเซอร์ (DHT11, DHT22, DHT21)
 #define DHT_READ_INTERVAL   2000    // ช่วงเวลาอ่านค่า (ms)
 #define DHT_SLOW_READ_WARN_MS 250   // เตือนถ้า DHT read ใช้เวลานานผิดปกติ
+#define DHT_SLOW_READ_BACKOFF_MS 30000 // พักนานขึ้นเมื่อ read ช้าผิดปกติ (กัน WDT จาก bus hang)
 #define DHT_MAX_CONSECUTIVE_FAILURES 3 // จำนวน fail ติดกันก่อนพัก sensor ชั่วคราว
 #define DHT_FAIL_BACKOFF_MS 10000    // พักการอ่าน DHT หลัง fail ต่อเนื่อง (ms)
 
